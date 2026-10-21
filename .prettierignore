@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.npm-cache
+.browsers
+test-results
+Docs/ORIGINAL-README.md
+Docs/requirements.md
+Docs/Day1.md

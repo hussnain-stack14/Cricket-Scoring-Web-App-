@@ -66,3 +66,5 @@ temp/
 # Keep this rule aligned with the backend storage directory.
 backend/uploads/*
 !backend/uploads/.gitkeep
+.npm-cache/
+.browsers/

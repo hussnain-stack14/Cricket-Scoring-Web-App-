@@ -1,154 +1,89 @@
-# Crease — Cricket Scoring App
+﻿# Crease — Cricket Scoring
 
-Crease is a mobile-first cricket scoring web app for local teams.
-It will record matches ball by ball and calculate player statistics
-from completed match records.
+A mobile-first, device-local cricket scorebook built with Next.js App Router, JavaScript/JSX, Tailwind CSS and Dexie/IndexedDB. There is no runtime API, database server, authentication service, external font or cloud synchronization dependency.
 
-> Status: Planning and requirements. Features below are planned,
-> not implemented yet.
+**The local-first requirement supersedes the earlier backend-dependent MERN architecture.** The original README is preserved in [Docs/ORIGINAL-README.md](Docs/ORIGINAL-README.md); the original requirements and Day 1 notes remain intact as historical planning documents, not current implementation claims.
 
-## Project Goals
+## Run locally
 
-- Make scoring local cricket matches simple.
-- Maintain accurate batting and bowling records.
-- Give players access to their previous performances.
-- Support installation as a Progressive Web App (PWA).
+Use Node.js 22.13+ (tested with 24.18) and npm. On Windows PowerShell with script execution disabled, use `npm.cmd` instead of `npm`.
 
-## Planned Features
+```sh
+npm ci
+npm run dev
+```
 
-### Teams and Players
-- Create teams and player profiles.
-- Assign player roles and select match squads.
-- Identify players using unique IDs.
+Development mode is for editing; offline operation requires the production export:
 
-### Match Setup
-- Select teams, squads, venue, and overs.
-- Record the toss and batting decision.
-- Select opening batters and the opening bowler.
+```sh
+npm run build
+npm start
+```
 
-### Ball-by-Ball Scoring
-- Record dot balls, runs, boundaries, and wickets.
-- Record wides, no-balls, byes, and leg-byes.
-- Track legal deliveries and over completion.
-- Update batter, bowler, and team totals.
-- Undo or correct scoring mistakes.
+Open http://127.0.0.1:3000. The build creates `out/`, generates 192px/512px normal and maskable PNG icons, then hashes and precaches the complete static export. Deployable output is a plain static directory; no deployment or Git push is performed. Hosting must use HTTPS (localhost is allowed for testing), serve directory `index.html` files, and avoid long-lived caching of `sw.js` and HTML. Serve from the origin root; subdirectory deployment is not configured.
 
-### Scorecards and Match History
-- View batting and bowling scorecards.
-- Review deliveries and over summaries.
-- Record results and finalize matches.
+## First use and core flows
 
-### Player Statistics
-- Search players by name and team.
-- View previous match performances.
-- Calculate batting average and strike rate.
-- Calculate bowling average, economy, and strike rate.
+1. Enter a local display name. Crease creates a random workspace ID, without example data.
+2. Add players, create teams and assign squad members, captain and wicketkeeper.
+3. Set up a match through teams/squads, rules, toss, and opening players. Save draft preserves unfinished setup; Continue commits each completed step.
+4. Record runs, extras and supported wickets. Select replacement batters and a different bowler when prompted. View both scorecards and over-by-over history.
+5. Finalize a completed result to include it in player statistics. Reopen removes it from career totals until finalized again.
 
-### Installation and Offline Support
-- Install the app on supported devices.
-- Save scoring data locally during connection loss.
-- Sync saved data when connectivity returns.
+Players with identical names are distinguished by short UUIDs and team membership. Team/player edits and archive operations preserve frozen match squads. Hard deletion of individual records is intentionally not exposed; use Archive. Live means scoring in progress on this device, not broadcasting.
 
-Offline scoring and synchronization require implementation
-and testing before use in real matches.
+The scoring controls debounce rapid taps, disable concurrent commits, and assign unique event IDs. Database transactions check match revisions, so a stale tab receives a visible conflict instead of overwriting newer play. Close extra tabs during backup replacement; refresh a stale scoring tab before continuing.
 
-## User Roles
+## Offline preparation and updates
 
-| Role | Planned permissions |
-| --- | --- |
-| Organizer | Manage teams, players, matches, and scorer access |
-| Scorer | Score assigned matches and correct permitted records |
-| Viewer | View scores, scorecards, and player statistics |
+Visit online using a supported browser and wait for **Ready offline**. More → Offline & installation displays status and offers retry. Ready is shown only after service-worker activation and verification that every resource in the build's precache exists. This includes unvisited screens, HTML, Next.js route payloads, JavaScript chunks, CSS and icons.
 
-## Proposed Tech Stack
+All record routes are prebuilt (`/match/?id=...`, `/player/?id=...`). Full-document links and cache-first navigation avoid requiring a server-rendered response for records created offline. Close and reopen the app while disconnected to verify preparation before relying on it at a match. Initial download and updates require internet. Development mode does not provide this guarantee.
 
-- Frontend: React, JavaScript, Tailwind CSS
-- Backend: Node.js, Express.js
-- Database: MongoDB
-- Version control: Git and GitHub
-- Installation: Progressive Web App features
+Updates wait until explicitly applied from More. The update button is unavailable while local matches are live. Finish saves/drafts and close other tabs first. Old asset caches are retained to keep open older tabs working; this trades storage space for update safety. No asset-cache operation deletes IndexedDB. Browser settings can remove old asset caches, but avoid clearing site data unless you have exported your records.
 
-Frontend tooling and deployment services are not finalized.
+Android/Chromium exposes an install button when the browser provides an install prompt, or use its menu. On iOS Safari use Share → Add to Home Screen. Physical iOS/Android installation and standalone lifecycle checks must be performed separately; automated Chromium tests are not evidence of those checks.
 
-## Main Workflow
+## Storage and backups
 
-1. Create teams and players.
-2. Select the playing squads.
-3. Configure the match and record the toss.
-4. Select opening batters and bowler.
-5. Record each delivery.
-6. Complete the first innings.
-7. Score the chase.
-8. Finalize the result.
-9. Update player statistics from finalized match records.
+Each browser profile/device has its own workspace; there is no account login or sync. Anyone sharing that browser profile can access its records. Browser clearing, eviction or device loss can remove data. More offers a persistent-storage request where supported.
 
-## Statistics Rules
+Export downloads a version-2 JSON backup with workspace settings, players, teams, memberships, matches, innings, events, audits and setup draft. Verify the downloaded file and keep a copy outside this browser. The last-export timestamp records a download request, not ongoing backup protection.
 
-- Batting average = total runs / dismissals.
-- Batting strike rate = total runs / balls faced × 100.
-- Bowling average = runs conceded / wickets credited.
-- Bowling strike rate = legal balls bowled / wickets credited.
-- Economy rate = runs conceded / (legal balls bowled / 6).
+Import accepts up to 20 MB, validates versions, IDs, types, relationships and replayable match history, then previews counts. Export the current workspace before confirming replacement. Import replaces records transactionally rather than merging; invalid input or a failed transaction leaves the previous records intact. Imported records are scoped to the current workspace ID. Statistics are derived, so restoration does not duplicate accumulated totals.
 
-The economy formula assumes six legal deliveries per over.
-Over notation is not a decimal: 2.3 overs means 15 legal balls.
+## Architecture
 
-Display "—" when a statistic has a zero denominator.
-Calculate career statistics from combined totals, not by
-averaging individual match averages or strike rates.
+- `app/`: static App Router pages and shared responsive styling. System fonts; bundled Lucide icons.
+- `components/`: onboarding/navigation, people management, match setup, live scoring, profiles, storage/settings and offline readiness.
+- `lib/engine.js`: pure deterministic event replay, validation, result calculation and raw-total career aggregation. Independent of React and Dexie.
+- `lib/db.js`: versioned Dexie schema, scoped repositories, transactional writes, revision conflicts, backup validation and restoration. Version 2 adds drafts without clearing version 1 records.
+- `scripts/precache.mjs`, `scripts/sw-template.js`: build-generated versioned full-export precache and service worker. No runtime third-party requests.
+- `scripts/serve.mjs`: local production static-file preview, not an application backend.
+- `tests/`: scoring/database unit tests and production Playwright acceptance tests.
+- `Docs/RULES.md`: supported cricket rules, authoritative sources and unsupported variations.
 
-## Initial Scope
+Tables: workspaces/settings, players, teams, memberships, matches (frozen squads and rules), innings (opening selections), events (deliveries and player selections), audits, drafts. Domain records carry a workspace ID. Career statistics combine raw totals from finalized match event replays; there are no incrementally maintained counters to duplicate.
 
-The first version targets limited-overs matches with one
-innings per team and one active scoring device per match.
+## Corrections and rule limits
 
-Payments, tournament management, live streaming, and
-advanced analytics are outside the initial scope.
+Undo previews the delivery being reversed and removes dependent selections. A historical correction explicitly rewinds the selected delivery and all later play, including any later innings. Removed events and innings are retained in the audit. Re-enter the corrected delivery and review/re-enter subsequent play; there is no automatic guess at invalid downstream selections.
 
-## Rules to Confirm
+This release supports the documented recreational six-ball limited-overs subset, not every MCC/ICC incident. See [the rule contract](Docs/RULES.md). No retired batters, DLS, super over, special penalty runs, runners, overthrow boundary allowances or mid-over injured-bowler substitution. Wicket decisions and run-out ends come from the umpire/scorer. Ties stand.
 
-- Standard cricket rules or local tape-ball rules.
-- Wide and no-ball penalties.
-- Free-hit rules.
-- Supported dismissal types.
-- Last-batter rules.
-- Overs and bowler limits.
-- Tie handling.
+## Tests
 
-## Repository Structure
+```sh
+npm test
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
 
-Current:
+If Windows process restrictions block Node test-worker spawning, run `node --test --test-isolation=none tests/*.test.js`. Production build and browser workers require permission to start subprocesses. If browsers were installed under a custom location, set `PLAYWRIGHT_BROWSERS_PATH` to that location for both installation and test execution.
 
-- README.md
-- .gitignore
-- docs/requirements.md
-- docs/day-01.md
-
-Planned application folders:
-
-- frontend/
-- backend/
-
-## Local Setup
-
-Application setup is pending.
-
-Installation commands, environment variables, and development
-scripts will be documented when the application is initialized.
-
-## Development Practices
-
-- Write simple, readable JavaScript.
-- Validate incoming data on the backend.
-- Enforce permissions on the server.
-- Keep secrets out of version control.
-- Store deliveries as the source for match calculations.
-- Verify scoring rules and corrections with meaningful tests.
-- Use clear commit messages and review changes before merging.
+See [Docs/VALIDATION.md](Docs/VALIDATION.md) for actual test results and outstanding physical-device checks. Tests use disposable browser contexts and generated test records; production is never seeded.
 
 ## Author
 
-Hussnain Ali
-
-Built as a portfolio project through a three-month,
-self-directed internship simulation.
+Hussnain Ali. Built as a portfolio project through a self-directed internship simulation.
