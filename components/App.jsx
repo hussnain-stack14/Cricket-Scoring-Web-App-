@@ -259,7 +259,7 @@ export default function App({ screen }) {
             <span className="desktop-user">{w?.name || 'Local scorer'}</span>
           </div>
         </header>
-        <main className="app-content">
+        <main className={`app-content ${screen === 'setup' ? 'setup-page-content' : ''}`}>
           {['dashboard', 'matches', 'reports', 'statistics'].includes(screen) ? (
             <div className="page-heading mobile-page-heading">
               <div>

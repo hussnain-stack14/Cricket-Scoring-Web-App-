@@ -393,3 +393,82 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await expect(page.locator('.app-shell')).toHaveClass(/sidebar-collapsed/);
 });
+
+test('match setup actions remain within the form and visible at responsive widths', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await page.getByLabel('Your scorer name').fill('Setup tester');
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await page.goto('/app/setup/');
+
+  for (const team of ['North', 'South']) {
+    await page.getByLabel(`Or create Team ${team === 'North' ? 'A' : 'B'}`).fill(team);
+    await page
+      .getByRole('button', { name: 'Create team', exact: true })
+      .nth(team === 'North' ? 0 : 1)
+      .click();
+  }
+
+  const actions = page.locator('.setup-actions');
+  const card = page.locator('.setup-card');
+  await expect(card.getByRole('heading', { name: 'Choose teams' })).toBeVisible();
+  await expect(actions.getByRole('button', { name: 'Continue' })).toBeVisible();
+
+  for (const width of [360, 768, 1024, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await actions.scrollIntoViewIfNeeded();
+    await expect(actions.getByRole('button', { name: 'Save draft' })).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'Continue' })).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const container = document.querySelector('.setup-layout').getBoundingClientRect();
+      const form = document.querySelector('.setup-card').getBoundingClientRect();
+      const action = document.querySelector('.setup-actions').getBoundingClientRect();
+      const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
+      const navVisible = getComputedStyle(document.querySelector('.bottom-nav')).display !== 'none';
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+        layoutWidth: container.width,
+        formWidth: form.width,
+        actionBottom: action.bottom,
+        cardBottom: form.bottom,
+        navTop: nav.top,
+        navVisible,
+        actionPosition: getComputedStyle(document.querySelector('.setup-actions')).position,
+      };
+    });
+    expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
+    expect(layout.actionBottom).toBeLessThanOrEqual(layout.cardBottom + 1);
+    expect(layout.actionPosition).not.toBe('sticky');
+    if (width >= 1440) expect(layout.formWidth).toBeLessThan(1000);
+    if (layout.navVisible) expect(layout.actionBottom).toBeLessThanOrEqual(layout.navTop);
+  }
+
+  await page.getByRole('button', { name: 'Save draft' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status')).toContainText('Saved on this device');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(card.getByRole('heading', { name: 'Match rules & toss' })).toBeVisible();
+  await expect(page.getByLabel('Toss winner')).toBeVisible();
+  await expect(actions.getByRole('button', { name: 'Back' })).toBeVisible();
+
+  for (const width of [360, 768, 1024, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await actions.scrollIntoViewIfNeeded();
+    await expect(page.getByLabel('Match date')).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'Start match' })).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const form = document.querySelector('.setup-card').getBoundingClientRect();
+      const action = document.querySelector('.setup-actions').getBoundingClientRect();
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+        actionBottom: action.bottom,
+        cardBottom: form.bottom,
+      };
+    });
+    expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
+    expect(layout.actionBottom).toBeLessThanOrEqual(layout.cardBottom + 1);
+  }
+});

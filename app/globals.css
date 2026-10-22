@@ -512,7 +512,8 @@ input[type='checkbox'] {
 .stepper {
   display: flex;
   justify-content: space-between;
-  margin: 12px 0 25px;
+  gap: 16px;
+  margin: 12px 0 20px;
 }
 .stepper > div {
   flex: 1;
@@ -543,14 +544,32 @@ input[type='checkbox'] {
 .setup-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 7px;
-  position: sticky;
-  bottom: 85px;
-  padding: 12px 0;
-  background: var(--bg);
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 .setup-actions .button {
-  padding: 12px;
+  min-width: 120px;
+}
+.setup-layout {
+  width: min(100%, 820px);
+  min-width: 0;
+  margin: 0 auto;
+}
+.setup-card {
+  margin: 0;
+  padding: 28px;
+}
+.setup-card > .eyebrow {
+  margin-top: 0;
+}
+.setup-card > h2 {
+  margin: 0 0 20px;
+}
+.setup-card > .setup-actions {
+  width: 100%;
 }
 .match-card {
   display: block;
@@ -1442,9 +1461,6 @@ pre {
     border-radius: 20px;
     max-height: 85dvh;
   }
-  .setup-actions {
-    bottom: 75px;
-  }
 }
 @media (max-width: 360px) {
   main {
@@ -1497,8 +1513,8 @@ pre {
     padding: 18px;
   }
   .setup-actions .button {
-    font-size: 11px;
-    padding: 10px;
+    min-width: 0;
+    padding: 10px 12px;
   }
   .scorecard > .row {
     align-items: flex-start;
@@ -2994,6 +3010,16 @@ pre {
     min-height: calc(100dvh - 82px);
     margin: 0 auto;
     padding: 34px clamp(28px, 4vw, 64px) 56px;
+  }
+  .setup-page-content {
+    max-width: 1180px;
+    padding-bottom: 36px;
+  }
+  .setup-layout {
+    width: min(100%, 820px);
+  }
+  .setup-card {
+    padding: 32px 36px;
   }
   .app-content > .mobile-page-heading {
     display: none;

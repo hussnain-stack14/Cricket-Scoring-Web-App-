@@ -95,7 +95,7 @@ export default function Setup({ w, data, run, setError }) {
   }
 
   return (
-    <>
+    <div className="setup-layout">
       <div className="stepper">
         {steps.map((step, index) => (
           <div key={step} className={index <= draft.step ? 'current' : ''}>
@@ -104,7 +104,7 @@ export default function Setup({ w, data, run, setError }) {
           </div>
         ))}
       </div>
-      <section className="card">
+      <section className="card setup-card">
         <p className="eyebrow">STEP {draft.step + 1} OF 2</p>
         <h2>{steps[draft.step]}</h2>
         {draft.step === 0 ? (
@@ -254,18 +254,18 @@ export default function Setup({ w, data, run, setError }) {
             </div>
           </>
         )}
-      </section>
-      <div className="setup-actions">
-        {draft.step > 0 && (
-          <Button secondary onClick={() => set('step', 0)}>
-            Back
+        <div className="setup-actions">
+          {draft.step > 0 && (
+            <Button secondary onClick={() => set('step', 0)}>
+              Back
+            </Button>
+          )}
+          <Button secondary onClick={() => run(() => saveRecord(w.id, 'drafts', draft))}>
+            Save draft
           </Button>
-        )}
-        <Button secondary onClick={() => run(() => saveRecord(w.id, 'drafts', draft))}>
-          Save draft
-        </Button>
-        <Button onClick={next}>{draft.step === 1 ? 'Start match' : 'Continue'} →</Button>
-      </div>
-    </>
+          <Button onClick={next}>{draft.step === 1 ? 'Start match' : 'Continue'} →</Button>
+        </div>
+      </section>
+    </div>
   );
 }
