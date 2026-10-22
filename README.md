@@ -28,12 +28,12 @@ Open http://127.0.0.1:3000. The build creates `out/`, generates 192px/512px norm
 2. Enter a local display name. Crease creates a random workspace ID, without example data.
 3. Create or select two teams, configure rules and toss, and start. Player entry and optional pre-match squads are not required.
 4. Select existing players or add batters and bowlers directly from the scoring screen. Player records are assigned to their team and included in match history.
-5. Record runs, extras and supported wickets. Select replacement batters and a different bowler when prompted. View both scorecards and over-by-over history.
+5. Score ordinary balls with one tap (0–4, 6); choose a wicket type after tapping **W**. Wide, no-ball, bye and leg-bye buttons show common options with penalty totals calculated for you. Use Advanced delivery for mixed extras, overthrows, and unusual dismissals. Select replacement batters and a different bowler when prompted. View both scorecards and over-by-over history.
 6. Finalize a completed result to include it in player statistics. Reopen removes it from career totals until finalized again.
 
 Players with identical names are distinguished by short UUIDs and team membership. New match players may be added during scoring up to the configured number of players per side. Team/player edits and archive operations preserve match history. Permanently deleting an individual record is available only when no match history references it; otherwise archive it to preserve the scorebook. Live means scoring in progress on this device, not broadcasting.
 
-The scoring controls debounce rapid taps, disable concurrent commits, and assign unique event IDs. Database transactions check match revisions, so a stale tab receives a visible conflict instead of overwriting newer play. Close extra tabs during backup replacement; refresh a stale scoring tab before continuing.
+The scoring controls block concurrent commits and assign unique event IDs; the score changes only after the local transaction saves. Undo reverses the most recent delivery through the correction audit. Database transactions check match revisions, so a stale tab receives a visible conflict instead of overwriting newer play. Close extra tabs during backup replacement; refresh a stale scoring tab before continuing.
 
 ## Offline preparation and updates
 

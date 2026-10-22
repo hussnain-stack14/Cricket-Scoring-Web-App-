@@ -745,6 +745,154 @@ td small {
 .scoring-controls h3 {
   font-size: 14px;
 }
+.quick-score-buttons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+.quick-score-buttons button {
+  min-height: 68px;
+  border: 1px solid #d6e0d3;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--green);
+  font-size: 27px;
+  font-weight: 750;
+  box-shadow: 0 2px 5px #152b2009;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+.quick-score-buttons button:active:not(:disabled) {
+  transform: scale(0.96);
+  box-shadow: 0 1px 2px #152b2014;
+}
+.quick-score-buttons button.score-boundary {
+  background: var(--lime);
+  border-color: var(--lime);
+}
+.quick-score-buttons button.score-wicket {
+  color: var(--red);
+  background: #fff0ef;
+  border-color: #f1ceca;
+}
+.quick-score-buttons button.score-undo {
+  color: var(--muted);
+  background: #f0f3ef;
+  border-color: #e1e8e1;
+  font-size: 16px;
+}
+.scoring-section-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.quick-extra-buttons {
+  margin-bottom: 13px;
+}
+.quick-extra-buttons button {
+  min-height: 48px;
+  font-weight: 650;
+}
+.advanced-delivery-link {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+.advanced-delivery-link .button {
+  width: 100%;
+  color: var(--muted);
+}
+.quick-sheet-content {
+  padding-bottom: 8px;
+}
+.quick-choice-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+.quick-choice-list button {
+  display: flex;
+  min-height: 52px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+}
+.quick-choice-list button:active:not(:disabled),
+.quick-choice-grid button:active:not(:disabled),
+.wicket-options button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.quick-choice-list strong {
+  flex: none;
+  color: var(--green);
+  font-size: 12px;
+}
+.quick-choice-list button:last-child {
+  justify-content: center;
+  color: var(--green);
+  font-weight: 700;
+}
+.quick-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.quick-choice-grid button {
+  min-height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--green);
+  font-size: 18px;
+  font-weight: 700;
+}
+.quick-choice-grid button:last-child {
+  grid-column: span 2;
+  font-size: 13px;
+}
+.wicket-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.wicket-options button {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+.wicket-options button.selected {
+  border-color: var(--green);
+  background: #eaf1df;
+  color: var(--green);
+  font-weight: 700;
+}
+.big-score {
+  animation: score-update 240ms ease-out;
+}
+@keyframes score-update {
+  from {
+    opacity: 0.7;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .chase-banner {
   padding: 13px 16px;
   background: #e7efd9;
@@ -1674,6 +1822,11 @@ pre {
     animation: none;
   }
   .feature-card {
+    transition: none;
+  }
+  .quick-score-buttons button,
+  .big-score {
+    animation: none;
     transition: none;
   }
 }

@@ -263,6 +263,7 @@ export function useOffline() {
     instructions: 'Installation instructions available',
     prompting: 'Opening installation prompt…',
     accepted: 'Installation accepted; waiting for browser confirmation.',
+    error: 'Installation prompt unavailable; use the installation instructions.',
     installed: 'App Already Installed',
   }[installState];
 

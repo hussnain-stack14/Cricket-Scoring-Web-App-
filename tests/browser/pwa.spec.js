@@ -5,6 +5,9 @@ test('production install controls, manifest, icons and offline precache are accu
 }) => {
   const consoleErrors = [];
   page.on('pageerror', (error) => consoleErrors.push(error.message));
+  page.on('response', (response) => {
+    if (response.status() === 404) consoleErrors.push(`404 ${response.url()}`);
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });

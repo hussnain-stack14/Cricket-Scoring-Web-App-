@@ -13,8 +13,9 @@ export default function Match({ w, data, run, error }) {
     [delivery, setDelivery] = useState({}),
     [newPlayerName, setNewPlayerName] = useState(''),
     [playerTeamId, setPlayerTeamId] = useState(''),
-    [sheetError, setSheetError] = useState('');
-  const lastTap = useRef(0);
+    [sheetError, setSheetError] = useState(''),
+    [savingDelivery, setSavingDelivery] = useState(false);
+  const deliveryInFlight = useRef(false);
   if (!m)
     return (
       <p>
@@ -70,10 +71,11 @@ export default function Match({ w, data, run, error }) {
     return ok;
   }
   async function ball(e) {
-    if (Date.now() - lastTap.current < 450) return;
-    lastTap.current = Date.now();
-    if (
-      await act({
+    if (deliveryInFlight.current || frozen || s.done || pendingSelection) return false;
+    deliveryInFlight.current = true;
+    setSavingDelivery(true);
+    try {
+      const saved = await act({
         type: 'event',
         event: {
           type: 'delivery',
@@ -84,11 +86,15 @@ export default function Match({ w, data, run, error }) {
           running: 0,
           ...e,
         },
-      })
-    )
-      setSheet(null);
+      });
+      if (saved) setSheet(null);
+      return !!saved;
+    } finally {
+      deliveryInFlight.current = false;
+      setSavingDelivery(false);
+    }
   }
-  function detail(extra = 'none', wicket = false) {
+  function detail(extra = 'none') {
     setSheetError('');
     setDelivery({
       bat: 0,
@@ -96,11 +102,76 @@ export default function Match({ w, data, run, error }) {
       extraRuns: 0,
       running: 0,
       boundary: false,
-      kind: wicket ? 'bowled' : '',
+      kind: '',
       player: s.striker,
       survivorEnd: 'striker',
     });
-    setSheet('delivery');
+    setSheet('advanced');
+  }
+  function quickExtra(extra) {
+    setSheetError('');
+    setDelivery({
+      bat: 0,
+      extra,
+      extraRuns: 0,
+      running: 0,
+      boundary: false,
+      kind: '',
+      player: s.striker,
+      survivorEnd: 'striker',
+    });
+    setSheet({ type: 'quick-extra', extra });
+  }
+  function chooseWicket(kind) {
+    setSheetError('');
+    setDelivery({
+      bat: 0,
+      extra: 'none',
+      extraRuns: 0,
+      running: 0,
+      boundary: false,
+      kind,
+      player: s.striker,
+      survivorEnd: 'striker',
+    });
+    setSheet({ type: 'wicket', kind });
+  }
+  async function recordWicket() {
+    return ball({
+      bat: 0,
+      extra: 'none',
+      extraRuns: 0,
+      running: 0,
+      wicket: {
+        kind: delivery.kind,
+        player: delivery.player,
+        ...(delivery.kind === 'run out' ? { survivorEnd: delivery.survivorEnd } : {}),
+      },
+    });
+  }
+  async function quickExtraRuns(extra, runs) {
+    const event =
+      extra === 'wide'
+        ? { bat: 0, extra: 'wide', extraRuns: runs, running: runs }
+        : extra === 'noBall'
+          ? {
+              bat: runs,
+              extra: 'noBall',
+              extraRuns: 0,
+              running: runs === 4 || runs === 6 ? 0 : runs,
+              boundary: runs === 4 || runs === 6,
+            }
+          : { bat: 0, extra, extraRuns: runs, running: runs };
+    return ball(event);
+  }
+  function undoLatest() {
+    if (!latest || deliveryInFlight.current) return;
+    deliveryInFlight.current = true;
+    setSavingDelivery(true);
+    act({ type: 'undo' }).finally(() => {
+      deliveryInFlight.current = false;
+      setSavingDelivery(false);
+    });
   }
   function addPlayer(teamId = '', selection = null) {
     setPlayerTeamId(teamId);
@@ -138,6 +209,9 @@ export default function Match({ w, data, run, error }) {
   }
   const set = (k, v) => setDelivery((d) => ({ ...d, [k]: v }));
   const latest = [...events].reverse().find((e) => e.type === 'delivery');
+  const dismissalKinds = s.freeHit
+    ? ['run out']
+    : ['bowled', 'caught', 'lbw', 'stumped', 'hit wicket', 'run out'];
   return (
     <>
       <div className="match-meta">
@@ -172,7 +246,7 @@ export default function Match({ w, data, run, error }) {
               <span>{s.freeHit ? 'FREE HIT' : `${m.rules.overs} OVERS`}</span>
             </div>
             <h2>{m.teams[battingSide].name}</h2>
-            <div className="big-score">
+            <div className="big-score" key={`${s.runs}-${s.wickets}-${s.balls}`}>
               {s.runs}
               <span>/{s.wickets}</span>
               <small>({overs(s.balls)})</small>
@@ -347,53 +421,68 @@ export default function Match({ w, data, run, error }) {
           ) : (
             <section className="scoring-controls">
               <div className="row">
-                <h3>Record delivery</h3>
+                <h3>Tap to score</h3>
                 <span className="help">
-                  Next ball {Math.floor(s.balls / 6)}.{(s.balls % 6) + 1}
+                  {savingDelivery
+                    ? 'Saving…'
+                    : `Next ball ${Math.floor(s.balls / 6)}.${(s.balls % 6) + 1}`}
                 </span>
               </div>
-              <div className="run-buttons">
-                {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+              <div className="run-buttons quick-score-buttons">
+                {[0, 1, 2, 3, 4, 6, 'W', 'Undo'].map((value) => (
                   <button
-                    key={n}
-                    onClick={() =>
-                      ball({
-                        bat: n,
-                        running: n === 4 || n === 6 ? 0 : n,
-                        boundary: n === 4 || n === 6,
-                      })
+                    key={value}
+                    type="button"
+                    className={
+                      value === 'W'
+                        ? 'score-wicket'
+                        : value === 'Undo'
+                          ? 'score-undo'
+                          : value === 4 || value === 6
+                            ? 'score-boundary'
+                            : ''
                     }
+                    disabled={savingDelivery || (value === 'Undo' && !latest)}
+                    onClick={() => {
+                      if (value === 'W') {
+                        chooseWicket(dismissalKinds[0]);
+                      } else if (value === 'Undo') undoLatest();
+                      else
+                        ball({
+                          bat: value,
+                          running: value === 4 || value === 6 ? 0 : value,
+                          boundary: value === 4 || value === 6,
+                        });
+                    }}
                   >
-                    {n}
+                    {value}
                   </button>
                 ))}
               </div>
-              <div className="extras-buttons">
+              <p className="scoring-section-label">Extras</p>
+              <div className="extras-buttons quick-extra-buttons">
                 {[
                   ['Wide', 'wide'],
                   ['No-ball', 'noBall'],
-                  ['Byes', 'bye'],
-                  ['Leg-byes', 'legBye'],
+                  ['Bye', 'bye'],
+                  ['Leg Bye', 'legBye'],
                 ].map(([label, value]) => (
-                  <button key={value} onClick={() => detail(value)}>
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={savingDelivery}
+                    onClick={() => quickExtra(value)}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
-              <div className="two-col">
-                <Button secondary onClick={() => detail()}>
-                  Other runs / details
-                </Button>
-                <Button danger onClick={() => detail('none', true)}>
-                  Wicket
+              <div className="advanced-delivery-link">
+                <Button secondary disabled={savingDelivery} onClick={() => detail()}>
+                  Advanced delivery
                 </Button>
               </div>
             </section>
-          )}
-          {!frozen && latest && (
-            <Button secondary onClick={() => setSheet('undo')}>
-              Undo last delivery
-            </Button>
           )}
         </>
       )}
@@ -462,17 +551,26 @@ export default function Match({ w, data, run, error }) {
       {sheet && (
         <Sheet
           title={
-            sheet === 'delivery'
-              ? 'Delivery details'
-              : sheet === 'chase'
-                ? 'Opening the chase'
-                : sheet.type === 'player'
-                  ? sheet.selection?.type === 'batter'
-                    ? 'Add a batsman'
-                    : sheet.selection?.type === 'bowler'
-                      ? 'Add a bowler'
-                      : 'Add player to match'
-                  : 'Confirm match change'
+            sheet === 'advanced'
+              ? 'Advanced delivery'
+              : sheet?.type === 'wicket'
+                ? 'Record wicket'
+                : sheet?.type === 'quick-extra'
+                  ? {
+                      wide: 'Wide',
+                      noBall: 'No-ball',
+                      bye: 'Byes',
+                      legBye: 'Leg byes',
+                    }[sheet.extra]
+                  : sheet === 'chase'
+                    ? 'Opening the chase'
+                    : sheet.type === 'player'
+                      ? sheet.selection?.type === 'batter'
+                        ? 'Add a batsman'
+                        : sheet.selection?.type === 'bowler'
+                          ? 'Add a bowler'
+                          : 'Add player to match'
+                      : 'Confirm match change'
           }
           close={() => {
             setSheet(null);
@@ -509,7 +607,138 @@ export default function Match({ w, data, run, error }) {
               <Button>Add player</Button>
             </form>
           )}
-          {sheet === 'delivery' && (
+          {sheet?.type === 'wicket' && (
+            <div className="quick-sheet-content">
+              <p className="help">
+                Choose how the batter was dismissed.{' '}
+                {s.freeHit ? 'A free hit allows run out only.' : ''}
+              </p>
+              <div className="wicket-options">
+                {dismissalKinds.map((kind) => (
+                  <button
+                    type="button"
+                    key={kind}
+                    className={delivery.kind === kind ? 'selected' : ''}
+                    onClick={() => set('kind', kind)}
+                  >
+                    {kind[0].toUpperCase() + kind.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <Select
+                label="Dismissed batter"
+                value={delivery.player}
+                onChange={(event) => set('player', event.target.value)}
+                options={[s.striker, s.nonStriker]
+                  .filter(Boolean)
+                  .map((playerId) => playerLabel(s.batting[playerId]))}
+              />
+              {delivery.kind === 'run out' && (
+                <Select
+                  label="Which end does the not-out batter take?"
+                  value={delivery.survivorEnd}
+                  onChange={(event) => set('survivorEnd', event.target.value)}
+                  options={[
+                    { id: 'striker', name: 'Striker end' },
+                    { id: 'nonStriker', name: 'Non-striker end' },
+                  ]}
+                />
+              )}
+              <Button
+                disabled={savingDelivery || !delivery.kind || !delivery.player}
+                onClick={recordWicket}
+              >
+                {savingDelivery ? 'Saving…' : 'Record wicket'}
+              </Button>
+              <Button secondary onClick={() => detail()}>
+                Advanced dismissal details
+              </Button>
+            </div>
+          )}
+          {sheet?.type === 'quick-extra' && (
+            <div className="quick-sheet-content">
+              {sheet.extra === 'wide' && (
+                <>
+                  <p className="help">
+                    One wide penalty is added automatically. Tap the completed runs; the team total
+                    includes the penalty.
+                  </p>
+                  <div className="quick-choice-list">
+                    {[0, 1, 2, 3].map((runs) => (
+                      <button
+                        type="button"
+                        key={runs}
+                        disabled={savingDelivery}
+                        onClick={() => quickExtraRuns('wide', runs)}
+                      >
+                        <span>
+                          Wide + {runs} completed {runs === 1 ? 'run' : 'runs'}
+                        </span>
+                        <strong>
+                          {runs + 1} team {runs + 1 === 1 ? 'run' : 'runs'}
+                        </strong>
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => detail('wide')}>
+                      Custom
+                    </button>
+                  </div>
+                </>
+              )}
+              {sheet.extra === 'noBall' && (
+                <>
+                  <p className="help">
+                    The no-ball penalty is added automatically. Bat runs are separate, and the free
+                    hit follows this match&apos;s rules.
+                  </p>
+                  <div className="quick-choice-list">
+                    {[0, 1, 2, 4, 6].map((runs) => (
+                      <button
+                        type="button"
+                        key={runs}
+                        disabled={savingDelivery}
+                        onClick={() => quickExtraRuns('noBall', runs)}
+                      >
+                        <span>
+                          No-ball + {runs} bat {runs === 1 ? 'run' : 'runs'}
+                        </span>
+                        <strong>
+                          {runs + 1} team {runs + 1 === 1 ? 'run' : 'runs'}
+                        </strong>
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => detail('noBall')}>
+                      Other extras / Custom
+                    </button>
+                  </div>
+                </>
+              )}
+              {(sheet.extra === 'bye' || sheet.extra === 'legBye') && (
+                <>
+                  <p className="help">
+                    {sheet.extra === 'bye' ? 'Byes' : 'Leg byes'} are added to the team, not the
+                    batter.
+                  </p>
+                  <div className="quick-choice-grid">
+                    {[1, 2, 3, 4].map((runs) => (
+                      <button
+                        type="button"
+                        key={runs}
+                        disabled={savingDelivery}
+                        onClick={() => quickExtraRuns(sheet.extra, runs)}
+                      >
+                        {runs}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => detail(sheet.extra)}>
+                      Custom
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {sheet === 'advanced' && (
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -619,7 +848,9 @@ export default function Match({ w, data, run, error }) {
                 Penalties are added automatically. Enter only completed running, excluding penalties
                 and boundary allowances. Umpire decisions determine the dismissal and ends.
               </p>
-              <Button>Save delivery</Button>
+              <Button disabled={savingDelivery}>
+                {savingDelivery ? 'Saving…' : 'Save advanced delivery'}
+              </Button>
             </form>
           )}
           {sheet === 'chase' && (
@@ -640,27 +871,6 @@ export default function Match({ w, data, run, error }) {
                 }}
               >
                 Start second innings
-              </Button>
-            </>
-          )}
-          {sheet === 'undo' && (
-            <>
-              <p>
-                Reverse the latest delivery:{' '}
-                <strong>
-                  {latest?.extra} · {latest?.bat || 0} bat runs
-                  {latest?.wicket ? ` · ${latest.wicket.kind}` : ''}
-                </strong>
-                . Any selections made after it will also be reversed. If this was the first innings,
-                an empty chase setup is removed.
-              </p>
-              <Button
-                danger
-                onClick={async () => {
-                  if (await act({ type: 'undo' })) setSheet(null);
-                }}
-              >
-                Confirm undo
               </Button>
             </>
           )}
