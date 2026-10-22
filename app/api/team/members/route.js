@@ -6,6 +6,7 @@ import { Resend } from 'resend';
 import { connectDB } from '../../../../lib/server/db';
 import { TeamMember } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
+import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 
 function getResend() {
   return process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -20,6 +21,12 @@ export async function GET(req) {
   const session = await getIronSession(req, res, getSessionOptions());
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to access team members.' }, { status: 401 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
 
   await connectDB();
@@ -45,6 +52,12 @@ export async function POST(req) {
   }
   if (session.role !== 'owner') {
     return NextResponse.json({ error: 'Only team owners can invite members.' }, { status: 403 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
 
   let body;
@@ -130,6 +143,12 @@ export async function DELETE(req) {
 
   if (!session.teamId || session.role !== 'owner') {
     return NextResponse.json({ error: 'Only team owners can remove members.' }, { status: 403 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
 
   let body;

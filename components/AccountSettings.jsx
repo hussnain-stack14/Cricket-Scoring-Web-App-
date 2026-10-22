@@ -1,18 +1,11 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import {
-  Leaf,
-  UserPlus,
-  Trash2,
-  Copy,
-  Check,
-  Shield,
-  Link,
-} from 'lucide-react';
+import { Leaf, UserPlus, Trash2, Copy, Check, Shield, Link } from 'lucide-react';
 import { activateAccountWorkspace, db, exportBackup, listWorkspaces } from '../lib/db';
 import { fetchSession, getSyncState, resolveConflict, sync } from '../lib/sync';
 import SignOutAction from './SignOutAction';
 import SyncStatus from './SyncStatus';
+import AccountSecurity from './AccountSecurity';
 
 const ROLE_LABELS = { owner: 'Owner', scorer: 'Scorer', viewer: 'Viewer' };
 const ROLE_DESCRIPTIONS = {
@@ -55,11 +48,14 @@ export default function AccountSettings() {
   const loadSession = useCallback(async () => {
     const s = await fetchSession();
     if (s) {
-      const ws = await activateAccountWorkspace(s.teamId, s.teamName);
+      const workspaceKey = s.workspaceKey || s.teamId;
+      const ws = await activateAccountWorkspace(workspaceKey, s.teamName);
       setWorkspaceId(ws.id);
       const workspaces = await listWorkspaces();
       const metadata = await db.syncMeta.toArray();
-      const linked = new Set(metadata.filter((item) => item.teamId).map((item) => item.workspaceId));
+      const linked = new Set(
+        metadata.filter((item) => item.teamId).map((item) => item.workspaceId),
+      );
       const local = workspaces.filter((item) => item.id !== ws.id && !linked.has(item.id));
       setLocalWorkspaces(local);
       setMigrateSourceId((current) => current || local[0]?.id || '');
@@ -68,14 +64,17 @@ export default function AccountSettings() {
     setSessionLoading(false);
   }, []);
 
-  const loadSyncMeta = useCallback(async (id = workspaceId) => {
-    if (id) {
-      const state = await getSyncState(id);
-      setSyncMeta(state.meta);
-      setPendingSync(state.pending);
-      setConflicts(state.conflicts);
-    }
-  }, [workspaceId]);
+  const loadSyncMeta = useCallback(
+    async (id = workspaceId) => {
+      if (id) {
+        const state = await getSyncState(id);
+        setSyncMeta(state.meta);
+        setPendingSync(state.pending);
+        setConflicts(state.conflicts);
+      }
+    },
+    [workspaceId],
+  );
 
   const loadMembers = useCallback(async () => {
     if (!session) return;
@@ -97,7 +96,10 @@ export default function AccountSettings() {
       try {
         const s = await loadSession();
         if (s) {
-          const meta = await db.syncMeta.where('teamId').equals(s.teamId).first();
+          const meta = await db.syncMeta
+            .where('teamId')
+            .equals(s.workspaceKey || s.teamId)
+            .first();
           if (meta) {
             const state = await getSyncState(meta.workspaceId);
             if (active) {
@@ -108,7 +110,8 @@ export default function AccountSettings() {
           }
         }
       } catch (error) {
-        if (active) setActionError(error instanceof Error ? error.message : 'Could not load account data.');
+        if (active)
+          setActionError(error instanceof Error ? error.message : 'Could not load account data.');
         if (active) setSessionLoading(false);
       }
     }
@@ -139,6 +142,7 @@ export default function AccountSettings() {
     try {
       if (workspaceId) {
         const result = await sync(workspaceId);
+        if (result.session) setSession(result.session);
         if (result.status !== 'synced')
           setActionError(result.error || 'Sync did not finish. Your local changes are retained.');
         await loadSyncMeta(workspaceId);
@@ -274,10 +278,9 @@ export default function AccountSettings() {
     });
   }
 
-  const statusKey =
-    !online
-      ? 'offline'
-      : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
+  const statusKey = !online
+    ? 'offline'
+    : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
 
   if (sessionLoading) {
     return (
@@ -293,15 +296,21 @@ export default function AccountSettings() {
     <div className="auth-shell">
       <header className="auth-header">
         <a className="auth-brand" href="/">
-          <span className="brand-mark"><Leaf size={20} /></span>
+          <span className="brand-mark">
+            <Leaf size={20} />
+          </span>
           crease<span>.</span>
         </a>
-        <a href="/app/" className="auth-header-app-link">← App</a>
+        <a href="/app/" className="auth-header-app-link">
+          ← App
+        </a>
       </header>
 
       <main className="auth-main">
         <div className="auth-hero" style={{ marginBottom: '1.5rem' }}>
-          <span className="auth-kicker"><Shield size={14} /> ACCOUNT SETTINGS</span>
+          <span className="auth-kicker">
+            <Shield size={14} /> ACCOUNT SETTINGS
+          </span>
           <h1>{session ? session.teamName : 'Team Account'}</h1>
           {session && (
             <p className="auth-team-id-display">
@@ -335,7 +344,9 @@ export default function AccountSettings() {
                 )}
               </div>
               {syncMeta?.lastError && (
-                <p className="auth-error" style={{ marginTop: '0.5rem' }}>{syncMeta.lastError}</p>
+                <p className="auth-error" style={{ marginTop: '0.5rem' }}>
+                  {syncMeta.lastError}
+                </p>
               )}
               {conflicts.length > 0 && (
                 <div className="sync-conflicts">
@@ -372,17 +383,24 @@ export default function AccountSettings() {
               )}
             </section>
 
+            {session.role === 'owner' && (
+              <AccountSecurity
+                session={session}
+                onTeamIdChanged={(teamId) => setSession((current) => ({ ...current, teamId }))}
+              />
+            )}
+
             {/* ─── Local Data Migration ─── */}
             {session.role === 'owner' && migrateStep === null && (
               <section className="account-section">
                 <h2>Link local data to this account</h2>
                 <p>
-                  Upload your existing local teams, players and matches to this team account
-                  so you can access them from other devices.
+                  Upload your existing local teams, players and matches to this team account so you
+                  can access them from other devices.
                 </p>
                 <p className="auth-field-hint">
-                  A backup of your current local data will be downloaded automatically before upload.
-                  Your local records will not be deleted.
+                  A backup of your current local data will be downloaded automatically before
+                  upload. Your local records will not be deleted.
                 </p>
                 {localWorkspaces.length > 0 ? (
                   <>
@@ -412,15 +430,17 @@ export default function AccountSettings() {
               <section className="account-section">
                 <h2>Preview: local data upload</h2>
                 <div className="auth-info-card">
-                  <p><strong>Workspace:</strong> {migratePreview.workspace.name}</p>
+                  <p>
+                    <strong>Workspace:</strong> {migratePreview.workspace.name}
+                  </p>
                   <p>
                     {migratePreview.players} players · {migratePreview.teams} teams ·{' '}
                     {migratePreview.matches} matches · {migratePreview.events} scoring events ·{' '}
                     {migratePreview.audits} audit records
                   </p>
                   <p>
-                    A backup file will be downloaded to your device automatically before upload.
-                    Any records already on the server will not be overwritten.
+                    A backup file will be downloaded to your device automatically before upload. Any
+                    records already on the server will not be overwritten.
                   </p>
                 </div>
                 {migrateError && <p className="auth-error">{migrateError}</p>}
@@ -437,7 +457,10 @@ export default function AccountSettings() {
             {migrateStep === 'done' && (
               <section className="account-section">
                 <h2>Upload complete</h2>
-                <p>Your local data has been linked to this team account. It will now sync across your devices.</p>
+                <p>
+                  Your local data has been linked to this team account. It will now sync across your
+                  devices.
+                </p>
                 <button className="button secondary" onClick={() => setMigrateStep(null)}>
                   Done
                 </button>
@@ -464,7 +487,9 @@ export default function AccountSettings() {
                           <span className={`member-role-badge role-${m.role}`}>
                             {ROLE_LABELS[m.role]}
                           </span>
-                          {!m.activatedAt && <span className="member-pending-badge">Invite pending</span>}
+                          {!m.activatedAt && (
+                            <span className="member-pending-badge">Invite pending</span>
+                          )}
                         </div>
                         {m.role !== 'owner' && (
                           <button
@@ -524,7 +549,9 @@ export default function AccountSettings() {
 
                 {inviteResult && (
                   <div className="auth-info-card" style={{ marginTop: '1rem' }}>
-                    <p><strong>Invite link created!</strong></p>
+                    <p>
+                      <strong>Invite link created!</strong>
+                    </p>
                     <p>Share this link with your team member. It expires in 7 days.</p>
                     <div className="auth-teamid-value" style={{ wordBreak: 'break-all' }}>
                       <code style={{ fontSize: '0.8rem' }}>{inviteResult.inviteUrl}</code>

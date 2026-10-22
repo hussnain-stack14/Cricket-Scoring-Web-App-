@@ -9,6 +9,7 @@ import {
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { loginLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
+import { isValidLoginTeamId, normalizeLoginTeamId } from '../../../../lib/accountCredentials';
 
 /** POST /api/auth/login */
 export async function POST(req) {
@@ -26,7 +27,7 @@ export async function POST(req) {
   const { teamId, password } = body ?? {};
 
   // Basic format validation — do not reveal whether the team exists
-  if (typeof teamId !== 'string' || !/^CRS-\d{6}$/.test(teamId.toUpperCase().trim())) {
+  if (typeof teamId !== 'string' || !isValidLoginTeamId(normalizeLoginTeamId(teamId))) {
     return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
   }
   if (typeof password !== 'string' || password.length < 1) {
@@ -37,7 +38,13 @@ export async function POST(req) {
     const authOptions = getSessionOptions();
     await connectDB();
 
-    const account = await TeamAccount.findOne({ teamId: teamId.toUpperCase().trim() });
+    const normalizedTeamId = normalizeLoginTeamId(teamId);
+    const account = await TeamAccount.findOne({
+      $or: [
+        { loginTeamId: normalizedTeamId },
+        { loginTeamId: { $exists: false }, teamId: normalizedTeamId },
+      ],
+    });
 
     // Constant-time comparison to resist timing attacks
     const dummyHash = '$2b$12$invalidhashpaddingtoresisttimingattacks.invalidsalt.xxx';
@@ -46,6 +53,11 @@ export async function POST(req) {
 
     if (!account || !match) {
       return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
+    }
+
+    if (!account.loginTeamId) {
+      account.loginTeamId = account.teamId;
+      await account.save();
     }
 
     // Find or create the owner member record
@@ -66,7 +78,7 @@ export async function POST(req) {
     await TeamAccount.updateOne({ teamId: account.teamId }, { lastLoginAt: new Date() });
 
     const res = NextResponse.json({
-      teamId: account.teamId,
+      teamId: account.loginTeamId,
       teamName: account.name,
       memberId: ownerMember.memberId,
       role: 'owner',
@@ -74,9 +86,12 @@ export async function POST(req) {
 
     const session = await getIronSession(req, res, authOptions);
     session.teamId = account.teamId;
+    session.accountId = account._id.toString();
+    session.publicTeamId = account.loginTeamId;
     session.teamName = account.name;
     session.memberId = ownerMember.memberId;
     session.role = 'owner';
+    session.authVersion = account.authVersion ?? 0;
     await session.save();
 
     return res;

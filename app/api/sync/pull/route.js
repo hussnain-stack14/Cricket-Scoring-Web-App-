@@ -3,6 +3,7 @@ import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
+import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 
 const ALLOWED_TABLES = [
   'players',
@@ -27,6 +28,12 @@ export async function GET(req) {
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
 
   const { searchParams } = new URL(req.url);

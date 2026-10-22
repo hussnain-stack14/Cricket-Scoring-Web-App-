@@ -78,6 +78,11 @@ export default function Settings({
               <a className="button secondary" href="/account/settings/">
                 Account settings
               </a>
+              {session.role === 'owner' && (
+                <a className="button secondary" href="/account/settings/#security">
+                  Account security
+                </a>
+              )}
               <SignOutAction workspaceId={workspaceId} />
             </div>
           </>

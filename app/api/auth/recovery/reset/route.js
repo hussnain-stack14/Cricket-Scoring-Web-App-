@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '../../../../../lib/server/db';
 import { TeamAccount } from '../../../../../lib/server/models';
+import {
+  normalizeLoginTeamId,
+  passwordValidationError,
+} from '../../../../../lib/accountCredentials';
 
 /**
  * POST /api/auth/recovery/reset
@@ -17,35 +21,24 @@ export async function POST(req) {
 
   const { teamId, token, newPassword, confirmPassword } = body ?? {};
 
-  if (
-    typeof teamId !== 'string' ||
-    typeof token !== 'string' ||
-    typeof newPassword !== 'string'
-  ) {
+  if (typeof teamId !== 'string' || typeof token !== 'string' || typeof newPassword !== 'string') {
     return NextResponse.json({ error: 'Invalid reset request.' }, { status: 400 });
   }
 
-  if (newPassword.length < 8) {
-    return NextResponse.json(
-      { error: 'New password must be at least 8 characters.' },
-      { status: 400 },
-    );
-  }
+  const passwordError = passwordValidationError(newPassword);
+  if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
   if (newPassword !== confirmPassword) {
     return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 });
   }
-  if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-    return NextResponse.json(
-      { error: 'Password must contain at least one letter and one number.' },
-      { status: 400 },
-    );
-  }
-
   await connectDB();
 
+  const normalizedTeamId = normalizeLoginTeamId(teamId);
   const account = await TeamAccount.findOne({
-    teamId: teamId.toUpperCase().trim(),
     recoveryTokenExpiry: { $gt: new Date() },
+    $or: [
+      { loginTeamId: normalizedTeamId },
+      { loginTeamId: { $exists: false }, teamId: normalizedTeamId },
+    ],
   });
 
   if (!account?.recoveryTokenHash) {
@@ -65,11 +58,18 @@ export async function POST(req) {
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await TeamAccount.updateOne(
-    { teamId: account.teamId },
     {
-      passwordHash,
-      recoveryTokenHash: null,
-      recoveryTokenExpiry: null,
+      _id: account._id,
+      $or: [{ authVersion: account.authVersion ?? 0 }, { authVersion: { $exists: false } }],
+    },
+    {
+      $set: {
+        passwordHash,
+        recoveryTokenHash: null,
+        recoveryTokenExpiry: null,
+        loginTeamId: account.loginTeamId || account.teamId,
+      },
+      $inc: { authVersion: 1 },
     },
   );
 

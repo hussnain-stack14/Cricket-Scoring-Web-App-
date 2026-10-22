@@ -3,6 +3,7 @@ import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
+import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 
 const ALLOWED_TABLES = new Set([
   'players',
@@ -15,8 +16,7 @@ const ALLOWED_TABLES = new Set([
   'drafts',
 ]);
 const MAX_BATCH = 250;
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function publicRecord(record) {
   return record
@@ -47,6 +47,12 @@ export async function POST(req) {
   const session = await getIronSession(req, response, getSessionOptions());
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
   if (session.role === 'viewer') {
     return NextResponse.json({ error: 'Viewers cannot push changes.' }, { status: 403 });
@@ -118,7 +124,11 @@ export async function POST(req) {
             applied.push({ table, recordId, changeId, revision: latest.revision });
           } else {
             rejected.push(
-              conflict(change, latest, 'The server changed during this push. Resolve the conflict.'),
+              conflict(
+                change,
+                latest,
+                'The server changed during this push. Resolve the conflict.',
+              ),
             );
           }
           continue;
@@ -144,7 +154,12 @@ export async function POST(req) {
           name: error?.name || 'Error',
           code: error?.code,
         });
-        rejected.push({ table, recordId, reason: 'Server error applying change.', serverRecord: null });
+        rejected.push({
+          table,
+          recordId,
+          reason: 'Server error applying change.',
+          serverRecord: null,
+        });
       }
     }
   }

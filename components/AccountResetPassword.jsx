@@ -78,19 +78,34 @@ export default function AccountResetPassword() {
       <div className="auth-shell">
         <header className="auth-header">
           <a className="auth-brand" href="/">
-            <span className="brand-mark"><Leaf size={20} /></span>
+            <span className="brand-mark">
+              <Leaf size={20} />
+            </span>
             crease<span>.</span>
           </a>
         </header>
 
         <main className="auth-main auth-main-narrow">
           <div className="auth-success-card" style={{ textAlign: 'center' }}>
-            <span style={{ color: 'var(--color-primary, #7fae42)', display: 'inline-block', marginBottom: '1rem' }}>
+            <span
+              style={{
+                color: 'var(--color-primary, #7fae42)',
+                display: 'inline-block',
+                marginBottom: '1rem',
+              }}
+            >
               <CheckCircle2 size={48} />
             </span>
             <h1>Password updated!</h1>
-            <p>Your team password has been successfully reset. You can now sign in with your new credentials.</p>
-            <a className="button landing-primary auth-submit" href="/account/login/" style={{ display: 'inline-flex', marginTop: '1.5rem' }}>
+            <p>
+              Your team password has been successfully reset. You can now sign in with your new
+              credentials.
+            </p>
+            <a
+              className="button landing-primary auth-submit"
+              href="/account/login/"
+              style={{ display: 'inline-flex', marginTop: '1.5rem' }}
+            >
               Sign in now <ArrowRight size={17} />
             </a>
           </div>
@@ -103,14 +118,18 @@ export default function AccountResetPassword() {
     <div className="auth-shell">
       <header className="auth-header">
         <a className="auth-brand" href="/">
-          <span className="brand-mark"><Leaf size={20} /></span>
+          <span className="brand-mark">
+            <Leaf size={20} />
+          </span>
           crease<span>.</span>
         </a>
       </header>
 
       <main className="auth-main auth-main-narrow">
         <div className="auth-hero">
-          <span className="auth-kicker"><KeyRound size={14} /> ACCOUNT RECOVERY</span>
+          <span className="auth-kicker">
+            <KeyRound size={14} /> ACCOUNT RECOVERY
+          </span>
           <h1>Reset Password</h1>
           <p>Choose a new password for your Crease team account.</p>
         </div>
@@ -127,10 +146,10 @@ export default function AccountResetPassword() {
             <input
               id="teamId"
               type="text"
-              placeholder="CRS-XXXXXX"
+              placeholder="CRS-YOUNGS01"
               value={teamId}
               spellCheck={false}
-              maxLength={10}
+              maxLength={16}
               required
               onChange={(e) => setTeamId(e.target.value.toUpperCase())}
             />
@@ -184,7 +203,13 @@ export default function AccountResetPassword() {
           </div>
 
           <button className="auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Updating password…' : <>Reset password <ArrowRight size={17} /></>}
+            {busy ? (
+              'Updating password…'
+            ) : (
+              <>
+                Reset password <ArrowRight size={17} />
+              </>
+            )}
           </button>
         </form>
 

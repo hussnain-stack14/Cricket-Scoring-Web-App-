@@ -5,6 +5,7 @@ import { Resend } from 'resend';
 import { connectDB } from '../../../../../lib/server/db';
 import { TeamAccount } from '../../../../../lib/server/models';
 import { registerLimiter, checkRateLimit, getClientIp } from '../../../../../lib/server/rateLimit';
+import { normalizeLoginTeamId } from '../../../../../lib/accountCredentials';
 
 function getResend() {
   return process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -31,16 +32,19 @@ export async function POST(req) {
 
   const { teamId, recoveryEmail } = body ?? {};
 
-  if (
-    typeof teamId !== 'string' ||
-    typeof recoveryEmail !== 'string'
-  ) {
+  if (typeof teamId !== 'string' || typeof recoveryEmail !== 'string') {
     return NextResponse.json({ ok: true });
   }
 
   await connectDB();
 
-  const account = await TeamAccount.findOne({ teamId: teamId.toUpperCase().trim() });
+  const normalizedTeamId = normalizeLoginTeamId(teamId);
+  const account = await TeamAccount.findOne({
+    $or: [
+      { loginTeamId: normalizedTeamId },
+      { loginTeamId: { $exists: false }, teamId: normalizedTeamId },
+    ],
+  });
 
   // Only send email if team exists AND has a matching recovery email
   if (account?.recoveryEmail) {
@@ -59,7 +63,7 @@ export async function POST(req) {
         { recoveryTokenHash: tokenHash, recoveryTokenExpiry: expiry },
       );
 
-      const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/account/reset-password/?token=${token}&teamId=${account.teamId}`;
+      const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/account/reset-password/?token=${token}&teamId=${account.loginTeamId || account.teamId}`;
 
       const resend = getResend();
       if (resend) {
@@ -69,7 +73,7 @@ export async function POST(req) {
           subject: 'Reset your Crease password',
           html: `
             <p>Hi,</p>
-            <p>Someone requested a password reset for the Crease team account <strong>${account.teamId}</strong> (${account.name}).</p>
+            <p>Someone requested a password reset for the Crease team account <strong>${account.loginTeamId || account.teamId}</strong> (${account.name}).</p>
             <p>Click the link below to reset your password. The link expires in 1 hour.</p>
             <p><a href="${resetUrl}">${resetUrl}</a></p>
             <p>If you did not request this, ignore this email. Your password has not changed.</p>

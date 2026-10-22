@@ -79,10 +79,14 @@ export async function POST(req) {
   );
 
   // Fetch team name for session
-  const account = await TeamAccount.findOne({ teamId: member.teamId }, { name: 1 });
+  const account = await TeamAccount.findOne(
+    { teamId: member.teamId },
+    { name: 1, loginTeamId: 1, authVersion: 1 },
+  );
+  const publicTeamId = account?.loginTeamId || member.teamId;
 
   const res = NextResponse.json({
-    teamId: member.teamId,
+    teamId: publicTeamId,
     teamName: account?.name ?? '',
     memberId,
     role: member.role,
@@ -90,9 +94,12 @@ export async function POST(req) {
 
   const session = await getIronSession(req, res, getSessionOptions());
   session.teamId = member.teamId;
+  session.accountId = account?._id.toString();
+  session.publicTeamId = publicTeamId;
   session.teamName = account?.name ?? '';
   session.memberId = memberId;
   session.role = member.role;
+  session.authVersion = account?.authVersion ?? 0;
   await session.save();
 
   return res;

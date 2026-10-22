@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Leaf, LogIn, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
 
 export default function AccountLogin() {
   const [teamId, setTeamId] = useState('');
@@ -15,9 +16,9 @@ export default function AccountLogin() {
     setBusy(true);
     setError('');
 
-    const normalised = teamId.toUpperCase().trim();
-    if (!/^CRS-\d{6}$/.test(normalised)) {
-      setError('Team ID must be in the format CRS-XXXXXX (e.g. CRS-482916).');
+    const normalised = normalizeLoginTeamId(teamId);
+    if (!isValidLoginTeamId(normalised)) {
+      setError('Team ID must use CRS- followed by 4–12 letters or numbers.');
       setBusy(false);
       return;
     }
@@ -63,14 +64,18 @@ export default function AccountLogin() {
     <div className="auth-shell">
       <header className="auth-header">
         <a className="auth-brand" href="/">
-          <span className="brand-mark"><Leaf size={20} /></span>
+          <span className="brand-mark">
+            <Leaf size={20} />
+          </span>
           crease<span>.</span>
         </a>
       </header>
 
       <main className="auth-main auth-main-narrow">
         <div className="auth-hero">
-          <span className="auth-kicker"><LogIn size={14} /> TEAM SIGN IN</span>
+          <span className="auth-kicker">
+            <LogIn size={14} /> TEAM SIGN IN
+          </span>
           <h1>Welcome back.</h1>
           <p>Enter your Team ID and password to access your records.</p>
         </div>
@@ -87,11 +92,11 @@ export default function AccountLogin() {
             <input
               id="teamId"
               type="text"
-              placeholder="CRS-XXXXXX"
+              placeholder="CRS-YOUNGS01"
               value={teamId}
               autoComplete="username"
               spellCheck={false}
-              maxLength={10}
+              maxLength={16}
               required
               onChange={(e) => setTeamId(e.target.value.toUpperCase())}
             />
@@ -122,7 +127,13 @@ export default function AccountLogin() {
           </div>
 
           <button className="auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Signing in…' : <>Sign in <ArrowRight size={17} /></>}
+            {busy ? (
+              'Signing in…'
+            ) : (
+              <>
+                Sign in <ArrowRight size={17} />
+              </>
+            )}
           </button>
 
           <div className="auth-form-links">

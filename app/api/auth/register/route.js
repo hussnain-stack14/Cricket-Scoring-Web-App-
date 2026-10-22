@@ -82,8 +82,10 @@ export async function POST(req) {
           [
             {
               teamId,
+              loginTeamId: teamId,
               name: teamName.trim(),
               passwordHash,
+              authVersion: 0,
             },
           ],
           { session: dbSession },
@@ -108,7 +110,7 @@ export async function POST(req) {
     // Start authenticated session
     const res = NextResponse.json(
       {
-        teamId: account.teamId,
+        teamId: account.loginTeamId,
         teamName: account.name,
         memberId,
         role: 'owner',
@@ -118,9 +120,12 @@ export async function POST(req) {
 
     const session = await getIronSession(req, res, authOptions);
     session.teamId = account.teamId;
+    session.accountId = account._id.toString();
+    session.publicTeamId = account.loginTeamId;
     session.teamName = account.name;
     session.memberId = memberId;
     session.role = 'owner';
+    session.authVersion = account.authVersion ?? 0;
     await session.save();
 
     return res;

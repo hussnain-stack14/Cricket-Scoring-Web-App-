@@ -3876,6 +3876,149 @@ pre {
   color: var(--green-deep);
 }
 
+.account-security-section {
+  scroll-margin-top: 24px;
+}
+
+.security-account-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.security-account-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 13px 15px;
+  border: 1px solid #e6ece3;
+  border-radius: 10px;
+  background: #f8faf6;
+}
+
+.security-account-summary span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.security-account-summary strong {
+  overflow-wrap: anywhere;
+  color: var(--green-deep);
+  font-size: 14px;
+}
+
+.security-modal-backdrop {
+  position: fixed;
+  z-index: 1001;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 20px;
+  background: #10201799;
+  backdrop-filter: blur(3px);
+}
+
+.security-modal {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: min(780px, calc(100dvh - 40px));
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid #e2e9df;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 90px #0e241c55;
+}
+
+.security-modal h2 {
+  margin: 7px 0 9px;
+  color: var(--green-deep);
+  font-size: 22px;
+}
+
+.security-modal > p {
+  margin-bottom: 17px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.security-modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #e6ece3;
+  border-radius: 9px;
+  background: #f8faf6;
+  color: var(--muted);
+}
+
+.security-password-input {
+  position: relative;
+  display: block;
+}
+
+.auth-field .security-password-input input {
+  padding-right: 48px;
+}
+
+.security-visibility-button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.security-visibility-button:hover {
+  background: #edf2e9;
+  color: var(--green-deep);
+}
+
+.security-password-hint {
+  display: block;
+  margin-top: -8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.security-modal-actions {
+  justify-content: flex-start;
+  margin-top: 20px;
+}
+
+.auth-success {
+  margin-top: 12px;
+  color: #2b701c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .security-account-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .security-modal {
+    padding: 24px 19px;
+    border-radius: 15px;
+  }
+}
+
 .sync-status-bar {
   display: flex;
   align-items: center;

@@ -16,24 +16,30 @@ export default function AccountHub() {
     <div className="auth-shell">
       <header className="auth-header">
         <a className="auth-brand" href="/">
-          <span className="brand-mark"><Leaf size={20} /></span>
+          <span className="brand-mark">
+            <Leaf size={20} />
+          </span>
           crease<span>.</span>
         </a>
       </header>
 
       <main className="auth-main">
         <div className="auth-hero">
-          <span className="auth-kicker"><Shield size={14} /> TEAM ACCOUNTS</span>
+          <span className="auth-kicker">
+            <Shield size={14} /> TEAM ACCOUNTS
+          </span>
           <h1>Your team, anywhere.</h1>
           <p>
-            Create a team account to sync your players, matches and statistics across
-            all your devices. Your Team ID is your team's unique address — keep it safe.
+            Create a team account to sync your players, matches and statistics across all your
+            devices. Your Team ID is your team's unique address — keep it safe.
           </p>
         </div>
 
         <div className="auth-card-grid">
           <a className="auth-action-card" href="/account/login/">
-            <span className="auth-action-icon"><LogIn size={22} /></span>
+            <span className="auth-action-icon">
+              <LogIn size={22} />
+            </span>
             <div>
               <h2>Sign in</h2>
               <p>Already have a team account? Enter your Team ID and password.</p>
@@ -42,7 +48,9 @@ export default function AccountHub() {
           </a>
 
           <a className="auth-action-card" href="/account/register/">
-            <span className="auth-action-icon primary"><UserPlus size={22} /></span>
+            <span className="auth-action-icon primary">
+              <UserPlus size={22} />
+            </span>
             <div>
               <h2>Create team account</h2>
               <p>New to Crease accounts? Register your team in seconds.</p>
@@ -55,9 +63,9 @@ export default function AccountHub() {
           <div>
             <strong>What is a Team ID?</strong>
             <p>
-              A Team ID looks like <code>CRS-482916</code>. It's generated for your team when
-              you register and never changes. Share it with teammates so they can request to join.
-              Don't share it publicly.
+              A Team ID looks like <code>CRS-482916</code>. It's generated when your team registers
+              and can be changed later in Account Settings. Share your current Team ID with
+              teammates so they can request to join.
             </p>
           </div>
           <div>

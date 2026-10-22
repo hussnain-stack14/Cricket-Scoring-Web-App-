@@ -1,24 +1,38 @@
 import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { getSessionOptions } from '../../../../lib/server/session';
+import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 
 /** GET /api/auth/me — returns current session (no password, no DB _id) */
 export async function GET(req) {
-  const res = NextResponse.json(null); // placeholder, overwritten below
-  const session = await getIronSession(req, res, getSessionOptions());
+  const session = await getIronSession(req, NextResponse.json(null), getSessionOptions());
 
-  if (!session.teamId) {
+  const account = await getCurrentSessionAccount(session);
+  if (!account) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  // Renew the session cookie (sliding expiry)
-  await session.save();
+  const loginTeamId = account.loginTeamId || account.teamId;
+  if (!account.loginTeamId) {
+    account.loginTeamId = loginTeamId;
+    await account.save();
+  }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     authenticated: true,
-    teamId: session.teamId,
-    teamName: session.teamName,
+    teamId: loginTeamId,
+    workspaceKey: account.teamId,
+    teamName: account.name,
     memberId: session.memberId,
     role: session.role,
   });
+  const renewedSession = await getIronSession(req, response, getSessionOptions());
+  renewedSession.teamId = account.teamId;
+  renewedSession.accountId = account._id.toString();
+  renewedSession.publicTeamId = loginTeamId;
+  renewedSession.authVersion = account.authVersion ?? 0;
+  renewedSession.teamName = account.name;
+  await renewedSession.save();
+
+  return response;
 }

@@ -53,19 +53,28 @@ export default function AccountRecovery() {
       <div className="auth-shell">
         <header className="auth-header">
           <a className="auth-brand" href="/">
-            <span className="brand-mark"><Leaf size={20} /></span>
+            <span className="brand-mark">
+              <Leaf size={20} />
+            </span>
             crease<span>.</span>
           </a>
         </header>
 
         <main className="auth-main auth-main-narrow">
           <div className="auth-success-card" style={{ textAlign: 'center' }}>
-            <span style={{ color: 'var(--color-primary, #7fae42)', display: 'inline-block', marginBottom: '1rem' }}>
+            <span
+              style={{
+                color: 'var(--color-primary, #7fae42)',
+                display: 'inline-block',
+                marginBottom: '1rem',
+              }}
+            >
               <CheckCircle2 size={48} />
             </span>
             <h1>Check your email</h1>
             <p>
-              If a team account exists for <strong>{teamId}</strong> with matching recovery details, we have dispatched a password reset link to your email.
+              If a team account exists for <strong>{teamId}</strong> with matching recovery details,
+              we have dispatched a password reset link to your email.
             </p>
             <div className="auth-form-links" style={{ marginTop: '2rem' }}>
               <a href="/account/reset-password/">Already have a token? Reset password here</a>
@@ -81,14 +90,18 @@ export default function AccountRecovery() {
     <div className="auth-shell">
       <header className="auth-header">
         <a className="auth-brand" href="/">
-          <span className="brand-mark"><Leaf size={20} /></span>
+          <span className="brand-mark">
+            <Leaf size={20} />
+          </span>
           crease<span>.</span>
         </a>
       </header>
 
       <main className="auth-main auth-main-narrow">
         <div className="auth-hero">
-          <span className="auth-kicker"><KeyRound size={14} /> FORGOT PASSWORD</span>
+          <span className="auth-kicker">
+            <KeyRound size={14} /> FORGOT PASSWORD
+          </span>
           <h1>Recover Team Account</h1>
           <p>Enter your Team ID and the recovery email configured for your team.</p>
         </div>
@@ -105,10 +118,10 @@ export default function AccountRecovery() {
             <input
               id="teamId"
               type="text"
-              placeholder="CRS-XXXXXX"
+              placeholder="CRS-YOUNGS01"
               value={teamId}
               spellCheck={false}
-              maxLength={10}
+              maxLength={16}
               required
               onChange={(e) => setTeamId(e.target.value.toUpperCase())}
             />
@@ -127,7 +140,13 @@ export default function AccountRecovery() {
           </div>
 
           <button className="auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Sending link…' : <>Send Reset Link <ArrowRight size={17} /></>}
+            {busy ? (
+              'Sending link…'
+            ) : (
+              <>
+                Send Reset Link <ArrowRight size={17} />
+              </>
+            )}
           </button>
 
           <div className="auth-form-links">

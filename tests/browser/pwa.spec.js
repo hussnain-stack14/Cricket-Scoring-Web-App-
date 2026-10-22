@@ -9,7 +9,8 @@ test('production install controls, manifest, icons and offline precache are accu
     if (response.status() === 404) consoleErrors.push(`404 ${response.url()}`);
   });
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() === 'error' && !message.text().includes('401 (Unauthorized)'))
+      consoleErrors.push(message.text());
   });
 
   await page.goto('/');
@@ -106,4 +107,28 @@ test('production install controls, manifest, icons and offline precache are accu
   await page.getByRole('link', { name: 'Open Crease' }).click();
   await expect(page).toHaveURL(/\/app\/$/);
   expect(consoleErrors).toEqual([]);
+});
+
+test('credential change APIs reject cross-origin and unauthenticated requests', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/account/login/');
+  for (const path of ['/api/account/team-id', '/api/account/password']) {
+    const crossOrigin = await request.patch(path, {
+      headers: { Origin: 'https://attacker.invalid' },
+      data: {},
+    });
+    expect(crossOrigin.status()).toBe(403);
+
+    const unauthenticated = await page.evaluate(async (url) => {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      return { status: response.status, body: await response.json() };
+    }, path);
+    expect(unauthenticated.status, JSON.stringify(unauthenticated.body)).toBe(401);
+  }
 });

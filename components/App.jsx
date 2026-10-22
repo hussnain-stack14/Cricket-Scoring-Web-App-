@@ -84,7 +84,10 @@ export default function App({ screen }) {
       try {
         const currentSession = await fetchSession();
         const ws = currentSession
-          ? await activateAccountWorkspace(currentSession.teamId, currentSession.teamName)
+          ? await activateAccountWorkspace(
+              currentSession.workspaceKey || currentSession.teamId,
+              currentSession.teamName,
+            )
           : await findGuestWorkspace();
         if (cancelled) return;
         setSession(currentSession);
@@ -118,7 +121,8 @@ export default function App({ screen }) {
     syncBusy.current = true;
     setSyncing(true);
     try {
-      await sync(w.id);
+      const result = await sync(w.id);
+      if (result.session) setSession(result.session);
       await refreshSyncState(w.id);
       await refresh();
     } catch (e) {
@@ -365,11 +369,19 @@ export default function App({ screen }) {
               </a>
             )}
             {session ? (
-              <a className="button compact secondary" href="/account/settings/" style={{ textDecoration: 'none' }}>
+              <a
+                className="button compact secondary"
+                href="/account/settings/"
+                style={{ textDecoration: 'none' }}
+              >
                 <Shield size={14} /> {session.teamName}
               </a>
             ) : (
-              <a className="button compact secondary" href="/account/login/" style={{ textDecoration: 'none' }}>
+              <a
+                className="button compact secondary"
+                href="/account/login/"
+                style={{ textDecoration: 'none' }}
+              >
                 Sign in
               </a>
             )}

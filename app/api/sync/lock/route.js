@@ -3,6 +3,7 @@ import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncLock } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
+import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 
 const LOCK_DURATION_MS = 60 * 60 * 1000; // 60 minutes
 const HEARTBEAT_GRACE_MS = 90 * 1000; // allow 90s grace for heartbeat delay
@@ -24,6 +25,12 @@ export async function GET(req) {
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
 
   const { searchParams } = new URL(req.url);
@@ -56,6 +63,12 @@ export async function POST(req) {
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+  }
+  if (!(await getCurrentSessionAccount(session))) {
+    return NextResponse.json(
+      { error: 'Your session has expired. Sign in again.' },
+      { status: 401 },
+    );
   }
   if (session.role === 'viewer') {
     return NextResponse.json({ error: 'Viewers cannot acquire scoring lock.' }, { status: 403 });
