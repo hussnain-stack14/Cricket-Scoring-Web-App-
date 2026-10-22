@@ -1,4 +1,4 @@
-/* Generated after static export: every exported HTML, route payload, JS, CSS and icon. */
+/* Generated after a Next.js production build with its routes and static assets. */
 const CACHE = 'crease-__VERSION__';
 const FILES = __FILES__;
 async function notify(message) {
@@ -63,11 +63,8 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       const cache = await caches.open(CACHE);
       if (event.request.mode === 'navigate') {
-        const path = url.pathname.endsWith('/')
-          ? `${url.pathname}index.html`
-          : url.pathname.endsWith('.html')
-            ? url.pathname
-            : `${url.pathname}/index.html`;
+        const path =
+          url.pathname === '/' || url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;
         return (await cache.match(path)) || (await fetch(event.request));
       }
       const cached = await cache.match(url.pathname);

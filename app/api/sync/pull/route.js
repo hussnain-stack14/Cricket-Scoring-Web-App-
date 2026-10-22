@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 
 const ALLOWED_TABLES = [
   'players',
@@ -23,7 +23,7 @@ const ALLOWED_TABLES = [
  */
 export async function GET(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });

@@ -1,39 +1,20 @@
-import http from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
-import { resolve, extname, sep } from 'node:path';
-const root = resolve('out');
-const types = {
-  '.html': 'text/html',
-  '.js': 'application/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.webmanifest': 'application/manifest+json',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.txt': 'text/plain',
-};
-http
-  .createServer(async (req, res) => {
-    try {
-      const url = new URL(req.url, 'http://localhost');
-      let path = resolve(root, '.' + decodeURIComponent(url.pathname));
-      if (path !== root && !path.startsWith(root + sep)) {
-        res.writeHead(403);
-        res.end();
-        return;
-      }
-      if ((await stat(path)).isDirectory()) path = resolve(path, 'index.html');
-      const content = await readFile(path);
-      res.writeHead(200, {
-        'Content-Type': types[extname(path)] || 'application/octet-stream',
-        'Cache-Control': 'no-cache',
-      });
-      res.end(content);
-    } catch {
-      res.writeHead(404);
-      res.end('Not found');
-    }
-  })
-  .listen(Number(process.env.PORT || 3000), '127.0.0.1', () =>
-    console.log('Crease production preview: http://127.0.0.1:3000'),
-  );
+import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
+
+const nextBin = resolve('node_modules/next/dist/bin/next');
+const server = spawn(process.execPath, [nextBin, 'start', '--hostname', '127.0.0.1'], {
+  env: process.env,
+  stdio: 'inherit',
+});
+
+server.on('error', (error) => {
+  console.error('Could not start the Next.js production server:', error.message);
+  process.exitCode = 1;
+});
+server.on('exit', (code, signal) => {
+  process.exitCode = code ?? (signal ? 1 : 0);
+});
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => server.kill(signal));
+}

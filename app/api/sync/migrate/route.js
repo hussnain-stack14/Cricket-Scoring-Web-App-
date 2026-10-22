@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 import { validateBackup } from '../../../../lib/db';
 
 /**
@@ -16,7 +16,7 @@ import { validateBackup } from '../../../../lib/db';
  */
 export async function POST(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to migrate your data.' }, { status: 401 });
@@ -37,13 +37,19 @@ export async function POST(req) {
   try {
     backup = validateBackup(body?.backup);
   } catch (err) {
-    return NextResponse.json(
-      { error: `Invalid backup: ${err.message}` },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: `Invalid backup: ${err.message}` }, { status: 400 });
   }
 
-  const tables = ['players', 'teams', 'memberships', 'matches', 'innings', 'events', 'audits', 'drafts'];
+  const tables = [
+    'players',
+    'teams',
+    'memberships',
+    'matches',
+    'innings',
+    'events',
+    'audits',
+    'drafts',
+  ];
 
   await connectDB();
 

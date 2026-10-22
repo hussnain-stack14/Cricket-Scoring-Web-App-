@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 
 /**
  * POST /api/team/join
@@ -88,7 +88,7 @@ export async function POST(req) {
     role: member.role,
   });
 
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
   session.teamId = member.teamId;
   session.teamName = account?.name ?? '';
   session.memberId = memberId;

@@ -1,21 +1,26 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { getIronSession } from 'iron-session';
-import { connectDB } from '../../../../lib/server/db';
+import {
+  connectDB,
+  getSafeErrorDetails,
+  isDatabaseConnectionError,
+} from '../../../../lib/server/db';
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 import { registerLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
 
 /**
  * Generate a unique CRS-XXXXXX team ID.
  * Retries up to 5 times in the unlikely event of a collision.
  */
-async function generateTeamId() {
+async function generateTeamId(session) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const digits = crypto.randomInt(100000, 999999);
     const teamId = `CRS-${digits}`;
-    const exists = await TeamAccount.exists({ teamId });
+    const exists = await TeamAccount.exists({ teamId }).session(session);
     if (!exists) return teamId;
   }
   throw new Error('Could not generate a unique Team ID. Please try again.');
@@ -38,11 +43,7 @@ export async function POST(req) {
   const { teamName, password, confirmPassword } = body ?? {};
 
   // Validate team name
-  if (
-    typeof teamName !== 'string' ||
-    teamName.trim().length < 2 ||
-    teamName.trim().length > 100
-  ) {
+  if (typeof teamName !== 'string' || teamName.trim().length < 2 || teamName.trim().length > 100) {
     return NextResponse.json(
       { error: 'Team name must be between 2 and 100 characters.' },
       { status: 400 },
@@ -51,10 +52,7 @@ export async function POST(req) {
 
   // Validate password strength
   if (typeof password !== 'string' || password.length < 8) {
-    return NextResponse.json(
-      { error: 'Password must be at least 8 characters.' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
   }
   if (password !== confirmPassword) {
     return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 });
@@ -68,32 +66,44 @@ export async function POST(req) {
   }
 
   try {
+    const authOptions = getSessionOptions();
     await connectDB();
 
     // Hash the password
     const passwordHash = await bcrypt.hash(password, 12);
-
-    // Generate unique Team ID
-    const teamId = await generateTeamId();
-
-    // Stable owner memberId
-    const memberId = crypto.randomUUID();
-
-    // Create team account
-    const account = await TeamAccount.create({
-      teamId,
-      name: teamName.trim(),
-      passwordHash,
-    });
-
-    // Create the owner member entry
-    await TeamMember.create({
-      teamId,
-      memberId,
-      displayName: teamName.trim() + ' (Owner)',
-      role: 'owner',
-      activatedAt: new Date(),
-    });
+    const dbSession = await mongoose.startSession();
+    let account;
+    let memberId;
+    try {
+      await dbSession.withTransaction(async () => {
+        const teamId = await generateTeamId(dbSession);
+        memberId = crypto.randomUUID();
+        [account] = await TeamAccount.create(
+          [
+            {
+              teamId,
+              name: teamName.trim(),
+              passwordHash,
+            },
+          ],
+          { session: dbSession },
+        );
+        await TeamMember.create(
+          [
+            {
+              teamId,
+              memberId,
+              displayName: teamName.trim() + ' (Owner)',
+              role: 'owner',
+              activatedAt: new Date(),
+            },
+          ],
+          { session: dbSession },
+        );
+      });
+    } finally {
+      await dbSession.endSession();
+    }
 
     // Start authenticated session
     const res = NextResponse.json(
@@ -106,7 +116,7 @@ export async function POST(req) {
       { status: 201 },
     );
 
-    const session = await getIronSession(req, res, sessionOptions);
+    const session = await getIronSession(req, res, authOptions);
     session.teamId = account.teamId;
     session.teamName = account.name;
     session.memberId = memberId;
@@ -115,16 +125,22 @@ export async function POST(req) {
 
     return res;
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Registration error:', getSafeErrorDetails(error));
     if (error.code === 11000) {
       return NextResponse.json(
         { error: 'A team account with this identifier already exists. Please try again.' },
         { status: 409 },
       );
     }
-    if (error.message?.includes('MONGODB_URI') || error.name === 'MongooseServerSelectionError') {
+    if (isDatabaseConnectionError(error)) {
       return NextResponse.json(
         { error: 'Database service is currently unavailable. Please verify connection settings.' },
+        { status: 503 },
+      );
+    }
+    if (error.message?.includes('SESSION_SECRET')) {
+      return NextResponse.json(
+        { error: 'Authentication service is not configured. Please contact support.' },
         { status: 503 },
       );
     }

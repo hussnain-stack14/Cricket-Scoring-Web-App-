@@ -5,7 +5,7 @@ import { getIronSession } from 'iron-session';
 import { Resend } from 'resend';
 import { connectDB } from '../../../../lib/server/db';
 import { TeamMember } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 
 function getResend() {
   return process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -17,7 +17,7 @@ function getResend() {
  */
 export async function GET(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to access team members.' }, { status: 401 });
   }
@@ -38,7 +38,7 @@ export async function GET(req) {
  */
 export async function POST(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to manage team members.' }, { status: 401 });
@@ -61,17 +61,11 @@ export async function POST(req) {
     displayName.trim().length < 1 ||
     displayName.trim().length > 100
   ) {
-    return NextResponse.json(
-      { error: 'Display name must be 1–100 characters.' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Display name must be 1–100 characters.' }, { status: 400 });
   }
 
   if (!['scorer', 'viewer'].includes(role)) {
-    return NextResponse.json(
-      { error: 'Role must be "scorer" or "viewer".' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Role must be "scorer" or "viewer".' }, { status: 400 });
   }
 
   await connectDB();
@@ -97,18 +91,20 @@ export async function POST(req) {
   if (typeof email === 'string' && email.includes('@')) {
     const resend = getResend();
     if (resend) {
-      await resend.emails.send({
-        from: 'Crease <noreply@crease.app>',
-        to: email,
-        subject: `You've been invited to ${session.teamName} on Crease`,
-        html: `
+      await resend.emails
+        .send({
+          from: 'Crease <noreply@crease.app>',
+          to: email,
+          subject: `You've been invited to ${session.teamName} on Crease`,
+          html: `
           <p>Hi ${displayName.trim()},</p>
           <p>You've been invited to join <strong>${session.teamName}</strong> on Crease as a <strong>${role}</strong>.</p>
           <p>Click the link below to accept the invitation and set up your access. The link expires in 7 days.</p>
           <p><a href="${inviteUrl}">${inviteUrl}</a></p>
           <p>— The Crease team</p>
         `,
-      }).catch(console.error); // Don't fail if email send fails
+        })
+        .catch(console.error); // Don't fail if email send fails
     }
   }
 
@@ -130,7 +126,7 @@ export async function POST(req) {
  */
 export async function DELETE(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId || session.role !== 'owner') {
     return NextResponse.json({ error: 'Only team owners can remove members.' }, { status: 403 });

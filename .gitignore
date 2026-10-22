@@ -12,6 +12,8 @@ dist/
 build/
 .next/
 out/
+public/sw.js
+public/icons/
 coverage/
 *.tsbuildinfo
 

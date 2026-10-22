@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 
 const ALLOWED_TABLES = [
   'players',
@@ -23,13 +23,13 @@ const MAX_BATCH = 500; // max records per push
  *
  * Applies client changes to the server store idempotently.
  * Authorization: session teamId only.
- * 
+ *
  * For matches: checks that the session holds the scoring lock before
  * accepting delivery events.
  */
 export async function POST(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });
@@ -53,10 +53,7 @@ export async function POST(req) {
     return NextResponse.json({ error: 'changes must be an array.' }, { status: 400 });
   }
   if (changes.length > MAX_BATCH) {
-    return NextResponse.json(
-      { error: `Maximum ${MAX_BATCH} changes per push.` },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: `Maximum ${MAX_BATCH} changes per push.` }, { status: 400 });
   }
 
   await connectDB();

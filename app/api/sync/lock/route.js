@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncLock } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 
 const LOCK_DURATION_MS = 60 * 60 * 1000; // 60 minutes
 const HEARTBEAT_GRACE_MS = 90 * 1000; // allow 90s grace for heartbeat delay
@@ -20,7 +20,7 @@ const HEARTBEAT_GRACE_MS = 90 * 1000; // allow 90s grace for heartbeat delay
  */
 export async function GET(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
@@ -52,7 +52,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });

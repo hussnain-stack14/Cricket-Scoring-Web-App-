@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
-import { connectDB } from '../../../../lib/server/db';
+import {
+  connectDB,
+  getSafeErrorDetails,
+  isDatabaseConnectionError,
+} from '../../../../lib/server/db';
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 import { loginLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
 
 /** POST /api/auth/login */
@@ -22,23 +26,15 @@ export async function POST(req) {
   const { teamId, password } = body ?? {};
 
   // Basic format validation — do not reveal whether the team exists
-  if (
-    typeof teamId !== 'string' ||
-    !/^CRS-\d{6}$/.test(teamId.toUpperCase().trim())
-  ) {
-    return NextResponse.json(
-      { error: 'Team ID or password is incorrect.' },
-      { status: 401 },
-    );
+  if (typeof teamId !== 'string' || !/^CRS-\d{6}$/.test(teamId.toUpperCase().trim())) {
+    return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
   }
   if (typeof password !== 'string' || password.length < 1) {
-    return NextResponse.json(
-      { error: 'Team ID or password is incorrect.' },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
   }
 
   try {
+    const authOptions = getSessionOptions();
     await connectDB();
 
     const account = await TeamAccount.findOne({ teamId: teamId.toUpperCase().trim() });
@@ -49,10 +45,7 @@ export async function POST(req) {
     const match = await bcrypt.compare(password, hash);
 
     if (!account || !match) {
-      return NextResponse.json(
-        { error: 'Team ID or password is incorrect.' },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
     }
 
     // Find or create the owner member record
@@ -79,7 +72,7 @@ export async function POST(req) {
       role: 'owner',
     });
 
-    const session = await getIronSession(req, res, sessionOptions);
+    const session = await getIronSession(req, res, authOptions);
     session.teamId = account.teamId;
     session.teamName = account.name;
     session.memberId = ownerMember.memberId;
@@ -88,10 +81,16 @@ export async function POST(req) {
 
     return res;
   } catch (err) {
-    console.error('Login error:', err);
-    if (err.message?.includes('MONGODB_URI') || err.name === 'MongooseServerSelectionError') {
+    console.error('Login error:', getSafeErrorDetails(err));
+    if (isDatabaseConnectionError(err)) {
       return NextResponse.json(
         { error: 'Database service is currently unavailable. Please verify connection settings.' },
+        { status: 503 },
+      );
+    }
+    if (err.message?.includes('SESSION_SECRET')) {
+      return NextResponse.json(
+        { error: 'Authentication service is not configured. Please contact support.' },
         { status: 503 },
       );
     }

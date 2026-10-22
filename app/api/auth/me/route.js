@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
-import { sessionOptions } from '../../../../lib/server/session';
+import { getSessionOptions } from '../../../../lib/server/session';
 
 /** GET /api/auth/me — returns current session (no password, no DB _id) */
 export async function GET(req) {
   const res = NextResponse.json(null); // placeholder, overwritten below
-  const session = await getIronSession(req, res, sessionOptions);
+  const session = await getIronSession(req, res, getSessionOptions());
 
   if (!session.teamId) {
     return NextResponse.json({ authenticated: false }, { status: 401 });

@@ -315,10 +315,10 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   // Install a new asset-cache version, prove it waits, then apply it without losing records.
   await context.setOffline(false);
   await page.goto('/app/more/');
-  const originalWorker = await readFile('out/sw.js', 'utf8');
+  const originalWorker = await readFile('public/sw.js', 'utf8');
   try {
     await writeFile(
-      'out/sw.js',
+      'public/sw.js',
       originalWorker.replace(/const CACHE = '([^']+)'/, "const CACHE = '$1-update-test'"),
     );
     await page.evaluate(async () => {
@@ -333,7 +333,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
       timeout: 30000,
     });
   } finally {
-    await writeFile('out/sw.js', originalWorker);
+    await writeFile('public/sw.js', originalWorker);
   }
   await context.setOffline(true);
   await page.close();
