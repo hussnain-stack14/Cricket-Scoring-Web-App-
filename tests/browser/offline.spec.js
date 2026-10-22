@@ -20,7 +20,10 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByLabel('Your scorer name').fill('Local scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
   await expect(page.getByText('Ready offline', { exact: true })).toBeVisible({ timeout: 45000 });
-  await expect(page.getByText('No matches in progress.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Your scorebook starts here')).toBeVisible();
+  await page.goto('/app/matches/');
+  await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
+  await expect(page.getByText('No matches here yet')).toBeVisible();
   // Teams and Players have never been visited in this context before disconnecting.
   await context.setOffline(true);
   await page.goto('/app/players/');
@@ -192,6 +195,10 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByRole('button', { name: 'Finalize match', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm finalization' }).click();
   await expect(page.getByText('Finalized. Included in player career statistics.')).toBeVisible();
+  const scorecardDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download Scorecard' }).click();
+  const scorecardDownload = await scorecardDownloadPromise;
+  expect(scorecardDownload.suggestedFilename()).toMatch(/^Crease_North_vs_South_.*\.pdf$/);
 
   const resultReportPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Result PDF' }).click();
@@ -199,6 +206,19 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(resultReport.getByRole('heading', { name: 'Match result', level: 1 })).toBeVisible();
   await expect(resultReport.locator('body')).toContainText('North vs South');
   await resultReport.close();
+
+  await page.goto('/app/matches/');
+  await page.getByRole('button', { name: /Completed/ }).click();
+  const completedMatchCard = page.locator('.match-grid > .match-card-item');
+  await expect(completedMatchCard).toHaveCount(1);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const completedCardWidth = await completedMatchCard.evaluate(
+    (card) => card.getBoundingClientRect().width,
+  );
+  expect(completedCardWidth).toBeLessThan(768);
+  const historyPdfPromise = page.waitForEvent('download');
+  await completedMatchCard.getByRole('button', { name: 'Download Scorecard' }).click();
+  expect((await historyPdfPromise).suggestedFilename()).toMatch(/^Crease_North_vs_South_.*\.pdf$/);
 
   await page.goto('/app/teams/');
   const northTeamRow = page.locator('.person-row').filter({ hasText: 'North' });
@@ -282,6 +302,14 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
+    if (width >= 1024) {
+      const columns = await page.evaluate(() => {
+        const details = document.querySelector('.live-score-details').getBoundingClientRect();
+        const actions = document.querySelector('.live-score-actions').getBoundingClientRect();
+        return actions.left > details.left && actions.width > 0;
+      });
+      expect(columns).toBe(true);
+    }
     await page.screenshot({ path: `test-results/match-${width}.png`, fullPage: true });
   }
   // Install a new asset-cache version, prove it waits, then apply it without losing records.
@@ -323,4 +351,45 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(fresh).toHaveURL(/\/app\/$/);
   await expect(fresh.getByText('A workspace of your own')).toBeVisible();
   await isolated.close();
+});
+
+test('dashboard shell and navigation stay usable across phone, tablet, and desktop widths', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await page.getByLabel('Your scorer name').fill('Responsive scorer');
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await expect(page.getByText('Your scorebook starts here')).toBeVisible();
+
+  for (const width of [360, 390, 768, 1024, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole('heading', { name: 'Your cricket, at a glance.' })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(overflow, `unexpected horizontal overflow at ${width}px`).toBe(false);
+    if (width < 1024) {
+      await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+      await expect(page.locator('.desktop-sidebar')).toBeHidden();
+    } else {
+      await expect(page.locator('.desktop-sidebar')).toBeVisible();
+      await expect(page.locator('.bottom-nav')).toBeHidden();
+    }
+  }
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole('link', { name: 'Matches', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/matches\/$/);
+  await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Teams' }).click();
+  await page.getByRole('button', { name: 'Add team', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Responsive XI');
+  await page.getByRole('button', { name: 'Save team' }).click();
+  await page.getByRole('link', { name: 'Statistics' }).click();
+  await expect(page).toHaveURL(/\/app\/statistics\/$/);
+  await expect(page.getByLabel('Team')).toBeVisible();
+  await page.getByRole('link', { name: 'Reports' }).click();
+  await expect(page).toHaveURL(/\/app\/reports\/$/);
+  await page.getByRole('button', { name: 'Collapse navigation' }).click();
+  await expect(page.locator('.app-shell')).toHaveClass(/sidebar-collapsed/);
 });

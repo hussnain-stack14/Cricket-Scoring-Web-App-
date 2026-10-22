@@ -1,15 +1,35 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Trophy, Users, UserRound, Ellipsis, Plus, ArrowUpRight, Leaf } from 'lucide-react';
+import {
+  Users,
+  UserRound,
+  Ellipsis,
+  Plus,
+  ArrowUpRight,
+  Leaf,
+  LayoutDashboard,
+  CalendarDays,
+  ChartNoAxesCombined,
+  FileText,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Play,
+  Clock3,
+  CheckCircle2,
+  ArrowRight,
+} from 'lucide-react';
 import { all, workspace, createWorkspace } from '../lib/db';
 import { matchStates, result } from '../lib/engine';
+import { teamStatistics } from '../lib/statistics';
 import { Button, Field, Empty } from './ui';
 import People from './People';
+import Statistics from './Statistics';
 import Setup from './Setup';
 import Match from './Match';
 import Profile from './Profile';
 import Settings from './Settings';
 import { useOffline } from './offline';
+import { DownloadScorecardButton } from './ReportActions';
 function userError(error) {
   const message = error instanceof Error ? error.message : '';
   if (/another tab|revision/i.test(message))
@@ -31,7 +51,8 @@ export default function App({ screen }) {
     [status, setStatus] = useState(''),
     [loaded, setLoaded] = useState(false),
     [name, setName] = useState(''),
-    [filter, setFilter] = useState('live');
+    [filter, setFilter] = useState('live'),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const busy = useRef(false);
   const offline = useOffline();
   const base = '/app';
@@ -68,7 +89,10 @@ export default function App({ screen }) {
   }
   const ctx = { w, data, run, refresh, setError, error };
   const titles = {
+    dashboard: 'Dashboard',
     matches: 'Matches',
+    reports: 'Reports',
+    statistics: 'Statistics',
     teams: 'Teams',
     players: 'Players',
     more: 'More',
@@ -76,219 +100,470 @@ export default function App({ screen }) {
     match: 'Match centre',
     player: 'Player profile',
   };
-  return (
-    <div className="app">
-      <header className="brand">
-        <a href={`${base}/`} aria-label="Crease home">
-          <span className="brand-mark">
-            <Leaf size={22} />
-          </span>{' '}
-          crease<span className="brand-dot">.</span>
+  const navItems = [
+    { label: 'Dashboard', href: `${base}/`, icon: LayoutDashboard, active: screen === 'dashboard' },
+    {
+      label: 'Matches',
+      href: `${base}/matches/`,
+      icon: CalendarDays,
+      active: screen === 'matches' || screen === 'match' || screen === 'setup',
+    },
+    { label: 'Teams', href: `${base}/teams/`, icon: Users, active: screen === 'teams' },
+    {
+      label: 'Players',
+      href: `${base}/players/`,
+      icon: UserRound,
+      active: screen === 'players' || screen === 'player',
+    },
+    {
+      label: 'Statistics',
+      href: `${base}/statistics/`,
+      icon: ChartNoAxesCombined,
+      active: screen === 'statistics',
+    },
+    { label: 'Reports', href: `${base}/reports/`, icon: FileText, active: screen === 'reports' },
+    { label: 'Settings / More', href: `${base}/more/`, icon: Ellipsis, active: screen === 'more' },
+  ];
+  const matches = data?.matches ?? [];
+  const liveMatches = matches.filter((match) => match.status === 'live');
+  const completedMatches = matches.filter((match) => match.status === 'completed');
+  const recentMatches = [...matches]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 4);
+
+  function renderMatchCard(match) {
+    const states = matchStates(
+      match,
+      data.innings.filter((inning) => inning.matchId === match.id),
+      data.events.filter((event) => event.matchId === match.id),
+    );
+    return (
+      <div className="match-card-item" key={match.id}>
+        <a className="match-card" href={`${base}/match/?id=${match.id}`}>
+          <div className="match-card-topline">
+            <span className={`match-status status-${match.status}`}>
+              {match.status === 'live' ? (
+                <Play size={13} />
+              ) : match.status === 'completed' ? (
+                <CheckCircle2 size={14} />
+              ) : (
+                <Clock3 size={14} />
+              )}
+              {match.status === 'live'
+                ? 'Live'
+                : match.status === 'completed'
+                  ? 'Completed'
+                  : 'Upcoming'}
+            </span>
+            <small>{new Date(match.date).toLocaleDateString()}</small>
+          </div>
+          <div className="match-teams">
+            {match.teams.map((team, index) => {
+              const state = states[index === match.firstBat ? 0 : 1];
+              return (
+                <div className="match-team-line" key={team.id}>
+                  <strong>{team.name}</strong>
+                  <b>{state ? `${state.runs}/${state.wickets}` : '—'}</b>
+                </div>
+              );
+            })}
+          </div>
+          <div className="match-card-details">
+            <span>{match.rules.overs} overs</span>
+            <span>{match.venue || 'Local match'}</span>
+          </div>
+          <div className="card-footer">
+            {match.status === 'live'
+              ? 'Continue scoring'
+              : match.status === 'completed'
+                ? 'View result'
+                : 'Open match'}
+            <ArrowUpRight size={17} />
+          </div>
         </a>
-        <span className="local-badge">
-          <span /> ON THIS DEVICE
-        </span>
-      </header>
-      <main>
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">YOUR GAME. YOUR RECORD.</p>
-            <h1>{titles[screen]}</h1>
+        {match.status === 'completed' && (
+          <div className="match-card-history-action">
+            <DownloadScorecardButton match={match} states={states} compact />
           </div>
-          {screen === 'matches' && w && (
-            <a className="button compact" href={`${base}/setup/`}>
-              <Plus size={18} />
-              New match
-            </a>
-          )}
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className={`app app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <aside className="desktop-sidebar">
+        <div className="sidebar-brand">
+          <a href={`${base}/`} aria-label="Crease dashboard">
+            <span className="brand-mark">
+              <Leaf size={21} />
+            </span>
+            <span className="sidebar-brand-name">
+              crease<span>.</span>
+            </span>
+          </a>
+          <button
+            className="sidebar-collapse-button"
+            aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+          </button>
         </div>
-        {error && (
-          <div role="alert" className="notice error">
-            {error}
-            <button
-              onClick={() =>
-                refresh()
-                  .then(() => setError(''))
-                  .catch((e) => setError(e.message))
-              }
+        <nav className="sidebar-nav" aria-label="Main navigation">
+          <p className="sidebar-section-label">WORKSPACE</p>
+          {navItems.map(({ label, href, icon: Icon, active }) => (
+            <a
+              key={label}
+              href={href}
+              className={`sidebar-link ${active ? 'selected' : ''}`}
+              aria-current={active ? 'page' : undefined}
+              title={sidebarCollapsed ? label : undefined}
             >
-              Refresh records
-            </button>
+              <Icon size={20} strokeWidth={1.9} />
+              <span>{label}</span>
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <span className="sidebar-offline-dot" />
+          <span className="sidebar-footer-text">Your records stay on this device</span>
+        </div>
+      </aside>
+      <div className="app-workspace">
+        <header className="brand">
+          <a href={`${base}/`} aria-label="Crease home">
+            <span className="brand-mark">
+              <Leaf size={22} />
+            </span>{' '}
+            crease<span className="brand-dot">.</span>
+          </a>
+          <span className="local-badge">
+            <span /> ON THIS DEVICE
+          </span>
+        </header>
+        <header className="desktop-topbar">
+          <div>
+            <span className="desktop-breadcrumb">Crease / {titles[screen] || 'Crease'}</span>
+            <h1>{titles[screen] || 'Crease'}</h1>
           </div>
-        )}
-        {status && (
-          <div role="status" className={`save-status ${status === 'Save failed' ? 'red' : ''}`}>
-            {status}
+          <div className="desktop-topbar-actions">
+            <span className={`offline-indicator ${offline.ready ? 'is-ready' : ''}`}>
+              <span />
+              {offline.ready ? 'Ready offline' : 'Offline setup needed'}
+            </span>
+            {w && ['dashboard', 'matches'].includes(screen) && (
+              <a className="button compact" href={`${base}/setup/`}>
+                <Plus size={17} /> New match
+              </a>
+            )}
+            <span className="desktop-user">{w?.name || 'Local scorer'}</span>
           </div>
-        )}
-        {!loaded ? (
-          <p>Opening local records…</p>
-        ) : !w ? (
-          <section className="welcome">
-            <span className="pill">WELCOME TO YOUR CREASE</span>
-            <h2>
-              Every ball.
-              <br />
-              Every little victory.
-            </h2>
-            <p>
-              Your teams, matches and statistics, together in one place. Ready for the ground, even
-              without a signal.
-            </p>
-            <div className="card">
-              <h3>A workspace of your own</h3>
-              <p>
-                Records stay in this browser on this device. Your display name is not a login.
-                Anyone using this browser profile can access these records.
-              </p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  run(() => createWorkspace(name));
-                }}
-              >
-                <Field
-                  label="Your scorer name"
-                  value={name}
-                  maxLength={100}
-                  required
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <Button>
-                  Get started <ArrowUpRight size={18} />
-                </Button>
-              </form>
+        </header>
+        <main className="app-content">
+          {['dashboard', 'matches', 'reports', 'statistics'].includes(screen) ? (
+            <div className="page-heading mobile-page-heading">
+              <div>
+                <p className="eyebrow">YOUR GAME. YOUR RECORD.</p>
+                <h1>{titles[screen]}</h1>
+              </div>
+              {['dashboard', 'matches'].includes(screen) && w && (
+                <a className="button compact" href={`${base}/setup/`}>
+                  <Plus size={18} /> New match
+                </a>
+              )}
             </div>
-          </section>
-        ) : (
-          data && (
-            <>
-              {screen === 'matches' && (
-                <>
-                  <div className="intro-line">
-                    <p>
-                      Good to see you, <strong>{w.name}</strong>
-                    </p>
-                    <span className="pill">
-                      {offline.ready ? 'Ready offline' : 'Offline preparation needed'}
-                    </span>
-                  </div>
-                  <div className="tabs" aria-label="Match status">
-                    {['live', 'upcoming', 'completed'].map((f) => (
-                      <button
-                        key={f}
-                        className={filter === f ? 'active' : ''}
-                        onClick={() => setFilter(f)}
-                      >
-                        {f[0].toUpperCase() + f.slice(1)}{' '}
-                        <span>{data.matches.filter((m) => m.status === f).length}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="section-caption">
-                    {filter === 'live'
-                      ? 'IN PROGRESS ON THIS DEVICE'
-                      : filter === 'upcoming'
-                        ? 'READY FOR THE FIRST BALL'
-                        : 'FROM THE SCOREBOOK'}
-                  </p>
-                  {data.matches.filter((m) => m.status === filter).length ? (
-                    data.matches
-                      .filter((m) => m.status === filter)
-                      .map((m) => {
-                        const states = matchStates(
-                          m,
-                          data.innings.filter((i) => i.matchId === m.id),
-                          data.events.filter((e) => e.matchId === m.id),
-                        );
-                        return (
-                          <a className="match-card" key={m.id} href={`${base}/match/?id=${m.id}`}>
-                            <div className="row">
-                              <span className="pill">
-                                {m.rules.overs} overs · {m.rules.size} a side
-                              </span>
-                              <small>{new Date(m.date).toLocaleDateString()}</small>
+          ) : (
+            <div className="page-heading mobile-page-heading">
+              <div>
+                <p className="eyebrow">YOUR GAME. YOUR RECORD.</p>
+                <h1>{titles[screen]}</h1>
+              </div>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="notice error">
+              {error}
+              <button
+                onClick={() =>
+                  refresh()
+                    .then(() => setError(''))
+                    .catch((e) => setError(userError(e)))
+                }
+              >
+                Refresh records
+              </button>
+            </div>
+          )}
+          {status && (
+            <div role="status" className={`save-status ${status === 'Save failed' ? 'red' : ''}`}>
+              {status}
+            </div>
+          )}
+          {!loaded ? (
+            <p>Opening local records…</p>
+          ) : !w ? (
+            <section className="welcome">
+              <span className="pill">WELCOME TO YOUR CREASE</span>
+              <h2>
+                Every ball.
+                <br />
+                Every little victory.
+              </h2>
+              <p>
+                Your teams, matches and statistics, together in one place. Ready for the ground,
+                even without a signal.
+              </p>
+              <div className="card">
+                <h3>A workspace of your own</h3>
+                <p>
+                  Records stay in this browser on this device. Your display name is not a login.
+                  Anyone using this browser profile can access these records.
+                </p>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    run(() => createWorkspace(name));
+                  }}
+                >
+                  <Field
+                    label="Your scorer name"
+                    value={name}
+                    maxLength={100}
+                    required
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                  <Button>
+                    Get started <ArrowUpRight size={18} />
+                  </Button>
+                </form>
+              </div>
+            </section>
+          ) : (
+            data && (
+              <>
+                {screen === 'dashboard' && (
+                  <section className="dashboard-view">
+                    <div className="dashboard-welcome">
+                      <div>
+                        <p className="dashboard-kicker">Welcome back, {w.name}</p>
+                        <h2>Your cricket, at a glance.</h2>
+                      </div>
+                    </div>
+                    <div className="dashboard-stat-grid">
+                      {[
+                        ['Total matches', matches.length, CalendarDays],
+                        ['Live matches', liveMatches.length, Play],
+                        ['Completed', completedMatches.length, CheckCircle2],
+                        ['Teams', data.teams.filter((team) => !team.archived).length, Users],
+                      ].map(([label, value, Icon]) => (
+                        <div className="dashboard-stat-card" key={label}>
+                          <span className="dashboard-stat-icon">
+                            <Icon size={19} />
+                          </span>
+                          <strong>{value}</strong>
+                          <span>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="dashboard-main-grid">
+                      <section className="dashboard-panel dashboard-recent">
+                        <div className="dashboard-panel-heading">
+                          <div>
+                            <h2>Recent matches</h2>
+                            <p>Your latest scorebook activity</p>
+                          </div>
+                          <a href={`${base}/matches/`}>
+                            All matches <ArrowRight size={15} />
+                          </a>
+                        </div>
+                        {liveMatches.length > 0 && (
+                          <div className="continue-scoring">
+                            <span className="live-pulse" />
+                            <div>
+                              <strong>Continue scoring</strong>
+                              <small>
+                                {liveMatches.length} match{liveMatches.length === 1 ? '' : 'es'} in
+                                progress
+                              </small>
                             </div>
-                            {m.teams.map((t, i) => {
-                              const s = states[i === m.firstBat ? 0 : 1];
+                            <a
+                              className="button compact"
+                              href={`${base}/match/?id=${liveMatches[0].id}`}
+                            >
+                              Resume
+                            </a>
+                          </div>
+                        )}
+                        {recentMatches.length ? (
+                          <div className="match-grid dashboard-match-grid">
+                            {recentMatches.map(renderMatchCard)}
+                          </div>
+                        ) : (
+                          <Empty
+                            title="Your scorebook starts here"
+                            href={`${base}/setup/`}
+                            action="Set up a match"
+                          >
+                            Create a match to start building your local cricket history.
+                          </Empty>
+                        )}
+                      </section>
+                      <aside className="dashboard-side-column">
+                        <section className="dashboard-panel">
+                          <div className="dashboard-panel-heading">
+                            <div>
+                              <h2>Team performance</h2>
+                              <p>Completed matches only</p>
+                            </div>
+                          </div>
+                          {data.teams
+                            .filter((team) => !team.archived)
+                            .slice(0, 4)
+                            .map((team) => {
+                              const stats = teamStatistics(
+                                team.id,
+                                data.matches,
+                                data.innings,
+                                data.events,
+                              );
                               return (
-                                <div key={t.id} className="team-score">
-                                  <strong>{t.name}</strong>
-                                  <b>{s ? `${s.runs}/${s.wickets}` : 'Yet to bat'}</b>
-                                </div>
+                                <a
+                                  className="performance-row"
+                                  key={team.id}
+                                  href={`${base}/statistics/`}
+                                >
+                                  <span>
+                                    <strong>{team.name}</strong>
+                                    <small>
+                                      {stats.matches} matches · {stats.won} wins
+                                    </small>
+                                  </span>
+                                  <b>
+                                    {stats.winPercentage === null
+                                      ? '—'
+                                      : `${stats.winPercentage.toFixed(0)}%`}
+                                  </b>
+                                </a>
                               );
                             })}
-                            <p>
-                              {m.status === 'completed'
-                                ? result(m, states)
-                                : m.venue || 'Local match'}
+                          {!data.teams.length && (
+                            <p className="dashboard-empty-note">
+                              Add a team to see its match record here.
                             </p>
-                            <div className="card-footer">
-                              {m.status === 'completed' ? 'View scorecard' : 'Continue scoring'}
-                              <ArrowUpRight size={18} />
+                          )}
+                        </section>
+                        <section className="dashboard-panel quick-actions-panel">
+                          <div className="dashboard-panel-heading">
+                            <div>
+                              <h2>Quick actions</h2>
+                              <p>Pick up where you left off</p>
                             </div>
+                          </div>
+                          <a className="quick-action-link" href={`${base}/setup/`}>
+                            <Plus size={18} />
+                            <span>Start a new match</span>
+                            <ArrowRight size={15} />
                           </a>
-                        );
-                      })
-                  ) : (
-                    <Empty
-                      title={
-                        filter === 'completed'
-                          ? 'A scorebook waiting for stories'
-                          : 'The next innings starts here'
-                      }
-                      href={`${base}/setup/`}
-                      action="Set up a match"
-                    >
-                      {filter === 'live'
-                        ? 'No matches in progress. Choose your teams and make the first ball count.'
-                        : 'Your matches will appear here when you create and score them.'}
-                    </Empty>
-                  )}
-                  <div className="tip">
-                    <Trophy size={22} />
-                    <div>
-                      <strong>Built for your boundary line</strong>
-                      <p>
-                        Create your teams and players before match day. Your scorebook travels with
-                        this device.
-                      </p>
+                          <a className="quick-action-link" href={`${base}/teams/`}>
+                            <Users size={18} />
+                            <span>Manage teams</span>
+                            <ArrowRight size={15} />
+                          </a>
+                          <a className="quick-action-link" href={`${base}/players/`}>
+                            <UserRound size={18} />
+                            <span>Manage players</span>
+                            <ArrowRight size={15} />
+                          </a>
+                        </section>
+                      </aside>
                     </div>
-                  </div>
-                </>
-              )}
-              {(screen === 'teams' || screen === 'players') && <People {...ctx} screen={screen} />}
-              {screen === 'setup' && <Setup {...ctx} />}
-              {screen === 'match' && <Match {...ctx} />}
-              {screen === 'player' && <Profile {...ctx} />}
-              {screen === 'more' && <Settings {...ctx} offline={offline} />}
-            </>
-          )
-        )}
-      </main>
-      <nav className="bottom-nav" aria-label="Main navigation">
-        {[
-          ['matches', `${base}/`, Trophy],
-          ['teams', `${base}/teams/`, Users],
-          ['players', `${base}/players/`, UserRound],
-          ['more', `${base}/more/`, Ellipsis],
-        ].map(([key, href, Icon]) => (
-          <a
-            key={key}
-            href={href}
-            className={
-              screen === key ||
-              (screen === 'match' && key === 'matches') ||
-              (screen === 'player' && key === 'players')
-                ? 'selected'
-                : ''
-            }
-          >
-            <Icon size={21} />
-            <span>{key[0].toUpperCase() + key.slice(1)}</span>
-          </a>
-        ))}
-      </nav>
+                  </section>
+                )}
+                {screen === 'matches' && (
+                  <section className="matches-view">
+                    <div className="tabs" aria-label="Match status">
+                      {['live', 'upcoming', 'completed'].map((value) => (
+                        <button
+                          key={value}
+                          className={filter === value ? 'active' : ''}
+                          onClick={() => setFilter(value)}
+                        >
+                          {value[0].toUpperCase() + value.slice(1)}{' '}
+                          <span>{matches.filter((match) => match.status === value).length}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="match-grid">
+                      {matches.filter((match) => match.status === filter).length ? (
+                        matches.filter((match) => match.status === filter).map(renderMatchCard)
+                      ) : (
+                        <Empty
+                          title={
+                            filter === 'completed'
+                              ? 'No completed matches yet'
+                              : 'No matches here yet'
+                          }
+                          href={`${base}/setup/`}
+                          action="Set up a match"
+                        >
+                          {filter === 'live'
+                            ? 'Start a match to see live scoring here.'
+                            : filter === 'upcoming'
+                              ? 'New matches will appear here before the first ball.'
+                              : 'Completed matches and their scorecards will appear here.'}
+                        </Empty>
+                      )}
+                    </div>
+                  </section>
+                )}
+                {screen === 'reports' && (
+                  <section className="reports-view">
+                    <div className="dashboard-panel-heading reports-heading">
+                      <div>
+                        <h2>Match reports</h2>
+                        <p>Open a scorecard to print or save its report.</p>
+                      </div>
+                    </div>
+                    <div className="match-grid">
+                      {completedMatches.length ? (
+                        completedMatches.map(renderMatchCard)
+                      ) : (
+                        <Empty title="No reports yet">
+                          Finalized match scorecards and report exports will appear here.
+                        </Empty>
+                      )}
+                    </div>
+                  </section>
+                )}
+                {['teams', 'players'].includes(screen) && <People {...ctx} screen={screen} />}
+                {screen === 'statistics' && <Statistics data={data} />}
+                {screen === 'setup' && <Setup {...ctx} />}
+                {screen === 'match' && <Match {...ctx} />}
+                {screen === 'player' && <Profile {...ctx} />}
+                {screen === 'more' && <Settings {...ctx} offline={offline} />}
+              </>
+            )
+          )}
+        </main>
+        <nav className="bottom-nav" aria-label="Main navigation">
+          {[
+            [
+              'Matches',
+              `${base}/matches/`,
+              CalendarDays,
+              screen === 'matches' || screen === 'match' || screen === 'setup',
+            ],
+            ['Teams', `${base}/teams/`, Users, screen === 'teams' || screen === 'statistics'],
+            ['Players', `${base}/players/`, UserRound, screen === 'players' || screen === 'player'],
+            ['More', `${base}/more/`, Ellipsis, screen === 'more'],
+          ].map(([label, href, Icon, active]) => (
+            <a key={label} href={href} className={active ? 'selected' : ''}>
+              <Icon size={21} />
+              <span>{label}</span>
+            </a>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }

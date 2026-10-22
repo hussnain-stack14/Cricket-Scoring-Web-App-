@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
+import { FileText } from 'lucide-react';
 import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
 import { matchStates, overs, rate, result } from '../lib/engine';
 import { Button, Field, Select, Sheet, playerLabel } from './ui';
@@ -266,13 +267,39 @@ export default function Match({ w, data, run, error }) {
               {m.date} · {m.venue || 'Local match'} · {m.rules.overs} overs
             </p>
           </div>
-          <ReportActions match={m} states={states} />
+          {!frozen && <ReportActions match={m} states={states} />}
           {!frozen && (
             <Button secondary onClick={() => addPlayer()}>
               + Add player
             </Button>
           )}
         </div>
+        {frozen && (
+          <section className="completed-result">
+            <p className="completed-result-label">Final result</p>
+            <h2>{result(m, states)}</h2>
+            <div className="completed-result-scores">
+              {states.map((state, index) => {
+                const side = index === 0 ? m.firstBat : 1 - m.firstBat;
+                return (
+                  <span key={side}>
+                    <strong>{m.teams[side].name}</strong>
+                    <b>
+                      {state.runs}/{state.wickets}
+                    </b>
+                    <small>
+                      {Math.floor(state.balls / 6)}.{state.balls % 6} overs
+                    </small>
+                  </span>
+                );
+              })}
+            </div>
+            <button className="text-button" onClick={() => setTab('Scorecard')}>
+              <FileText size={17} /> View Scorecard
+            </button>
+            <ReportActions match={m} states={states} />
+          </section>
+        )}
       </div>
       <div className="tabs">
         {['Score', 'Scorecard', 'History'].map((t) => (
@@ -283,252 +310,258 @@ export default function Match({ w, data, run, error }) {
       </div>
       {tab === 'Score' && (
         <>
-          <section className="score-panel">
-            <div className="row">
-              <span className="pill">
-                INNINGS {inn.number} · {frozen ? 'FINAL' : 'LOCAL MATCH'}
-              </span>
-              <span>{s.freeHit ? 'FREE HIT' : `${m.rules.overs} OVERS`}</span>
-            </div>
-            <h2>{m.teams[battingSide].name}</h2>
-            <div className="big-score" key={`${s.runs}-${s.wickets}-${s.balls}`}>
-              {s.runs}
-              <span>/{s.wickets}</span>
-              <small>({overs(s.balls)})</small>
-            </div>
-            <div className="score-metrics">
-              <div>
-                <span>RUN RATE</span>
-                <strong>{rate(s.runs, s.balls, 6)}</strong>
-              </div>
-              <div>
-                <span>PARTNERSHIP</span>
-                <strong>{s.partnership}</strong>
-              </div>
-              <div>
-                <span>{target ? 'TARGET' : 'BALLS LEFT'}</span>
-                <strong>{target || ballsLeft}</strong>
-              </div>
-            </div>
-          </section>
-          {target && (
-            <div className="chase-banner">
-              {s.done ? (
-                result(m, states)
-              ) : (
-                <>
-                  {m.teams[battingSide].name} need{' '}
-                  <strong>
-                    {Math.max(0, target - s.runs)} from {ballsLeft} balls
-                  </strong>
-                  <small>
-                    Required run rate {rate(Math.max(0, target - s.runs), ballsLeft, 6)}
-                  </small>
-                </>
+          <div className="live-score-layout">
+            <div className="live-score-details">
+              <section className="score-panel">
+                <div className="row">
+                  <span className="pill">
+                    INNINGS {inn.number} · {frozen ? 'FINAL' : 'LOCAL MATCH'}
+                  </span>
+                  <span>{s.freeHit ? 'FREE HIT' : `${m.rules.overs} OVERS`}</span>
+                </div>
+                <h2>{m.teams[battingSide].name}</h2>
+                <div className="big-score" key={`${s.runs}-${s.wickets}-${s.balls}`}>
+                  {s.runs}
+                  <span>/{s.wickets}</span>
+                  <small>({overs(s.balls)})</small>
+                </div>
+                <div className="score-metrics">
+                  <div>
+                    <span>RUN RATE</span>
+                    <strong>{rate(s.runs, s.balls, 6)}</strong>
+                  </div>
+                  <div>
+                    <span>PARTNERSHIP</span>
+                    <strong>{s.partnership}</strong>
+                  </div>
+                  <div>
+                    <span>{target ? 'TARGET' : 'BALLS LEFT'}</span>
+                    <strong>{target || ballsLeft}</strong>
+                  </div>
+                </div>
+              </section>
+              {target && (
+                <div className="chase-banner">
+                  {s.done ? (
+                    result(m, states)
+                  ) : (
+                    <>
+                      {m.teams[battingSide].name} need{' '}
+                      <strong>
+                        {Math.max(0, target - s.runs)} from {ballsLeft} balls
+                      </strong>
+                      <small>
+                        Required run rate {rate(Math.max(0, target - s.runs), ballsLeft, 6)}
+                      </small>
+                    </>
+                  )}
+                </div>
               )}
-            </div>
-          )}
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Batter</th>
-                  <th>R</th>
-                  <th>B</th>
-                  <th>4s</th>
-                  <th>6s</th>
-                  <th>SR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[s.striker, s.nonStriker].filter(Boolean).map((p, index) => (
-                  <tr key={p}>
-                    <td>
-                      {s.batting[p].name}
-                      {index === 0 && <span className="strike"> ●</span>}
-                    </td>
-                    <td>
-                      <b>{s.batting[p].runs}</b>
-                    </td>
-                    <td>{s.batting[p].balls}</td>
-                    <td>{s.batting[p].fours}</td>
-                    <td>{s.batting[p].sixes}</td>
-                    <td>{rate(s.batting[p].runs, s.batting[p].balls, 100)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <table>
-              <thead>
-                <tr>
-                  <th>Bowler</th>
-                  <th>O</th>
-                  <th>M</th>
-                  <th>R</th>
-                  <th>W</th>
-                  <th>ECO</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[s.bowler ? s.bowling[s.bowler] : null].filter(Boolean).map((b) => (
-                  <tr key={b.id}>
-                    <td>{b.name}</td>
-                    <td>{overs(b.balls)}</td>
-                    <td>{b.maidens}</td>
-                    <td>{b.runs}</td>
-                    <td>{b.wickets}</td>
-                    <td>{rate(b.runs, b.balls, 6)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="over-strip">
-            <span>{s.balls > 0 && s.balls % 6 === 0 ? 'Last over' : 'This over'}</span>
-            {s.deliveries
-              .filter((e) => e.over === (s.deliveries.at(-1)?.over ?? 0))
-              .map((e) => (
-                <span
-                  className={`ball-chip ${e.wicket ? 'wicket' : e.bat >= 4 ? 'boundary' : ''}`}
-                  key={e.id}
-                >
-                  {e.wicket
-                    ? 'W'
-                    : e.extra === 'none'
-                      ? e.bat
-                      : `${e.total}${e.extra === 'wide' ? 'wd' : e.extra.startsWith('noBall') ? 'nb' : e.extra === 'bye' ? 'b' : 'lb'}`}
-                </span>
-              ))}
-          </div>
-          {frozen ? (
-            <div className="notice">
-              <h3>{result(m, states)}</h3>
-              <p>Finalized. Included in player career statistics.</p>
-              <Button secondary onClick={() => setSheet('reopen')}>
-                Reopen match
-              </Button>
-            </div>
-          ) : s.done ? (
-            <div className="notice">
-              <h3>{states.length === 1 ? 'Innings complete' : result(m, states)}</h3>
-              {states.length === 1 ? (
-                <Button
-                  onClick={() => {
-                    setSheetError('');
-                    setSheet('chase');
-                  }}
-                >
-                  Set up the chase
-                </Button>
-              ) : (
-                <Button onClick={() => setSheet('finalize')}>Finalize match</Button>
-              )}
-            </div>
-          ) : s.needBatter || s.needBowler ? (
-            <div className="notice">
-              <h3>
-                {s.needBatter
-                  ? s.wickets
-                    ? 'Select next batsman'
-                    : s.striker
-                      ? 'Select non-striker'
-                      : 'Who is batting? Select striker'
-                  : s.balls
-                    ? 'Over complete. Who is bowling next?'
-                    : 'Who is bowling?'}
-              </h3>
-              <Select
-                label={
-                  s.needBatter
-                    ? s.striker
-                      ? 'Select non-striker'
-                      : 'Select striker'
-                    : s.balls
-                      ? 'Select next bowler'
-                      : 'Select opening bowler'
-                }
-                value={selection}
-                onChange={(e) => setSelection(e.target.value)}
-                options={candidates.map(playerLabel)}
-              />
-              <Button disabled={!selection} onClick={() => selectPlayer(selection)}>
-                Confirm player
-              </Button>
-              {!frozen && (
-                <Button secondary onClick={() => addPlayer(selectionTeamId, pendingSelection)}>
-                  + Add new {s.needBatter ? 'batsman' : 'bowler'}
-                </Button>
-              )}
-              {!candidates.length && (
-                <p className="help">No eligible existing players. Add a player to continue.</p>
-              )}
-            </div>
-          ) : (
-            <section className="scoring-controls">
-              <div className="row">
-                <h3>Tap to score</h3>
-                <span className="help">
-                  {savingDelivery
-                    ? 'Saving…'
-                    : `Next ball ${Math.floor(s.balls / 6)}.${(s.balls % 6) + 1}`}
-                </span>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Batter</th>
+                      <th>R</th>
+                      <th>B</th>
+                      <th>4s</th>
+                      <th>6s</th>
+                      <th>SR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[s.striker, s.nonStriker].filter(Boolean).map((p, index) => (
+                      <tr key={p}>
+                        <td>
+                          {s.batting[p].name}
+                          {index === 0 && <span className="strike"> ●</span>}
+                        </td>
+                        <td>
+                          <b>{s.batting[p].runs}</b>
+                        </td>
+                        <td>{s.batting[p].balls}</td>
+                        <td>{s.batting[p].fours}</td>
+                        <td>{s.batting[p].sixes}</td>
+                        <td>{rate(s.batting[p].runs, s.batting[p].balls, 100)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Bowler</th>
+                      <th>O</th>
+                      <th>M</th>
+                      <th>R</th>
+                      <th>W</th>
+                      <th>ECO</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[s.bowler ? s.bowling[s.bowler] : null].filter(Boolean).map((b) => (
+                      <tr key={b.id}>
+                        <td>{b.name}</td>
+                        <td>{overs(b.balls)}</td>
+                        <td>{b.maidens}</td>
+                        <td>{b.runs}</td>
+                        <td>{b.wickets}</td>
+                        <td>{rate(b.runs, b.balls, 6)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className="run-buttons quick-score-buttons">
-                {[0, 1, 2, 3, 4, 6, 'W', 'Undo'].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={
-                      value === 'W'
-                        ? 'score-wicket'
-                        : value === 'Undo'
-                          ? 'score-undo'
-                          : value === 4 || value === 6
-                            ? 'score-boundary'
-                            : ''
+              <div className="over-strip">
+                <span>{s.balls > 0 && s.balls % 6 === 0 ? 'Last over' : 'This over'}</span>
+                {s.deliveries
+                  .filter((e) => e.over === (s.deliveries.at(-1)?.over ?? 0))
+                  .map((e) => (
+                    <span
+                      className={`ball-chip ${e.wicket ? 'wicket' : e.bat >= 4 ? 'boundary' : ''}`}
+                      key={e.id}
+                    >
+                      {e.wicket
+                        ? 'W'
+                        : e.extra === 'none'
+                          ? e.bat
+                          : `${e.total}${e.extra === 'wide' ? 'wd' : e.extra.startsWith('noBall') ? 'nb' : e.extra === 'bye' ? 'b' : 'lb'}`}
+                    </span>
+                  ))}
+              </div>
+            </div>
+            <div className="live-score-actions">
+              {frozen ? (
+                <div className="notice">
+                  <h3>{result(m, states)}</h3>
+                  <p>Finalized. Included in player career statistics.</p>
+                  <Button secondary onClick={() => setSheet('reopen')}>
+                    Reopen match
+                  </Button>
+                </div>
+              ) : s.done ? (
+                <div className="notice">
+                  <h3>{states.length === 1 ? 'Innings complete' : result(m, states)}</h3>
+                  {states.length === 1 ? (
+                    <Button
+                      onClick={() => {
+                        setSheetError('');
+                        setSheet('chase');
+                      }}
+                    >
+                      Set up the chase
+                    </Button>
+                  ) : (
+                    <Button onClick={() => setSheet('finalize')}>Finalize match</Button>
+                  )}
+                </div>
+              ) : s.needBatter || s.needBowler ? (
+                <div className="notice">
+                  <h3>
+                    {s.needBatter
+                      ? s.wickets
+                        ? 'Select next batsman'
+                        : s.striker
+                          ? 'Select non-striker'
+                          : 'Who is batting? Select striker'
+                      : s.balls
+                        ? 'Over complete. Who is bowling next?'
+                        : 'Who is bowling?'}
+                  </h3>
+                  <Select
+                    label={
+                      s.needBatter
+                        ? s.striker
+                          ? 'Select non-striker'
+                          : 'Select striker'
+                        : s.balls
+                          ? 'Select next bowler'
+                          : 'Select opening bowler'
                     }
-                    disabled={savingDelivery || (value === 'Undo' && !latest)}
-                    onClick={() => {
-                      if (value === 'W') {
-                        chooseWicket(dismissalKinds[0]);
-                      } else if (value === 'Undo') undoLatest();
-                      else
-                        ball({
-                          bat: value,
-                          running: value === 4 || value === 6 ? 0 : value,
-                          boundary: value === 4 || value === 6,
-                        });
-                    }}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-              <p className="scoring-section-label">Extras</p>
-              <div className="extras-buttons quick-extra-buttons">
-                {[
-                  ['Wide', 'wide'],
-                  ['No-ball', 'noBall'],
-                  ['Bye', 'bye'],
-                  ['Leg Bye', 'legBye'],
-                ].map(([label, value]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    disabled={savingDelivery}
-                    onClick={() => quickExtra(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="advanced-delivery-link">
-                <Button secondary disabled={savingDelivery} onClick={() => detail()}>
-                  Advanced delivery
-                </Button>
-              </div>
-            </section>
-          )}
+                    value={selection}
+                    onChange={(e) => setSelection(e.target.value)}
+                    options={candidates.map(playerLabel)}
+                  />
+                  <Button disabled={!selection} onClick={() => selectPlayer(selection)}>
+                    Confirm player
+                  </Button>
+                  {!frozen && (
+                    <Button secondary onClick={() => addPlayer(selectionTeamId, pendingSelection)}>
+                      + Add new {s.needBatter ? 'batsman' : 'bowler'}
+                    </Button>
+                  )}
+                  {!candidates.length && (
+                    <p className="help">No eligible existing players. Add a player to continue.</p>
+                  )}
+                </div>
+              ) : (
+                <section className="scoring-controls">
+                  <div className="row">
+                    <h3>Tap to score</h3>
+                    <span className="help">
+                      {savingDelivery
+                        ? 'Saving…'
+                        : `Next ball ${Math.floor(s.balls / 6)}.${(s.balls % 6) + 1}`}
+                    </span>
+                  </div>
+                  <div className="run-buttons quick-score-buttons">
+                    {[0, 1, 2, 3, 4, 6, 'W', 'Undo'].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={
+                          value === 'W'
+                            ? 'score-wicket'
+                            : value === 'Undo'
+                              ? 'score-undo'
+                              : value === 4 || value === 6
+                                ? 'score-boundary'
+                                : ''
+                        }
+                        disabled={savingDelivery || (value === 'Undo' && !latest)}
+                        onClick={() => {
+                          if (value === 'W') {
+                            chooseWicket(dismissalKinds[0]);
+                          } else if (value === 'Undo') undoLatest();
+                          else
+                            ball({
+                              bat: value,
+                              running: value === 4 || value === 6 ? 0 : value,
+                              boundary: value === 4 || value === 6,
+                            });
+                        }}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="scoring-section-label">Extras</p>
+                  <div className="extras-buttons quick-extra-buttons">
+                    {[
+                      ['Wide', 'wide'],
+                      ['No-ball', 'noBall'],
+                      ['Bye', 'bye'],
+                      ['Leg Bye', 'legBye'],
+                    ].map(([label, value]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={savingDelivery}
+                        onClick={() => quickExtra(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="advanced-delivery-link">
+                    <Button secondary disabled={savingDelivery} onClick={() => detail()}>
+                      Advanced delivery
+                    </Button>
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
         </>
       )}
       {tab === 'Scorecard' && (

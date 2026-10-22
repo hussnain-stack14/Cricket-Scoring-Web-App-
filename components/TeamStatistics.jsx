@@ -357,9 +357,11 @@ export default function TeamStatistics({ team, data, onBack }) {
     <section className="team-statistics">
       <div className="row team-stat-heading">
         <div>
-          <button className="text-button" onClick={onBack}>
-            <ArrowLeft size={17} /> Teams
-          </button>
+          {onBack && (
+            <button className="text-button" onClick={onBack}>
+              <ArrowLeft size={17} /> Teams
+            </button>
+          )}
           <h2>{team.name} statistics</h2>
         </div>
         <div className="actions">

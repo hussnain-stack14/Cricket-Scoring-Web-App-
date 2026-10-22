@@ -6,9 +6,9 @@ Last verified: 22 October 2026
 
 | Check                                            | Result                    | Evidence                                                                                                                                                                    |
 | ------------------------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm.cmd test`                                   | Passed: 22 tests          | Scoring engine, team-specific batting/bowling statistics, undefined rates, qualification, CSV escaping, IndexedDB, migrations, backups and safe record deletion             |
-| `npm.cmd run build`                              | Passed                    | Next.js static export includes the landing page, seven `/app/` routes, legacy routes and 116 precached resources                                                            |
-| `npm.cmd run test:e2e`                           | Passed: 2 tests           | Chromium acceptance covers scoring and persistence, offline CSV/PDF reports, team statistics, responsive layouts, install fallback, manifest/icons, and precache            |
+| `npm.cmd test`                                   | Passed: 25 tests          | Scoring engine, scorecard calculations and PDF generation, team-specific statistics, CSV escaping, IndexedDB, migrations, backups and safe record deletion                  |
+| `npm.cmd run build`                              | Passed                    | Next.js static export includes the landing page, app and legacy routes, plus 142 precached resources including local PDF-generation chunks                                  |
+| `npm.cmd run test:e2e`                           | Passed: 3 tests           | Chromium acceptance covers scoring, PDF downloads from the completed result and history while offline, team statistics, responsive layouts, install and precache flows      |
 | `npx.cmd vercel build --yes --target production` | Passed                    | Vercel static output contains `sw.js`, both PNG icons, all exported routes and configured response headers                                                                  |
 | Live production smoke test                       | Passed                    | `https://crease-scoring.vercel.app/`: worker/icons returned 200; precache verified with 0 missing assets; new match created, scored and reloaded while network was disabled |
 | `npm.cmd audit`                                  | Passed: 0 vulnerabilities | npm audit reported no known dependency vulnerabilities                                                                                                                      |
@@ -59,7 +59,8 @@ remains available.
 - Batting average divides runs by dismissals; strike rate uses balls faced. Averages with no dismissals and rates without a denominator remain undefined in the UI.
 - Bowling overs use cricket notation. Bowling average, economy, and strike rate use wickets and legal balls; byes and leg-byes are excluded from bowler runs. A dot ball is a delivery with zero runs charged to the bowler.
 - Top-player lists use a labeled Crease Performance Score with visible qualification thresholds; they are not presented as official rankings.
-- CSV files are generated in the browser. Reports are generated offline as print-ready pages; users can select “Save as PDF” in the browser print dialog. This relies on browser printing, not a bundled PDF file generator.
+- CSV and completed-match scorecard PDFs are generated locally in the browser. Scorecard PDFs use the saved, replayed innings data and bundled jsPDF libraries; completed scorecards can be downloaded again from match history. Result-only and unfinished-match reports retain the browser print flow.
+- Player of the Match is not currently recorded by the app, so generated scorecards do not assign or display an award. Ties use the scoring engine's supported result; abandoned, forfeited, and no-result outcomes are not currently supported.
 - No-result matches are not currently supported by match scoring, so team overview no-result totals remain zero.
 
 ## Known boundaries
