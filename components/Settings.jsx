@@ -70,7 +70,14 @@ export default function Settings({ w, data, run, setError, offline }) {
         <Button secondary onClick={offline.retry}>
           Retry offline preparation
         </Button>
-        {offline.install && <Button onClick={offline.install}>Install Crease</Button>}
+        {offline.installed ? (
+          <a className="button" href="/app/">
+            Open Crease
+          </a>
+        ) : (
+          <Button onClick={offline.install}>Install Crease</Button>
+        )}
+        <p role="status">{offline.installationMessage}</p>
         <p className="help">
           Android / Chromium: use Install in your browser menu. iPhone / iPad: open in Safari, tap
           Share, then Add to Home Screen. Prepare offline while connected before leaving for the

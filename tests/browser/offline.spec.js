@@ -10,9 +10,12 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(
     page.getByRole('heading', { name: 'Every Ball. Every Run. Every Moment.' }),
   ).toBeVisible();
-  await expect(page.getByText('Ready for offline use on this device.')).toBeVisible({
-    timeout: 45000,
-  });
+  await expect(page.locator('.offline-setup-status').last()).toContainText(
+    'Ready for Offline Use',
+    {
+      timeout: 45000,
+    },
+  );
   await page.getByRole('link', { name: 'Open web app' }).click();
   await expect(page).toHaveURL(/\/app\/$/);
   await expect(page.getByText('A workspace of your own')).toBeVisible({ timeout: 15000 });
@@ -186,9 +189,9 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
       timeout: 30000,
     });
     await page.getByRole('button', { name: 'Apply update & reload' }).click();
-    await expect(
-      page.getByText('Ready offline. Every core screen is stored on this device.'),
-    ).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText('Ready for Offline Use', { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
   } finally {
     await writeFile('out/sw.js', originalWorker);
   }

@@ -37,13 +37,13 @@ The scoring controls debounce rapid taps, disable concurrent commits, and assign
 
 ## Offline preparation and updates
 
-Visit online using a supported browser and wait for **Ready offline**. More → Offline & installation displays status and offers retry. Ready is shown only after service-worker activation and verification that every resource in the build's precache exists. This includes unvisited screens, HTML, Next.js route payloads, JavaScript chunks, CSS and icons.
+Visit the production site online using a supported browser and wait for **Ready for Offline Use**. More → Offline & installation displays status and offers retry. Ready is shown only after service-worker activation and verification that every resource in the build's precache exists. This includes unvisited screens, HTML, Next.js route payloads, JavaScript chunks, CSS and icons. The development server does not generate `/sw.js` or the production icons and reports that offline preparation needs a production build.
 
-The install manifest opens directly at `/app/`. Scoring routes are prebuilt both under `/app/` (for example `/app/match/?id=...`) and their legacy top-level URLs. Full-document links and cache-first navigation avoid requiring a server-rendered response for records created offline. Close and reopen the app while disconnected to verify preparation before relying on it at a match. Initial download and updates require internet. Development mode does not provide this guarantee.
+The install manifest starts at `/app` (served from the static `/app/` route). Scoring routes are prebuilt both under `/app/` (for example `/app/match/?id=...`) and their legacy top-level URLs. Full-document links and cache-first navigation avoid requiring a server-rendered response for records created offline. Close and reopen the app while disconnected to verify preparation before relying on it at a match. Initial download and updates require internet.
 
 Updates wait until explicitly applied from More. The update button is unavailable while local matches are live. Finish saves/drafts and close other tabs first. Old asset caches are retained to keep open older tabs working; this trades storage space for update safety. No asset-cache operation deletes IndexedDB. Browser settings can remove old asset caches, but avoid clearing site data unless you have exported your records.
 
-Android/Chromium exposes an install button when the browser provides an install prompt, or use its menu. On iOS Safari use Share → Add to Home Screen. Physical iOS/Android installation and standalone lifecycle checks must be performed separately; automated Chromium tests are not evidence of those checks.
+**Install Crease** invokes the browser's native installation prompt when the browser offers one; otherwise it displays platform-specific instructions. When installed, the action becomes **Open Crease**. On Android use a compatible browser's Install app/Add to Home screen menu if no prompt appears. On iPhone/iPad, open the site in Safari and use Share → Add to Home Screen. Physical iOS/Android installation and standalone lifecycle checks must be performed separately; automated Chromium tests do not prove those checks.
 
 ## Storage and backups
 

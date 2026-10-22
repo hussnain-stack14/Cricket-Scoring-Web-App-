@@ -54,18 +54,18 @@ export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function download() {
-    if (offline.install) {
-      await offline.install();
-      return;
+    const result = await offline.install();
+    if (result === 'instructions' || result === 'dismissed' || result === 'error') {
+      setInstructions(true);
+      document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' });
     }
-    setInstructions(true);
-    document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' });
   }
 
   const device =
     typeof navigator === 'undefined'
       ? 'browser'
-      : /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      : /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+          (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints > 1)
         ? 'ios'
         : /Android/i.test(navigator.userAgent)
           ? 'android'
@@ -315,10 +315,16 @@ export default function Landing() {
             No account or connection is needed to score after installation and offline preparation.
             Your records stay in this browser profile.
           </p>
-          <button className="button landing-primary" onClick={download}>
-            <Download size={18} /> Install Crease
-          </button>
-          {instructions && (
+          {offline.installed ? (
+            <a className="button landing-primary" href="/app/">
+              <ArrowRight size={18} /> Open Crease
+            </a>
+          ) : (
+            <button className="button landing-primary" onClick={download}>
+              <Download size={18} /> Install Crease
+            </button>
+          )}
+          {instructions && !offline.installed && (
             <div className="install-instructions" id="install-instructions" role="status">
               <strong>
                 {device === 'ios'
@@ -329,23 +335,21 @@ export default function Landing() {
               </strong>
               <p>
                 {device === 'ios'
-                  ? 'In Safari, tap Share, then Add to Home Screen.'
+                  ? 'Open this page in Safari, tap Share, then Add to Home Screen. iPhone and iPad do not use the Chromium installation prompt.'
                   : device === 'android'
                     ? 'Open your browser menu and choose Install app or Add to Home screen.'
                     : 'Use the install icon in your browser address bar, or choose Install Crease from the browser menu.'}
               </p>
-              <p className="offline-setup-status">{offline.message}</p>
-              {!offline.ready && (
-                <button className="text-link" onClick={offline.retry}>
-                  Retry offline preparation
-                </button>
-              )}
+              <p className="offline-setup-status">{offline.installationMessage}</p>
             </div>
           )}
-          {!instructions && (
-            <p className="offline-setup-status">
-              {offline.ready ? 'Ready for offline use on this device.' : offline.message}
-            </p>
+          <p className="offline-setup-status" role="status">
+            {offline.installationMessage} · {offline.message}
+          </p>
+          {!offline.ready && offline.message.startsWith('Offline Preparation Failed') && (
+            <button className="text-link" onClick={offline.retry}>
+              Retry Offline Preparation
+            </button>
           )}
           <p className="install-note">Crease is a web app, not an APK or EXE download.</p>
         </section>

@@ -1,9 +1,9 @@
 {
   "id": "/",
-  "name": "Crease",
+  "name": "Crease – Cricket Scoring",
   "short_name": "Crease",
   "description": "Your local, offline cricket scorebook",
-  "start_url": "/app/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F5F7F5",

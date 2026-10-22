@@ -7,19 +7,21 @@ Last verified: 22 October 2026
 | Check                           | Result                    | Evidence                                                                                                                                                                                                                |
 | ------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm.cmd test`                  | Passed: 17 tests          | Scoring engine, IndexedDB repositories, workspace isolation, revision conflicts, transaction rollback, migration, playerless match creation and dynamic roster, backup validation/restoration, and safe record deletion |
-| `npm.cmd run build`             | Passed                    | Next.js static export includes the landing page, seven `/app/` routes, legacy routes and 116 precached resources                                                                                                       |
-| `npm.cmd run test:e2e`          | Passed: 1 test            | Production Chromium acceptance covers the landing page, offline preparation and navigation, playerless match creation, dynamic players, scoring, persistence, backups, updates and mobile widths                        |
+| `npm.cmd run build`             | Passed                    | Next.js static export includes the landing page, seven `/app/` routes, legacy routes and 116 precached resources                                                                                                        |
+| `npm.cmd run test:e2e`          | Passed: 2 tests           | Production Chromium acceptance covers installation fallback and prompt lifecycle, manifest and icon responses, complete precache, offline navigation/scoring, persistence, backups, updates and mobile widths           |
 | `npm.cmd audit`                 | Passed: 0 vulnerabilities | npm audit reported no known dependency vulnerabilities                                                                                                                                                                  |
 | Prettier and `git diff --check` | Passed                    | Formatting check and whitespace validation completed without errors                                                                                                                                                     |
 
-The browser test uses Chromium and the production static export. It exercises
-offline use after the service worker reports complete precache readiness. It
-also simulates an IndexedDB write failure and confirms the user's unsaved input
-remains available.
+The browser tests use Chromium and the production static export. They verify
+that the worker explicitly reports every precache resource available before
+marking offline readiness. They also simulate the browser install-prompt and
+`appinstalled` events; this validates application event handling, not the
+native Chromium prompt itself. The scoring test also simulates an IndexedDB
+write failure and confirms the user's unsaved input remains available.
 
 ## PWA and offline status
 
-- The manifest declares the Crease name, `/app/` start URL, standalone display
+- The manifest declares the Crease name, `/app` start URL, standalone display
   mode, and 192px and 512px icons. The production build generates these icons
   and precaches exported routes, scripts, styles, and icons.
 - Chromium verified first-run precache readiness, navigation to previously
@@ -30,6 +32,11 @@ remains available.
 - Physical Android/iOS installation, native install prompts, and standalone
   lifecycle behavior have **not** been tested. Chromium automation is not
   evidence of physical-device installation.
+- The service worker and PNG icons are generated in `out/` after the static
+  export. The development server does not serve `/sw.js` or the generated
+  icons; when checked at `http://127.0.0.1:3000`, `/sw.js` returned 404. The
+  landing page now identifies development mode and directs developers to use
+  the production build rather than reporting a misleading registration error.
 
 ## Known boundaries
 
