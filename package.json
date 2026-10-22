@@ -11,13 +11,19 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dexie": "^4.2.0",
+    "iron-session": "^9.0.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "lucide-react": "^0.468.0",
+    "mongoose": "^9.11.3",
     "next": "^16.0.0",
+    "rate-limiter-flexible": "^11.2.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "resend": "^6.34.1",
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

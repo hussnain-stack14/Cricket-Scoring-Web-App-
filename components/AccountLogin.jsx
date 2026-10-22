@@ -1,0 +1,124 @@
+'use client';
+import { useState } from 'react';
+import { Leaf, LogIn, Eye, EyeOff, ArrowRight } from 'lucide-react';
+
+export default function AccountLogin() {
+  const [teamId, setTeamId] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+
+    const normalised = teamId.toUpperCase().trim();
+    if (!/^CRS-\d{6}$/.test(normalised)) {
+      setError('Team ID must be in the format CRS-XXXXXX (e.g. CRS-482916).');
+      setBusy(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: normalised, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Sign in failed. Check your Team ID and password.');
+        return;
+      }
+      // Redirect to app after successful login
+      window.location.href = '/app/';
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="auth-shell">
+      <header className="auth-header">
+        <a className="auth-brand" href="/">
+          <span className="brand-mark"><Leaf size={20} /></span>
+          crease<span>.</span>
+        </a>
+      </header>
+
+      <main className="auth-main auth-main-narrow">
+        <div className="auth-hero">
+          <span className="auth-kicker"><LogIn size={14} /> TEAM SIGN IN</span>
+          <h1>Welcome back.</h1>
+          <p>Enter your Team ID and password to access your records.</p>
+        </div>
+
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {error && (
+            <div role="alert" className="auth-error">
+              {error}
+            </div>
+          )}
+
+          <div className="auth-field">
+            <label htmlFor="teamId">Team ID</label>
+            <input
+              id="teamId"
+              type="text"
+              placeholder="CRS-XXXXXX"
+              value={teamId}
+              autoComplete="username"
+              spellCheck={false}
+              maxLength={10}
+              required
+              onChange={(e) => setTeamId(e.target.value.toUpperCase())}
+            />
+            <p className="auth-field-hint">Your Team ID was shown when you registered.</p>
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="password">Password</label>
+            <div className="auth-pw-wrap">
+              <input
+                id="password"
+                type={showPw ? 'text' : 'password'}
+                placeholder="Your team password"
+                value={password}
+                autoComplete="current-password"
+                required
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="auth-pw-toggle"
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPw((v) => !v)}
+              >
+                {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
+          </div>
+
+          <button className="auth-submit" type="submit" disabled={busy}>
+            {busy ? 'Signing in…' : <>Sign in <ArrowRight size={17} /></>}
+          </button>
+
+          <div className="auth-form-links">
+            <a href="/account/recovery/">Forgot your password?</a>
+            <a href="/account/register/">Create a team account</a>
+          </div>
+        </form>
+
+        <div className="auth-back">
+          <a href="/app/">← Back to the app without signing in</a>
+        </div>
+      </main>
+    </div>
+  );
+}
