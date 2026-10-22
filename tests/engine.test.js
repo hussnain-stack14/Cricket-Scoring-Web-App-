@@ -24,6 +24,15 @@ test('15 legal balls are 2.3, raw aggregate rates retain correct denominators', 
   assert.equal(rate(80, 55, 100), '145.45');
   assert.equal(rate(0, 0), '—');
 });
+test('five runs count as running, not a boundary, and rotate the strike', () => {
+  const s = replay(match, inn, [ball({ bat: 5, running: 5 })]);
+  assert.equal(s.runs, 5);
+  assert.equal(s.batting.a.runs, 5);
+  assert.equal(s.batting.a.fours, 0);
+  assert.equal(s.batting.a.sixes, 0);
+  assert.equal(s.balls, 1);
+  assert.equal(s.striker, 'b');
+});
 test('wide/no-ball separate batter balls and legal deliveries; running excludes penalties', () => {
   const s = replay(match, inn, [
     ball({ extra: 'wide' }),

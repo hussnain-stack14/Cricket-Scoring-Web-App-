@@ -20,6 +20,7 @@ export default function App({ screen }) {
     [filter, setFilter] = useState('live');
   const busy = useRef(false);
   const offline = useOffline();
+  const base = '/app';
   async function refresh() {
     const ws = await workspace();
     setW(ws);
@@ -38,10 +39,10 @@ export default function App({ screen }) {
     setError('');
     setStatus('Saving…');
     try {
-      await fn();
+      const value = await fn();
       await refresh();
       setStatus('Saved on this device');
-      return true;
+      return value === undefined ? true : value;
     } catch (e) {
       setError(e.message || 'Storage failed. Your input is still here.');
       setStatus('Save failed');
@@ -63,7 +64,7 @@ export default function App({ screen }) {
   return (
     <div className="app">
       <header className="brand">
-        <a href="/" aria-label="Crease home">
+        <a href={`${base}/`} aria-label="Crease home">
           <span className="brand-mark">
             <Leaf size={22} />
           </span>{' '}
@@ -80,7 +81,7 @@ export default function App({ screen }) {
             <h1>{titles[screen]}</h1>
           </div>
           {screen === 'matches' && w && (
-            <a className="button compact" href="/setup/">
+            <a className="button compact" href={`${base}/setup/`}>
               <Plus size={18} />
               New match
             </a>
@@ -186,7 +187,7 @@ export default function App({ screen }) {
                           data.events.filter((e) => e.matchId === m.id),
                         );
                         return (
-                          <a className="match-card" key={m.id} href={`/match/?id=${m.id}`}>
+                          <a className="match-card" key={m.id} href={`${base}/match/?id=${m.id}`}>
                             <div className="row">
                               <span className="pill">
                                 {m.rules.overs} overs · {m.rules.size} a side
@@ -221,7 +222,7 @@ export default function App({ screen }) {
                           ? 'A scorebook waiting for stories'
                           : 'The next innings starts here'
                       }
-                      href="/setup/"
+                      href={`${base}/setup/`}
                       action="Set up a match"
                     >
                       {filter === 'live'
@@ -252,10 +253,10 @@ export default function App({ screen }) {
       </main>
       <nav className="bottom-nav" aria-label="Main navigation">
         {[
-          ['matches', '/', Trophy],
-          ['teams', '/teams/', Users],
-          ['players', '/players/', UserRound],
-          ['more', '/more/', Ellipsis],
+          ['matches', `${base}/`, Trophy],
+          ['teams', `${base}/teams/`, Users],
+          ['players', `${base}/players/`, UserRound],
+          ['more', `${base}/more/`, Ellipsis],
         ].map(([key, href, Icon]) => (
           <a
             key={key}

@@ -1,11 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
-import { saveRecord, saveTeam } from '../lib/db';
+import { deleteRecord, saveRecord, saveTeam } from '../lib/db';
 import { Avatar, Button, Empty, Field, Select, Sheet, playerLabel } from './ui';
 export default function People({ screen, w, data, run, error }) {
+  const base = '/app';
   const isTeam = screen === 'teams',
     [edit, setEdit] = useState(null),
+    [deleting, setDeleting] = useState(false),
     [members, setMembers] = useState([]),
     [query, setQuery] = useState(''),
     [role, setRole] = useState(''),
@@ -20,6 +22,7 @@ export default function People({ screen, w, data, run, error }) {
           (!team || data.memberships.some((m) => m.playerId === p.id && m.teamId === team)))),
   );
   function open(p = {}) {
+    setDeleting(false);
     setEdit(
       isTeam
         ? { name: '', captain: '', keeper: '', ...p }
@@ -74,7 +77,7 @@ export default function People({ screen, w, data, run, error }) {
               {isTeam ? (
                 <strong>{p.name}</strong>
               ) : (
-                <a className="name-link" href={`/player/?id=${p.id}`}>
+                <a className="name-link" href={`${base}/player/?id=${p.id}`}>
                   {p.name}
                 </a>
               )}
@@ -108,7 +111,10 @@ export default function People({ screen, w, data, run, error }) {
       {edit && (
         <Sheet
           title={`${edit.id ? 'Edit' : 'Add'} ${isTeam ? 'team' : 'player'}`}
-          close={() => setEdit(null)}
+          close={() => {
+            setEdit(null);
+            setDeleting(false);
+          }}
         >
           <>
             {error && (
@@ -117,106 +123,142 @@ export default function People({ screen, w, data, run, error }) {
               </p>
             )}
           </>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (
-                await run(() =>
-                  isTeam ? saveTeam(w.id, edit, members) : saveRecord(w.id, 'players', edit),
-                )
-              )
-                setEdit(null);
-            }}
-          >
-            <Field
-              label="Name"
-              required
-              maxLength={100}
-              value={edit.name}
-              onChange={(e) => set('name', e.target.value)}
-            />
-            {isTeam ? (
-              <>
-                <h3>Squad members</h3>
-                {!data.players.length && <p>Add players from the Players tab first.</p>}
-                <div className="squad-list">
-                  {data.players
-                    .filter((p) => !p.archived || members.includes(p.id))
-                    .map((p) => (
-                      <label className="check" key={p.id}>
-                        <input
-                          type="checkbox"
-                          checked={members.includes(p.id)}
-                          onChange={(e) => {
-                            setMembers(
-                              e.target.checked
-                                ? [...members, p.id]
-                                : members.filter((id) => id !== p.id),
-                            );
-                            if (!e.target.checked) {
-                              if (edit.captain === p.id) set('captain', '');
-                              if (edit.keeper === p.id) set('keeper', '');
-                            }
-                          }}
-                        />
-                        {p.name} · {p.id.slice(0, 6)}
-                      </label>
-                    ))}
-                </div>
-                <Select
-                  label="Captain (optional)"
-                  value={edit.captain}
-                  onChange={(e) => set('captain', e.target.value)}
-                  options={data.players.filter((p) => members.includes(p.id)).map(playerLabel)}
-                />
-                <Select
-                  label="Wicketkeeper (optional)"
-                  value={edit.keeper}
-                  onChange={(e) => set('keeper', e.target.value)}
-                  options={data.players.filter((p) => members.includes(p.id)).map(playerLabel)}
-                />
-              </>
-            ) : (
-              <>
-                <Select
-                  label="Role"
-                  required
-                  value={edit.role}
-                  onChange={(e) => set('role', e.target.value)}
-                  options={['Batter', 'Bowler', 'All-rounder', 'Wicketkeeper']}
-                />
-                <Select
-                  label="Batting style"
-                  required
-                  value={edit.battingStyle}
-                  onChange={(e) => set('battingStyle', e.target.value)}
-                  options={['Right handed', 'Left handed']}
-                />
+          {deleting ? (
+            <>
+              <p>
+                Permanently delete {edit.name}? This cannot be undone. Records used by match history
+                cannot be deleted; archive those instead.
+              </p>
+              <div className="actions">
+                <Button
+                  danger
+                  onClick={async () => {
+                    if (await run(() => deleteRecord(w.id, screen, edit.id))) {
+                      setEdit(null);
+                      setDeleting(false);
+                    }
+                  }}
+                >
+                  Permanently delete
+                </Button>
+                <Button secondary onClick={() => setDeleting(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (
+                    await run(() =>
+                      isTeam ? saveTeam(w.id, edit, members) : saveRecord(w.id, 'players', edit),
+                    )
+                  )
+                    setEdit(null);
+                }}
+              >
                 <Field
-                  label="Bowling style (optional)"
+                  label="Name"
+                  required
                   maxLength={100}
-                  value={edit.bowlingStyle}
-                  onChange={(e) => set('bowlingStyle', e.target.value)}
+                  value={edit.name}
+                  onChange={(e) => set('name', e.target.value)}
                 />
-              </>
-            )}
-            <Button>Save {isTeam ? 'team' : 'player'}</Button>
-          </form>
-          {edit.id && (
-            <Button
-              secondary
-              danger
-              onClick={async () => {
-                if (
-                  await run(() => saveRecord(w.id, screen, { ...edit, archived: !edit.archived }))
-                )
-                  setEdit(null);
-              }}
-            >
-              {edit.archived ? 'Restore' : 'Archive'} {isTeam ? 'team' : 'player'}
-            </Button>
+                {isTeam ? (
+                  <>
+                    <h3>Squad members</h3>
+                    {!data.players.length && <p>Add players from the Players tab first.</p>}
+                    <div className="squad-list">
+                      {data.players
+                        .filter((p) => !p.archived || members.includes(p.id))
+                        .map((p) => (
+                          <label className="check" key={p.id}>
+                            <input
+                              type="checkbox"
+                              checked={members.includes(p.id)}
+                              onChange={(e) => {
+                                setMembers(
+                                  e.target.checked
+                                    ? [...members, p.id]
+                                    : members.filter((id) => id !== p.id),
+                                );
+                                if (!e.target.checked) {
+                                  if (edit.captain === p.id) set('captain', '');
+                                  if (edit.keeper === p.id) set('keeper', '');
+                                }
+                              }}
+                            />
+                            {p.name} · {p.id.slice(0, 6)}
+                          </label>
+                        ))}
+                    </div>
+                    <Select
+                      label="Captain (optional)"
+                      value={edit.captain}
+                      onChange={(e) => set('captain', e.target.value)}
+                      options={data.players.filter((p) => members.includes(p.id)).map(playerLabel)}
+                    />
+                    <Select
+                      label="Wicketkeeper (optional)"
+                      value={edit.keeper}
+                      onChange={(e) => set('keeper', e.target.value)}
+                      options={data.players.filter((p) => members.includes(p.id)).map(playerLabel)}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Select
+                      label="Role"
+                      required
+                      value={edit.role}
+                      onChange={(e) => set('role', e.target.value)}
+                      options={['Batter', 'Bowler', 'All-rounder', 'Wicketkeeper']}
+                    />
+                    <Select
+                      label="Batting style"
+                      required
+                      value={edit.battingStyle}
+                      onChange={(e) => set('battingStyle', e.target.value)}
+                      options={['Right handed', 'Left handed']}
+                    />
+                    <Field
+                      label="Bowling style (optional)"
+                      maxLength={100}
+                      value={edit.bowlingStyle}
+                      onChange={(e) => set('bowlingStyle', e.target.value)}
+                    />
+                  </>
+                )}
+                <Button>Save {isTeam ? 'team' : 'player'}</Button>
+              </form>
+              {edit.id && (
+                <>
+                  <Button
+                    secondary
+                    danger
+                    onClick={async () => {
+                      if (
+                        await run(() =>
+                          saveRecord(w.id, screen, { ...edit, archived: !edit.archived }),
+                        )
+                      )
+                        setEdit(null);
+                    }}
+                  >
+                    {edit.archived ? 'Restore' : 'Archive'} {isTeam ? 'team' : 'player'}
+                  </Button>
+                  <Button secondary danger onClick={() => setDeleting(true)}>
+                    Delete {isTeam ? 'team' : 'player'}
+                  </Button>
+                </>
+              )}
+              <p className="help">
+                Archiving preserves every historical match and player reference.
+              </p>
+            </>
           )}
-          <p className="help">Archiving preserves every historical match and player reference.</p>
         </Sheet>
       )}
     </>

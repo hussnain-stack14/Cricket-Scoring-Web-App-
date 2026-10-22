@@ -1,4 +1,4 @@
-import App from '../components/App';
+import Landing from '../components/Landing';
 export default function Page() {
-  return <App screen="matches" />;
+  return <Landing />;
 }

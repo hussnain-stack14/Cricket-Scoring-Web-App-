@@ -1,6 +1,6 @@
 # Implemented rule contract
 
-Two innings, six legal balls per over, 1–50 overs and 2–11 players per side. All out is squad size minus one; no last-batter-alone mode. Ties stand. Rules and named squads are frozen at creation.
+Two innings, six legal balls per over, 1–50 overs and a configured maximum of 2–11 players per side. Matches may start with empty or partial squads; players are added to the match roster before they bat or bowl. All out is configured player limit minus one; no last-batter-alone mode. Ties stand. Rules and team identities are frozen at creation; match roster entries are appended as players are selected during play.
 
 Wides and no-balls cost one penalty run and do not count as legal balls. No-balls count as a ball faced; wides do not. Bat runs, wides, no-balls, byes and leg-byes are separate. Byes/leg-byes are not charged to the bowler. Running is explicitly recorded separately from penalties/boundaries. Boundaries do not swap ends. Caught batters are replaced at their original end, regardless of crossing. At over completion, ends swap.
 

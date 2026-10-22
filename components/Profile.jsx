@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { career } from '../lib/engine';
 import { Avatar, Select } from './ui';
 export default function Profile({ data }) {
+  const base = '/app';
   const id = new URLSearchParams(window.location.search).get('id'),
     p = data.players.find((x) => x.id === id);
   const [tab, setTab] = useState('Batting'),
@@ -10,7 +11,7 @@ export default function Profile({ data }) {
   if (!p)
     return (
       <p>
-        Player not found on this device. <a href="/players/">View players</a>
+        Player not found on this device. <a href={`${base}/players/`}>View players</a>
       </p>
     );
   const stats = career(id, data.matches, data.innings, data.events, format);
@@ -80,7 +81,7 @@ export default function Profile({ data }) {
               (format === 'all' || String(m.rules.overs) === format),
           )
           .map((m) => (
-            <a className="list-link" key={m.id} href={`/match/?id=${m.id}`}>
+            <a className="list-link" key={m.id} href={`${base}/match/?id=${m.id}`}>
               <strong>{m.teams.map((t) => t.name).join(' vs ')}</strong>
               <small>
                 {m.date} · {m.status}

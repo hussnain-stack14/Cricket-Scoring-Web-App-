@@ -1,22 +1,24 @@
 'use client';
 import { useState, useRef } from 'react';
-import { changeMatch, uuid } from '../lib/db';
+import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
 import { matchStates, overs, rate, result } from '../lib/engine';
 import { Button, Field, Select, Sheet, playerLabel } from './ui';
 export default function Match({ w, data, run, error }) {
+  const base = '/app';
   const id = new URLSearchParams(window.location.search).get('id'),
     m = data.matches.find((x) => x.id === id);
   const [tab, setTab] = useState('Score'),
     [sheet, setSheet] = useState(null),
     [selection, setSelection] = useState(''),
-    [opening, setOpening] = useState({ striker: '', nonStriker: '', bowler: '' }),
     [delivery, setDelivery] = useState({}),
+    [newPlayerName, setNewPlayerName] = useState(''),
+    [playerTeamId, setPlayerTeamId] = useState(''),
     [sheetError, setSheetError] = useState('');
   const lastTap = useRef(0);
   if (!m)
     return (
       <p>
-        Match not found on this device. <a href="/">View matches</a>
+        Match not found on this device. <a href={`${base}/`}>View matches</a>
       </p>
     );
   const inns = data.innings.filter((i) => i.matchId === id).sort((a, b) => a.number - b.number),
@@ -28,6 +30,37 @@ export default function Match({ w, data, run, error }) {
   const target = states.length === 2 ? states[0].runs + 1 : null,
     ballsLeft = m.rules.overs * 6 - s.balls;
   const frozen = m.status === 'completed';
+  const pendingSelection = s.needBatter
+    ? { type: 'batter' }
+    : s.needBowler
+      ? { type: 'bowler' }
+      : null;
+  const selectionTeamId = pendingSelection
+    ? m.teams[pendingSelection.type === 'batter' ? battingSide : 1 - battingSide].id
+    : playerTeamId;
+  const candidates = data.players.filter((player) => {
+    const member = data.memberships.some(
+      (membership) => membership.playerId === player.id && membership.teamId === selectionTeamId,
+    );
+    if (!member || player.archived) return false;
+    const ownTeam = m.teams.find((team) => team.id === selectionTeamId);
+    const otherTeam = m.teams.find((team) => team.id !== selectionTeamId);
+    if (otherTeam?.squad.some((memberPlayer) => memberPlayer.id === player.id)) return false;
+    if (pendingSelection?.type === 'batter')
+      return (
+        !s.batting[player.id]?.played &&
+        ((ownTeam?.squad.length ?? 0) < m.rules.size ||
+          ownTeam?.squad.some((memberPlayer) => memberPlayer.id === player.id))
+      );
+    if (pendingSelection?.type === 'bowler')
+      return (
+        player.id !== s.bowler &&
+        (s.bowling[player.id]?.balls ?? 0) < m.rules.maxBowler * 6 &&
+        ((ownTeam?.squad.length ?? 0) < m.rules.size ||
+          ownTeam?.squad.some((memberPlayer) => memberPlayer.id === player.id))
+      );
+    return (ownTeam?.squad.length ?? 0) < m.rules.size;
+  });
   async function act(action) {
     const ok = await run(() => changeMatch(w.id, m.id, m.revision, action));
     if (!ok)
@@ -69,15 +102,58 @@ export default function Match({ w, data, run, error }) {
     });
     setSheet('delivery');
   }
+  function addPlayer(teamId = '', selection = null) {
+    setPlayerTeamId(teamId);
+    setNewPlayerName('');
+    setSheetError('');
+    setSheet({ type: 'player', teamId, selection });
+  }
+  async function savePlayer(event) {
+    event.preventDefault();
+    const targetTeam = sheet.teamId || playerTeamId;
+    if (!targetTeam) {
+      setSheetError('Choose which team this player represents.');
+      return;
+    }
+    const saved = await run(() =>
+      addMatchPlayer(w.id, m.id, m.revision, targetTeam, {
+        name: newPlayerName,
+        role: sheet.selection?.type === 'bowler' ? 'Bowler' : 'Batter',
+        selection: sheet.selection,
+      }),
+    );
+    if (saved && typeof saved === 'object') setSheet(null);
+    else
+      setSheetError(error || 'Could not add this player. Check the team and match player limit.');
+  }
+  async function selectPlayer(playerId) {
+    const added = await run(() =>
+      addMatchPlayer(w.id, m.id, m.revision, selectionTeamId, {
+        playerId,
+        selection: pendingSelection,
+      }),
+    );
+    if (added && typeof added === 'object') setSelection('');
+    else setSheetError(error || 'Could not select this player. Refresh the match and try again.');
+  }
   const set = (k, v) => setDelivery((d) => ({ ...d, [k]: v }));
   const latest = [...events].reverse().find((e) => e.type === 'delivery');
   return (
     <>
       <div className="match-meta">
-        <strong>{m.teams.map((t) => t.name).join(' vs ')}</strong>
-        <p>
-          {m.date} · {m.venue || 'Local match'} · {m.rules.overs} overs
-        </p>
+        <div className="row">
+          <div>
+            <strong>{m.teams.map((t) => t.name).join(' vs ')}</strong>
+            <p>
+              {m.date} · {m.venue || 'Local match'} · {m.rules.overs} overs
+            </p>
+          </div>
+          {!frozen && (
+            <Button secondary onClick={() => addPlayer()}>
+              + Add player
+            </Button>
+          )}
+        </div>
       </div>
       <div className="tabs">
         {['Score', 'Scorecard', 'History'].map((t) => (
@@ -175,7 +251,7 @@ export default function Match({ w, data, run, error }) {
                 </tr>
               </thead>
               <tbody>
-                {[s.bowling[s.bowler]].map((b) => (
+                {[s.bowler ? s.bowling[s.bowler] : null].filter(Boolean).map((b) => (
                   <tr key={b.id}>
                     <td>{b.name}</td>
                     <td>{overs(b.balls)}</td>
@@ -232,36 +308,41 @@ export default function Match({ w, data, run, error }) {
           ) : s.needBatter || s.needBowler ? (
             <div className="notice">
               <h3>
-                {s.needBatter ? 'Choose the next batter' : 'Over complete. Change the bowler.'}
+                {s.needBatter
+                  ? s.wickets
+                    ? 'Select next batsman'
+                    : s.striker
+                      ? 'Select non-striker'
+                      : 'Who is batting? Select striker'
+                  : s.balls
+                    ? 'Over complete. Who is bowling next?'
+                    : 'Who is bowling?'}
               </h3>
               <Select
-                label={s.needBatter ? 'Replacement batter' : 'Next bowler'}
+                label={
+                  s.needBatter
+                    ? s.striker
+                      ? 'Select non-striker'
+                      : 'Select striker'
+                    : s.balls
+                      ? 'Select next bowler'
+                      : 'Select opening bowler'
+                }
                 value={selection}
                 onChange={(e) => setSelection(e.target.value)}
-                options={(s.needBatter
-                  ? m.teams[battingSide].squad.filter((p) => !s.batting[p.id].played)
-                  : m.teams[1 - battingSide].squad.filter(
-                      (p) => p.id !== s.bowler && s.bowling[p.id].balls < m.rules.maxBowler * 6,
-                    )
-                ).map(playerLabel)}
+                options={candidates.map(playerLabel)}
               />
-              <Button
-                onClick={async () => {
-                  if (
-                    await act({
-                      type: 'event',
-                      event: {
-                        id: uuid(),
-                        type: s.needBatter ? 'batter' : 'bowler',
-                        player: selection,
-                      },
-                    })
-                  )
-                    setSelection('');
-                }}
-              >
+              <Button disabled={!selection} onClick={() => selectPlayer(selection)}>
                 Confirm player
               </Button>
+              {!frozen && (
+                <Button secondary onClick={() => addPlayer(selectionTeamId, pendingSelection)}>
+                  + Add new {s.needBatter ? 'batsman' : 'bowler'}
+                </Button>
+              )}
+              {!candidates.length && (
+                <p className="help">No eligible existing players. Add a player to continue.</p>
+              )}
             </div>
           ) : (
             <section className="scoring-controls">
@@ -272,10 +353,16 @@ export default function Match({ w, data, run, error }) {
                 </span>
               </div>
               <div className="run-buttons">
-                {[0, 1, 2, 3, 4, 6].map((n) => (
+                {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                   <button
                     key={n}
-                    onClick={() => ball({ bat: n, running: n < 4 ? n : 0, boundary: n >= 4 })}
+                    onClick={() =>
+                      ball({
+                        bat: n,
+                        running: n === 4 || n === 6 ? 0 : n,
+                        boundary: n === 4 || n === 6,
+                      })
+                    }
                   >
                     {n}
                   </button>
@@ -379,7 +466,13 @@ export default function Match({ w, data, run, error }) {
               ? 'Delivery details'
               : sheet === 'chase'
                 ? 'Opening the chase'
-                : 'Confirm match change'
+                : sheet.type === 'player'
+                  ? sheet.selection?.type === 'batter'
+                    ? 'Add a batsman'
+                    : sheet.selection?.type === 'bowler'
+                      ? 'Add a bowler'
+                      : 'Add player to match'
+                  : 'Confirm match change'
           }
           close={() => {
             setSheet(null);
@@ -390,6 +483,31 @@ export default function Match({ w, data, run, error }) {
             <p role="alert" className="notice error">
               {error || sheetError}
             </p>
+          )}
+          {sheet.type === 'player' && (
+            <form onSubmit={savePlayer}>
+              {!sheet.selection && (
+                <Select
+                  label="Team"
+                  value={playerTeamId}
+                  options={m.teams}
+                  onChange={(event) => setPlayerTeamId(event.target.value)}
+                />
+              )}
+              {sheet.selection && (
+                <p className="help">
+                  Adding this player to {m.teams.find((team) => team.id === sheet.teamId)?.name}.
+                </p>
+              )}
+              <Field
+                label="Player name"
+                required
+                maxLength={100}
+                value={newPlayerName}
+                onChange={(event) => setNewPlayerName(event.target.value)}
+              />
+              <Button>Add player</Button>
+            </form>
           )}
           {sheet === 'delivery' && (
             <form
@@ -507,22 +625,18 @@ export default function Match({ w, data, run, error }) {
           {sheet === 'chase' && (
             <>
               <p>
-                Target {states[0].runs + 1}. {m.teams[1 - m.firstBat].name} to bat.
+                Target {states[0].runs + 1}. {m.teams[1 - m.firstBat].name} to bat. Choose or create
+                opening players on the scoring screen.
               </p>
-              {['striker', 'nonStriker', 'bowler'].map((key) => (
-                <Select
-                  key={key}
-                  label={key === 'nonStriker' ? 'Opening non-striker' : `Opening ${key}`}
-                  value={opening[key]}
-                  onChange={(e) => setOpening((o) => ({ ...o, [key]: e.target.value }))}
-                  options={m.teams[key === 'bowler' ? m.firstBat : 1 - m.firstBat].squad.map(
-                    playerLabel,
-                  )}
-                />
-              ))}
               <Button
                 onClick={async () => {
-                  if (await act({ type: 'startChase', opening })) setSheet(null);
+                  if (
+                    await act({
+                      type: 'startChase',
+                      opening: { striker: '', nonStriker: '', bowler: '' },
+                    })
+                  )
+                    setSheet(null);
                 }}
               >
                 Start second innings

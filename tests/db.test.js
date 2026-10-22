@@ -9,6 +9,8 @@ import {
   saveTeam,
   createMatch,
   changeMatch,
+  addMatchPlayer,
+  deleteRecord,
   all,
   exportBackup,
   importBackup,
@@ -110,13 +112,170 @@ test('workspace isolation, transaction rollback, revisions, undo, backup and fin
 
 test('version 1 migration preserves existing records', async () => {
   const old = new Dexie('crease-local');
-  old.version(1).stores({ workspaces: 'id', players: 'id,workspaceId', teams: 'id,workspaceId', memberships: 'id,workspaceId,teamId', matches: 'id,workspaceId', innings: 'id,workspaceId,matchId', events: 'id,workspaceId,matchId,inningsId', audits: 'id,workspaceId,matchId' });
-  const id = uuid(), playerId = uuid();
+  old.version(1).stores({
+    workspaces: 'id',
+    players: 'id,workspaceId',
+    teams: 'id,workspaceId',
+    memberships: 'id,workspaceId,teamId',
+    matches: 'id,workspaceId',
+    innings: 'id,workspaceId,matchId',
+    events: 'id,workspaceId,matchId,inningsId',
+    audits: 'id,workspaceId,matchId',
+  });
+  const id = uuid(),
+    playerId = uuid();
   await old.workspaces.add({ id, name: 'Existing scorer' });
   await old.players.add({ id: playerId, workspaceId: id, name: 'Existing player' });
   old.close();
   await db.open();
   assert.equal((await all(id)).players[0].id, playerId);
   assert.equal((await all(id)).drafts.length, 0);
+  await db.delete();
+});
+
+test('safe record deletion removes unused memberships and protects match history', async () => {
+  await db.delete();
+  await db.open();
+  const w = await createWorkspace('Delete test');
+  const players = [];
+  for (let n = 0; n < 5; n++)
+    players.push(await saveRecord(w.id, 'players', { name: `Player ${n}` }));
+  const teams = [];
+  for (let n = 0; n < 2; n++) {
+    const team = { id: uuid(), name: `Team ${n}` };
+    const members = n === 0 ? [players[0], players[1], players[4]] : players.slice(2, 4);
+    await saveTeam(
+      w.id,
+      team,
+      members.map((player) => player.id),
+    );
+    teams.push({ ...team, squad: members.slice(0, 2) });
+  }
+  const unusedTeam = { id: uuid(), name: 'Unused team' };
+  await saveTeam(w.id, unusedTeam, []);
+  await createMatch(
+    w.id,
+    {
+      teams,
+      date: '2026-10-21',
+      firstBat: 0,
+      rules: { overs: 1, size: 2, maxBowler: 1, freeHit: true },
+    },
+    { striker: players[0].id, nonStriker: players[1].id, bowler: players[2].id },
+  );
+  await assert.rejects(deleteRecord(w.id, 'players', players[0].id), /match history references it/);
+  await assert.rejects(deleteRecord(w.id, 'teams', teams[0].id), /match history references it/);
+  await deleteRecord(w.id, 'players', players[4].id);
+  await deleteRecord(w.id, 'teams', unusedTeam.id);
+  const data = await all(w.id);
+  assert.equal(
+    data.players.some((player) => player.id === players[4].id),
+    false,
+  );
+  assert.equal(
+    data.memberships.some((member) => member.playerId === players[4].id),
+    false,
+  );
+  assert.equal(
+    data.teams.some((team) => team.id === unusedTeam.id),
+    false,
+  );
+  assert.equal(
+    data.memberships.some((member) => member.teamId === unusedTeam.id),
+    false,
+  );
+  assert.equal(data.matches.length, 1);
+  await db.delete();
+});
+
+test('playerless match can add and select players during play without losing scorecard history', async () => {
+  await db.delete();
+  await db.open();
+  const w = await createWorkspace('Quick match scorer');
+  const teams = [];
+  for (const name of ['Youngs Squad', 'Warriors']) {
+    const team = await saveRecord(w.id, 'teams', { name });
+    teams.push({ ...team, squad: [] });
+  }
+  let match = await createMatch(w.id, {
+    teams,
+    date: '2026-10-22',
+    firstBat: 0,
+    rules: { overs: 2, size: 3, maxBowler: 1, freeHit: true },
+  });
+  assert.equal(match.status, 'live');
+  let state = (await all(w.id)).innings;
+  let events = (await all(w.id)).events;
+  const { matchStates } = await import('../lib/engine.js');
+  let score = matchStates(match, state, events)[0];
+  assert.equal(score.needBatter, 'striker');
+  assert.equal(score.needBowler, true);
+
+  async function register(team, name, selection) {
+    const result = await addMatchPlayer(w.id, match.id, match.revision, team.id, {
+      name,
+      selection,
+    });
+    match = result.match;
+    return result.player;
+  }
+
+  const striker = await register(teams[0], 'Quick Striker', { type: 'batter' });
+  const nonStriker = await register(teams[0], 'Quick Partner', { type: 'batter' });
+  const openingBowler = await register(teams[1], 'Opening Bowler', { type: 'bowler' });
+  for (let ball = 0; ball < 5; ball++) {
+    match = await changeMatch(w.id, match.id, match.revision, {
+      type: 'event',
+      event: {
+        id: uuid(),
+        type: 'delivery',
+        bat: 0,
+        extra: 'none',
+        extraRuns: 0,
+        running: 0,
+      },
+    });
+  }
+  match = await changeMatch(w.id, match.id, match.revision, {
+    type: 'event',
+    event: {
+      id: uuid(),
+      type: 'delivery',
+      bat: 0,
+      extra: 'none',
+      extraRuns: 0,
+      running: 0,
+      wicket: { kind: 'bowled', player: striker.id },
+    },
+  });
+  let data = await all(w.id);
+  score = matchStates(match, data.innings, data.events)[0];
+  assert.equal(score.needBatter, 'nonStriker');
+  assert.equal(score.needBowler, true);
+
+  const replacement = await register(teams[0], 'Replacement Batter', { type: 'batter' });
+  const nextBowler = await register(teams[1], 'Next Bowler', { type: 'bowler' });
+  assert.notEqual(openingBowler.id, nextBowler.id);
+  assert.notEqual(nonStriker.id, replacement.id);
+  match = await changeMatch(w.id, match.id, match.revision, {
+    type: 'event',
+    event: {
+      id: uuid(),
+      type: 'delivery',
+      bat: 1,
+      extra: 'none',
+      extraRuns: 0,
+      running: 1,
+    },
+  });
+  data = await all(w.id);
+  score = matchStates(match, data.innings, data.events)[0];
+  assert.equal(score.runs, 1);
+  assert.equal(score.batting[replacement.id].played, true);
+  assert.equal(score.bowling[nextBowler.id].balls, 1);
+  assert.equal(match.teams[0].squad.length, 3);
+  assert.equal(data.players.length, 5);
+  validateBackup(await exportBackup(w));
+  db.close();
   await db.delete();
 });

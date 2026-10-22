@@ -1,6 +1,6 @@
 ﻿# Crease — Cricket Scoring
 
-A mobile-first, device-local cricket scorebook built with Next.js App Router, JavaScript/JSX, Tailwind CSS and Dexie/IndexedDB. There is no runtime API, database server, authentication service, external font or cloud synchronization dependency.
+A mobile-first, device-local cricket scorebook with a public product landing page at `/` and the scoring app at `/app/`, built with Next.js App Router, JavaScript/JSX, Tailwind CSS and Dexie/IndexedDB. There is no runtime API, database server, authentication service, external font or cloud synchronization dependency.
 
 **The local-first requirement supersedes the earlier backend-dependent MERN architecture.** The original README is preserved in [Docs/ORIGINAL-README.md](Docs/ORIGINAL-README.md); the original requirements and Day 1 notes remain intact as historical planning documents, not current implementation claims.
 
@@ -24,13 +24,14 @@ Open http://127.0.0.1:3000. The build creates `out/`, generates 192px/512px norm
 
 ## First use and core flows
 
-1. Enter a local display name. Crease creates a random workspace ID, without example data.
-2. Add players, create teams and assign squad members, captain and wicketkeeper.
-3. Set up a match through teams/squads, rules, toss, and opening players. Save draft preserves unfinished setup; Continue commits each completed step.
-4. Record runs, extras and supported wickets. Select replacement batters and a different bowler when prompted. View both scorecards and over-by-over history.
-5. Finalize a completed result to include it in player statistics. Reopen removes it from career totals until finalized again.
+1. Open `/` for the Crease landing page, then choose **Open app** to visit `/app/`.
+2. Enter a local display name. Crease creates a random workspace ID, without example data.
+3. Create or select two teams, configure rules and toss, and start. Player entry and optional pre-match squads are not required.
+4. Select existing players or add batters and bowlers directly from the scoring screen. Player records are assigned to their team and included in match history.
+5. Record runs, extras and supported wickets. Select replacement batters and a different bowler when prompted. View both scorecards and over-by-over history.
+6. Finalize a completed result to include it in player statistics. Reopen removes it from career totals until finalized again.
 
-Players with identical names are distinguished by short UUIDs and team membership. Team/player edits and archive operations preserve frozen match squads. Hard deletion of individual records is intentionally not exposed; use Archive. Live means scoring in progress on this device, not broadcasting.
+Players with identical names are distinguished by short UUIDs and team membership. New match players may be added during scoring up to the configured number of players per side. Team/player edits and archive operations preserve match history. Permanently deleting an individual record is available only when no match history references it; otherwise archive it to preserve the scorebook. Live means scoring in progress on this device, not broadcasting.
 
 The scoring controls debounce rapid taps, disable concurrent commits, and assign unique event IDs. Database transactions check match revisions, so a stale tab receives a visible conflict instead of overwriting newer play. Close extra tabs during backup replacement; refresh a stale scoring tab before continuing.
 
@@ -38,7 +39,7 @@ The scoring controls debounce rapid taps, disable concurrent commits, and assign
 
 Visit online using a supported browser and wait for **Ready offline**. More → Offline & installation displays status and offers retry. Ready is shown only after service-worker activation and verification that every resource in the build's precache exists. This includes unvisited screens, HTML, Next.js route payloads, JavaScript chunks, CSS and icons.
 
-All record routes are prebuilt (`/match/?id=...`, `/player/?id=...`). Full-document links and cache-first navigation avoid requiring a server-rendered response for records created offline. Close and reopen the app while disconnected to verify preparation before relying on it at a match. Initial download and updates require internet. Development mode does not provide this guarantee.
+The install manifest opens directly at `/app/`. Scoring routes are prebuilt both under `/app/` (for example `/app/match/?id=...`) and their legacy top-level URLs. Full-document links and cache-first navigation avoid requiring a server-rendered response for records created offline. Close and reopen the app while disconnected to verify preparation before relying on it at a match. Initial download and updates require internet. Development mode does not provide this guarantee.
 
 Updates wait until explicitly applied from More. The update button is unavailable while local matches are live. Finish saves/drafts and close other tabs first. Old asset caches are retained to keep open older tabs working; this trades storage space for update safety. No asset-cache operation deletes IndexedDB. Browser settings can remove old asset caches, but avoid clearing site data unless you have exported your records.
 
@@ -54,8 +55,8 @@ Import accepts up to 20 MB, validates versions, IDs, types, relationships and re
 
 ## Architecture
 
-- `app/`: static App Router pages and shared responsive styling. System fonts; bundled Lucide icons.
-- `components/`: onboarding/navigation, people management, match setup, live scoring, profiles, storage/settings and offline readiness.
+- `app/`: static App Router landing page, `/app/` scoring routes, legacy scorebook routes, and shared responsive styling. System fonts; bundled Lucide icons.
+- `components/`: landing page, onboarding/navigation, people management, match setup, live scoring, profiles, storage/settings and offline readiness.
 - `lib/engine.js`: pure deterministic event replay, validation, result calculation and raw-total career aggregation. Independent of React and Dexie.
 - `lib/db.js`: versioned Dexie schema, scoped repositories, transactional writes, revision conflicts, backup validation and restoration. Version 2 adds drafts without clearing version 1 records.
 - `scripts/precache.mjs`, `scripts/sw-template.js`: build-generated versioned full-export precache and service worker. No runtime third-party requests.
@@ -63,7 +64,7 @@ Import accepts up to 20 MB, validates versions, IDs, types, relationships and re
 - `tests/`: scoring/database unit tests and production Playwright acceptance tests.
 - `Docs/RULES.md`: supported cricket rules, authoritative sources and unsupported variations.
 
-Tables: workspaces/settings, players, teams, memberships, matches (frozen squads and rules), innings (opening selections), events (deliveries and player selections), audits, drafts. Domain records carry a workspace ID. Career statistics combine raw totals from finalized match event replays; there are no incrementally maintained counters to duplicate.
+Tables: workspaces/settings, players, teams, memberships, matches (team identities, evolving match rosters and frozen rules), innings (opening selections), events (deliveries and player selections), audits, drafts. Domain records carry a workspace ID. Career statistics combine raw totals from finalized match event replays; there are no incrementally maintained counters to duplicate.
 
 ## Corrections and rule limits
 
