@@ -38,52 +38,66 @@ export async function POST(req) {
     );
   }
 
-  await connectDB();
+  try {
+    await connectDB();
 
-  const account = await TeamAccount.findOne({ teamId: teamId.toUpperCase().trim() });
+    const account = await TeamAccount.findOne({ teamId: teamId.toUpperCase().trim() });
 
-  // Constant-time comparison to resist timing attacks
-  const dummyHash = '$2b$12$invalidhashpaddingtoresisttimingattacks.invalidsalt.xxx';
-  const hash = account?.passwordHash ?? dummyHash;
-  const match = await bcrypt.compare(password, hash);
+    // Constant-time comparison to resist timing attacks
+    const dummyHash = '$2b$12$invalidhashpaddingtoresisttimingattacks.invalidsalt.xxx';
+    const hash = account?.passwordHash ?? dummyHash;
+    const match = await bcrypt.compare(password, hash);
 
-  if (!account || !match) {
+    if (!account || !match) {
+      return NextResponse.json(
+        { error: 'Team ID or password is incorrect.' },
+        { status: 401 },
+      );
+    }
+
+    // Find or create the owner member record
+    let ownerMember = await TeamMember.findOne({ teamId: account.teamId, role: 'owner' });
+    if (!ownerMember) {
+      // Legacy: create owner member if missing (migration path)
+      const { randomUUID } = await import('node:crypto');
+      ownerMember = await TeamMember.create({
+        teamId: account.teamId,
+        memberId: randomUUID(),
+        displayName: account.name + ' (Owner)',
+        role: 'owner',
+        activatedAt: new Date(),
+      });
+    }
+
+    // Update last login timestamp
+    await TeamAccount.updateOne({ teamId: account.teamId }, { lastLoginAt: new Date() });
+
+    const res = NextResponse.json({
+      teamId: account.teamId,
+      teamName: account.name,
+      memberId: ownerMember.memberId,
+      role: 'owner',
+    });
+
+    const session = await getIronSession(req, res, sessionOptions);
+    session.teamId = account.teamId;
+    session.teamName = account.name;
+    session.memberId = ownerMember.memberId;
+    session.role = 'owner';
+    await session.save();
+
+    return res;
+  } catch (err) {
+    console.error('Login error:', err);
+    if (err.message?.includes('MONGODB_URI') || err.name === 'MongooseServerSelectionError') {
+      return NextResponse.json(
+        { error: 'Database service is currently unavailable. Please verify connection settings.' },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
-      { error: 'Team ID or password is incorrect.' },
-      { status: 401 },
+      { error: 'Sign in is temporarily unavailable. Please try again.' },
+      { status: 500 },
     );
   }
-
-  // Find or create the owner member record
-  let ownerMember = await TeamMember.findOne({ teamId: account.teamId, role: 'owner' });
-  if (!ownerMember) {
-    // Legacy: create owner member if missing (migration path)
-    const { randomUUID } = await import('node:crypto');
-    ownerMember = await TeamMember.create({
-      teamId: account.teamId,
-      memberId: randomUUID(),
-      displayName: account.name + ' (Owner)',
-      role: 'owner',
-      activatedAt: new Date(),
-    });
-  }
-
-  // Update last login timestamp
-  await TeamAccount.updateOne({ teamId: account.teamId }, { lastLoginAt: new Date() });
-
-  const res = NextResponse.json({
-    teamId: account.teamId,
-    teamName: account.name,
-    memberId: ownerMember.memberId,
-    role: 'owner',
-  });
-
-  const session = await getIronSession(req, res, sessionOptions);
-  session.teamId = account.teamId;
-  session.teamName = account.name;
-  session.memberId = ownerMember.memberId;
-  session.role = 'owner';
-  await session.save();
-
-  return res;
 }

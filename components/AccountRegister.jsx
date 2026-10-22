@@ -53,6 +53,11 @@ export default function AccountRegister() {
       return;
     }
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError("You're offline. Connect to the internet to create an account.");
+      return;
+    }
+
     setBusy(true);
     setError('');
 
@@ -61,16 +66,28 @@ export default function AccountRegister() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamName, password, confirmPassword }),
+        body: JSON.stringify({ teamName: teamName.trim(), password, confirmPassword }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || 'Registration failed. Please try again.');
+        if (res.status === 429) {
+          setError(data.error || 'Too many attempts. Please wait a few minutes before trying again.');
+        } else if (res.status === 503) {
+          setError(data.error || 'Database service is temporarily unavailable. Please verify settings.');
+        } else if (res.status === 409) {
+          setError(data.error || 'A team account with this identifier already exists.');
+        } else {
+          setError(data.error || 'Registration failed. Please check your details and try again.');
+        }
         return;
       }
       setSuccess({ teamId: data.teamId, teamName: data.teamName });
     } catch {
-      setError('Could not reach the server. Check your connection and try again.');
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setError("You're offline. Connect to the internet to create an account.");
+      } else {
+        setError('Could not reach the server. Please check your internet connection or try again shortly.');
+      }
     } finally {
       setBusy(false);
     }
@@ -218,11 +235,12 @@ export default function AccountRegister() {
 
           <div className="auth-form-links">
             <a href="/account/login/">Already have an account? Sign in</a>
+            <a href="/app/">Continue Offline without account</a>
           </div>
         </form>
 
         <div className="auth-back">
-          <a href="/app/">← Back to the app without an account</a>
+          <a href="/app/">← Return to Crease Scorebook</a>
         </div>
       </main>
     </div>

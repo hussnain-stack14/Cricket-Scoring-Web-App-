@@ -67,50 +67,70 @@ export async function POST(req) {
     );
   }
 
-  await connectDB();
+  try {
+    await connectDB();
 
-  // Hash the password
-  const passwordHash = await bcrypt.hash(password, 12);
+    // Hash the password
+    const passwordHash = await bcrypt.hash(password, 12);
 
-  // Generate unique Team ID
-  const teamId = await generateTeamId();
+    // Generate unique Team ID
+    const teamId = await generateTeamId();
 
-  // Stable owner memberId
-  const memberId = crypto.randomUUID();
+    // Stable owner memberId
+    const memberId = crypto.randomUUID();
 
-  // Create team account
-  const account = await TeamAccount.create({
-    teamId,
-    name: teamName.trim(),
-    passwordHash,
-  });
+    // Create team account
+    const account = await TeamAccount.create({
+      teamId,
+      name: teamName.trim(),
+      passwordHash,
+    });
 
-  // Create the owner member entry
-  await TeamMember.create({
-    teamId,
-    memberId,
-    displayName: teamName.trim() + ' (Owner)',
-    role: 'owner',
-    activatedAt: new Date(),
-  });
-
-  // Start authenticated session
-  const res = NextResponse.json(
-    {
-      teamId: account.teamId,
-      teamName: account.name,
+    // Create the owner member entry
+    await TeamMember.create({
+      teamId,
       memberId,
+      displayName: teamName.trim() + ' (Owner)',
       role: 'owner',
-    },
-    { status: 201 },
-  );
+      activatedAt: new Date(),
+    });
 
-  const session = await getIronSession(req, res, sessionOptions);
-  session.teamId = account.teamId;
-  session.teamName = account.name;
-  session.memberId = memberId;
-  session.role = 'owner';
-  await session.save();
+    // Start authenticated session
+    const res = NextResponse.json(
+      {
+        teamId: account.teamId,
+        teamName: account.name,
+        memberId,
+        role: 'owner',
+      },
+      { status: 201 },
+    );
 
-  return res;
+    const session = await getIronSession(req, res, sessionOptions);
+    session.teamId = account.teamId;
+    session.teamName = account.name;
+    session.memberId = memberId;
+    session.role = 'owner';
+    await session.save();
+
+    return res;
+  } catch (error) {
+    console.error('Registration error:', error);
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: 'A team account with this identifier already exists. Please try again.' },
+        { status: 409 },
+      );
+    }
+    if (error.message?.includes('MONGODB_URI') || error.name === 'MongooseServerSelectionError') {
+      return NextResponse.json(
+        { error: 'Database service is currently unavailable. Please verify connection settings.' },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json(
+      { error: 'Registration is temporarily unavailable. Please try again.' },
+      { status: 500 },
+    );
+  }
 }

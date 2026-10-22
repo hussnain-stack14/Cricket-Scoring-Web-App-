@@ -22,6 +22,12 @@ export default function AccountLogin() {
       return;
     }
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError("You're offline. Connect to the internet to sign in.");
+      setBusy(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -29,15 +35,25 @@ export default function AccountLogin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamId: normalised, password }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || 'Sign in failed. Check your Team ID and password.');
+        if (res.status === 429) {
+          setError(data.error || 'Too many sign-in attempts. Please wait a few minutes.');
+        } else if (res.status === 503) {
+          setError(data.error || 'Database service is temporarily unavailable.');
+        } else {
+          setError(data.error || 'Sign in failed. Check your Team ID and password.');
+        }
         return;
       }
       // Redirect to app after successful login
       window.location.href = '/app/';
     } catch {
-      setError('Could not reach the server. Check your connection and try again.');
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setError("You're offline. Connect to the internet to sign in.");
+      } else {
+        setError('Could not reach the server. Please check your connection and try again.');
+      }
     } finally {
       setBusy(false);
     }
