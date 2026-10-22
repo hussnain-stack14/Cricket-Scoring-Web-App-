@@ -19,10 +19,16 @@ import {
   ArrowRight,
   Shield,
 } from 'lucide-react';
-import { all, workspace, createWorkspace } from '../lib/db';
+import {
+  activateAccountWorkspace,
+  all,
+  createWorkspace,
+  findGuestWorkspace,
+  workspace,
+} from '../lib/db';
 import { matchStates, result } from '../lib/engine';
 import { teamStatistics } from '../lib/statistics';
-import { fetchSession } from '../lib/sync';
+import { fetchSession, getSyncState, sync } from '../lib/sync';
 import { Button, Field, Empty } from './ui';
 import People from './People';
 import Statistics from './Statistics';
@@ -32,6 +38,8 @@ import Profile from './Profile';
 import Settings from './Settings';
 import { useOffline } from './offline';
 import { DownloadScorecardButton } from './ReportActions';
+import SyncStatus from './SyncStatus';
+import TeamAccountMenu from './TeamAccountMenu';
 function userError(error) {
   const message = error instanceof Error ? error.message : '';
   if (/another tab|revision/i.test(message))
@@ -56,7 +64,12 @@ export default function App({ screen }) {
     [filter, setFilter] = useState('live'),
     [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [session, setSession] = useState(null);
+  const [syncMeta, setSyncMeta] = useState(null);
+  const [pendingSync, setPendingSync] = useState(0);
+  const [syncing, setSyncing] = useState(false);
   const busy = useRef(false);
+  const syncBusy = useRef(false);
+  const syncRef = useRef(null);
   const offline = useOffline();
   const base = '/app';
   async function refresh() {
@@ -66,12 +79,71 @@ export default function App({ screen }) {
     setLoaded(true);
   }
   useEffect(() => {
-    refresh().catch((e) => {
-      setError(userError(e));
-      setLoaded(true);
-    });
-    fetchSession().then(setSession).catch(() => {});
+    let cancelled = false;
+    async function initialize() {
+      try {
+        const currentSession = await fetchSession();
+        const ws = currentSession
+          ? await activateAccountWorkspace(currentSession.teamId, currentSession.teamName)
+          : await findGuestWorkspace();
+        if (cancelled) return;
+        setSession(currentSession);
+        setW(ws);
+        setData(ws ? await all(ws.id) : null);
+        if (ws && currentSession) {
+          const syncState = await getSyncState(ws.id);
+          setSyncMeta(syncState.meta);
+          setPendingSync(syncState.pending);
+        }
+        setLoaded(true);
+      } catch (e) {
+        if (cancelled) return;
+        setError(userError(e));
+        setLoaded(true);
+      }
+    }
+    initialize();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+  async function refreshSyncState(workspaceId = w?.id) {
+    if (!workspaceId) return;
+    const state = await getSyncState(workspaceId);
+    setSyncMeta(state.meta);
+    setPendingSync(state.pending);
+  }
+  async function syncNow() {
+    if (!session || !w || syncBusy.current) return;
+    syncBusy.current = true;
+    setSyncing(true);
+    try {
+      await sync(w.id);
+      await refreshSyncState(w.id);
+      await refresh();
+    } catch (e) {
+      setError('Sync needs attention. Your local changes are still saved.');
+    } finally {
+      syncBusy.current = false;
+      setSyncing(false);
+    }
+  }
+  syncRef.current = syncNow;
+  useEffect(() => {
+    if (!loaded || !session || !w) return undefined;
+    const triggerSync = () => {
+      if (document.visibilityState === 'visible') syncRef.current?.();
+    };
+    triggerSync();
+    const interval = window.setInterval(triggerSync, 45000);
+    window.addEventListener('online', triggerSync);
+    document.addEventListener('visibilitychange', triggerSync);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('online', triggerSync);
+      document.removeEventListener('visibilitychange', triggerSync);
+    };
+  }, [loaded, session?.teamId, w?.id]);
   async function run(fn) {
     if (busy.current) return false;
     busy.current = true;
@@ -80,7 +152,8 @@ export default function App({ screen }) {
     try {
       const value = await fn();
       await refresh();
-      setStatus('Saved on this device');
+      setStatus(session ? 'Waiting to sync' : 'Saved on this device');
+      if (session && w) void syncRef.current?.();
       return value === undefined ? true : value;
     } catch (e) {
       console.error('Crease operation failed', e);
@@ -227,26 +300,24 @@ export default function App({ screen }) {
               <span>{label}</span>
             </a>
           ))}
-          <p className="sidebar-section-label" style={{ marginTop: '1.25rem' }}>TEAM ACCOUNT</p>
-          {session ? (
-            <a
-              href="/account/settings/"
-              className="sidebar-link"
-              title={sidebarCollapsed ? `${session.teamName} (${session.teamId})` : undefined}
-            >
-              <Shield size={20} strokeWidth={1.9} />
-              <span>{session.teamName}</span>
-            </a>
-          ) : (
-            <a
-              href="/account/login/"
-              className="sidebar-link"
-              title={sidebarCollapsed ? 'Sign in' : undefined}
-            >
-              <Shield size={20} strokeWidth={1.9} />
-              <span>Sign in / Sync</span>
-            </a>
-          )}
+          <p className="sidebar-section-label" style={{ marginTop: '1.25rem' }}>
+            TEAM ACCOUNT
+          </p>
+          <TeamAccountMenu
+            session={session}
+            workspaceId={w?.id}
+            syncStatus={
+              !session
+                ? 'unauthenticated'
+                : typeof navigator !== 'undefined' && !navigator.onLine
+                  ? 'offline'
+                  : syncMeta?.syncStatus || 'pending'
+            }
+            pending={pendingSync}
+            syncing={syncing}
+            onSync={syncNow}
+            collapsed={sidebarCollapsed}
+          />
         </nav>
         <div className="sidebar-footer">
           <span className="sidebar-offline-dot" />
@@ -262,7 +333,7 @@ export default function App({ screen }) {
             crease<span className="brand-dot">.</span>
           </a>
           <span className="local-badge">
-            <span /> ON THIS DEVICE
+            <span /> {session ? 'TEAM ACCOUNT' : 'ON THIS DEVICE'}
           </span>
         </header>
         <header className="desktop-topbar">
@@ -275,6 +346,19 @@ export default function App({ screen }) {
               <span />
               {offline.ready ? 'Ready offline' : 'Offline setup needed'}
             </span>
+            {session && (
+              <SyncStatus
+                status={
+                  typeof navigator !== 'undefined' && !navigator.onLine
+                    ? 'offline'
+                    : syncMeta?.syncStatus || 'pending'
+                }
+                pending={pendingSync}
+                onSync={syncNow}
+                syncing={syncing}
+                compact
+              />
+            )}
             {w && ['dashboard', 'matches'].includes(screen) && (
               <a className="button compact" href={`${base}/setup/`}>
                 <Plus size={17} /> New match
@@ -573,7 +657,22 @@ export default function App({ screen }) {
                 {screen === 'setup' && <Setup {...ctx} />}
                 {screen === 'match' && <Match {...ctx} />}
                 {screen === 'player' && <Profile {...ctx} />}
-                {screen === 'more' && <Settings {...ctx} offline={offline} />}
+                {screen === 'more' && (
+                  <Settings
+                    {...ctx}
+                    offline={offline}
+                    session={session}
+                    workspaceId={w.id}
+                    syncStatus={
+                      typeof navigator !== 'undefined' && !navigator.onLine
+                        ? 'offline'
+                        : syncMeta?.syncStatus || 'pending'
+                    }
+                    pendingSync={pendingSync}
+                    syncing={syncing}
+                    onSync={syncNow}
+                  />
+                )}
               </>
             )
           )}

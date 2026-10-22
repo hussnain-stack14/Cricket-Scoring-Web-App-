@@ -2,22 +2,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Leaf,
-  RefreshCw,
-  LogOut,
-  Users,
   UserPlus,
   Trash2,
   Copy,
   Check,
-  Cloud,
-  CloudOff,
-  AlertCircle,
   Shield,
-  ChevronRight,
   Link,
 } from 'lucide-react';
-import { db, exportBackup } from '../lib/db';
-import { sync, getSyncMeta, fetchSession } from '../lib/sync';
+import { activateAccountWorkspace, db, exportBackup, listWorkspaces } from '../lib/db';
+import { fetchSession, getSyncState, resolveConflict, sync } from '../lib/sync';
+import SignOutAction from './SignOutAction';
+import SyncStatus from './SyncStatus';
 
 const ROLE_LABELS = { owner: 'Owner', scorer: 'Scorer', viewer: 'Viewer' };
 const ROLE_DESCRIPTIONS = {
@@ -26,19 +21,15 @@ const ROLE_DESCRIPTIONS = {
   viewer: 'View matches and statistics only.',
 };
 
-const STATUS_CONFIG = {
-  synced: { icon: Cloud, label: 'All changes synced', cls: 'sync-ok' },
-  pending: { icon: RefreshCw, label: 'Waiting to sync', cls: 'sync-pending' },
-  conflict: { icon: AlertCircle, label: 'Sync needs attention', cls: 'sync-conflict' },
-  offline: { icon: CloudOff, label: 'No connection — saved locally', cls: 'sync-offline' },
-  syncing: { icon: RefreshCw, label: 'Syncing…', cls: 'sync-pending' },
-  unauthenticated: { icon: Shield, label: 'Sign in to sync', cls: 'sync-offline' },
-};
-
 export default function AccountSettings() {
   const [session, setSession] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [syncMeta, setSyncMeta] = useState(null);
+  const [pendingSync, setPendingSync] = useState(0);
+  const [conflicts, setConflicts] = useState([]);
+  const [workspaceId, setWorkspaceId] = useState(null);
+  const [localWorkspaces, setLocalWorkspaces] = useState([]);
+  const [migrateSourceId, setMigrateSourceId] = useState('');
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
 
@@ -59,20 +50,32 @@ export default function AccountSettings() {
 
   const [actionError, setActionError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [online, setOnline] = useState(true);
 
   const loadSession = useCallback(async () => {
     const s = await fetchSession();
+    if (s) {
+      const ws = await activateAccountWorkspace(s.teamId, s.teamName);
+      setWorkspaceId(ws.id);
+      const workspaces = await listWorkspaces();
+      const metadata = await db.syncMeta.toArray();
+      const linked = new Set(metadata.filter((item) => item.teamId).map((item) => item.workspaceId));
+      const local = workspaces.filter((item) => item.id !== ws.id && !linked.has(item.id));
+      setLocalWorkspaces(local);
+      setMigrateSourceId((current) => current || local[0]?.id || '');
+    }
     setSession(s);
     setSessionLoading(false);
   }, []);
 
-  const loadSyncMeta = useCallback(async () => {
-    const ws = await db.workspaces.toCollection().first();
-    if (ws) {
-      const meta = await getSyncMeta(ws.id);
-      setSyncMeta(meta);
+  const loadSyncMeta = useCallback(async (id = workspaceId) => {
+    if (id) {
+      const state = await getSyncState(id);
+      setSyncMeta(state.meta);
+      setPendingSync(state.pending);
+      setConflicts(state.conflicts);
     }
-  }, []);
+  }, [workspaceId]);
 
   const loadMembers = useCallback(async () => {
     if (!session) return;
@@ -89,9 +92,42 @@ export default function AccountSettings() {
   }, [session]);
 
   useEffect(() => {
-    loadSession();
-    loadSyncMeta();
-  }, [loadSession, loadSyncMeta]);
+    let active = true;
+    async function initialize() {
+      try {
+        const s = await loadSession();
+        if (s) {
+          const meta = await db.syncMeta.where('teamId').equals(s.teamId).first();
+          if (meta) {
+            const state = await getSyncState(meta.workspaceId);
+            if (active) {
+              setSyncMeta(state.meta);
+              setPendingSync(state.pending);
+              setConflicts(state.conflicts);
+            }
+          }
+        }
+      } catch (error) {
+        if (active) setActionError(error instanceof Error ? error.message : 'Could not load account data.');
+        if (active) setSessionLoading(false);
+      }
+    }
+    initialize();
+    return () => {
+      active = false;
+    };
+  }, [loadSession]);
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const updateOnline = () => setOnline(navigator.onLine);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+    };
+  }, []);
 
   useEffect(() => {
     if (session) loadMembers();
@@ -101,9 +137,12 @@ export default function AccountSettings() {
     setSyncing(true);
     setActionError('');
     try {
-      const ws = await db.workspaces.toCollection().first();
-      if (ws) await sync(ws.id);
-      await loadSyncMeta();
+      if (workspaceId) {
+        const result = await sync(workspaceId);
+        if (result.status !== 'synced')
+          setActionError(result.error || 'Sync did not finish. Your local changes are retained.');
+        await loadSyncMeta(workspaceId);
+      }
     } catch (e) {
       setActionError('Sync failed. Check your connection and try again.');
     } finally {
@@ -111,9 +150,21 @@ export default function AccountSettings() {
     }
   }
 
-  async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-    window.location.href = '/account/login/';
+  async function handleResolveConflict(conflict, resolution) {
+    if (!workspaceId) return;
+    setSyncing(true);
+    setActionError('');
+    try {
+      await resolveConflict(workspaceId, conflict, resolution);
+      if (resolution === 'local') await sync(workspaceId);
+      await loadSyncMeta(workspaceId);
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : 'Could not resolve this sync conflict.',
+      );
+    } finally {
+      setSyncing(false);
+    }
   }
 
   async function handleInvite(e) {
@@ -162,7 +213,7 @@ export default function AccountSettings() {
   }
 
   async function previewMigrate() {
-    const ws = await db.workspaces.toCollection().first();
+    const ws = localWorkspaces.find((item) => item.id === migrateSourceId);
     if (!ws) return;
     const backup = await exportBackup(ws);
     setMigratePreview({
@@ -205,7 +256,10 @@ export default function AccountSettings() {
         return;
       }
       setMigrateStep('done');
-      await loadSyncMeta();
+      if (workspaceId) {
+        await sync(workspaceId);
+        await loadSyncMeta(workspaceId);
+      }
     } catch {
       setMigrateError('Could not reach the server. Your local data is unchanged.');
     } finally {
@@ -220,9 +274,10 @@ export default function AccountSettings() {
     });
   }
 
-  const statusKey = syncMeta?.syncStatus || (session ? 'synced' : 'unauthenticated');
-  const statusCfg = STATUS_CONFIG[statusKey] || STATUS_CONFIG.unauthenticated;
-  const StatusIcon = statusCfg.icon;
+  const statusKey =
+    !online
+      ? 'offline'
+      : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
 
   if (sessionLoading) {
     return (
@@ -268,22 +323,52 @@ export default function AccountSettings() {
             {/* ─── Sync Status ─── */}
             <section className="account-section">
               <h2>Sync status</h2>
-              <div className={`sync-status-bar ${statusCfg.cls}`}>
-                <StatusIcon size={17} className={syncing ? 'spin' : ''} />
-                <span>{statusCfg.label}</span>
+              <SyncStatus
+                status={statusKey}
+                pending={pendingSync}
+                syncing={syncing}
+                onSync={handleSync}
+              />
+              <div>
                 {syncMeta?.lastPush && (
                   <small>Last sync: {new Date(syncMeta.lastPush).toLocaleString()}</small>
                 )}
-                <button
-                  className="button compact"
-                  onClick={handleSync}
-                  disabled={syncing}
-                >
-                  {syncing ? 'Syncing…' : 'Sync now'}
-                </button>
               </div>
               {syncMeta?.lastError && (
                 <p className="auth-error" style={{ marginTop: '0.5rem' }}>{syncMeta.lastError}</p>
+              )}
+              {conflicts.length > 0 && (
+                <div className="sync-conflicts">
+                  <h3>Resolve changes from another device</h3>
+                  <p>
+                    Choose which version to keep for each conflicting record. Your local version
+                    remains available until you choose.
+                  </p>
+                  {conflicts.map((conflict) => (
+                    <div
+                      className="sync-conflict-row"
+                      key={`${conflict.table}:${conflict.recordId}`}
+                    >
+                      <span>
+                        {conflict.table} · {conflict.recordId.slice(0, 8)}
+                      </span>
+                      <button
+                        className="button compact secondary"
+                        onClick={() => handleResolveConflict(conflict, 'local')}
+                        disabled={syncing}
+                      >
+                        Keep local
+                      </button>
+                      <button
+                        className="button compact secondary"
+                        onClick={() => handleResolveConflict(conflict, 'remote')}
+                        disabled={syncing}
+                      >
+                        Use server
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
             </section>
 
@@ -299,9 +384,28 @@ export default function AccountSettings() {
                   A backup of your current local data will be downloaded automatically before upload.
                   Your local records will not be deleted.
                 </p>
-                <button className="button secondary" onClick={previewMigrate}>
-                  <Link size={16} /> Preview and upload local data
-                </button>
+                {localWorkspaces.length > 0 ? (
+                  <>
+                    <label className="auth-field">
+                      <span>Choose a local workspace</span>
+                      <select
+                        value={migrateSourceId}
+                        onChange={(event) => setMigrateSourceId(event.target.value)}
+                      >
+                        {localWorkspaces.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="button secondary" onClick={previewMigrate}>
+                      <Link size={16} /> Preview and upload local data
+                    </button>
+                  </>
+                ) : (
+                  <p>No unlinked local workspaces are available to migrate.</p>
+                )}
               </section>
             )}
             {migrateStep === 'preview' && migratePreview && (
@@ -446,9 +550,7 @@ export default function AccountSettings() {
                 You can sign in again at any time using your Team ID and password.
               </p>
               {actionError && <p className="auth-error">{actionError}</p>}
-              <button className="button danger secondary" onClick={handleLogout}>
-                <LogOut size={16} /> Sign out of this device
-              </button>
+              <SignOutAction workspaceId={workspaceId} />
             </section>
           </>
         )}

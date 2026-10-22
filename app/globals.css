@@ -3902,8 +3902,144 @@ pre {
   color: var(--muted);
 }
 
+.sync-status-bar.sync-conflict,
+.sync-status-bar.sync-attention {
+  background: #fff0eb;
+  color: #983b1b;
+}
+
+.sync-status-bar.sync-synced {
+  background: #eaf1df;
+  color: #2b551d;
+}
+
+.sync-status-bar.sync-status-compact {
+  gap: 7px;
+  margin: 5px 0;
+  padding: 8px 9px;
+  font-size: 11px;
+}
+
 .sync-status-bar button {
   margin-left: auto;
+}
+
+.team-account-menu {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 9px 7px;
+  border: 1px solid #e7eee5;
+  border-radius: 12px;
+  background: #f8faf6;
+}
+
+.team-account-identity {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 2px 5px;
+}
+
+.team-account-identity strong,
+.team-account-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-account-identity strong {
+  color: var(--green-deep);
+  font-size: 13px;
+}
+
+.team-account-identity small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.team-account-menu .sidebar-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: none;
+}
+
+.signout-dialog {
+  position: fixed;
+  z-index: 1000;
+  inset: 50% auto auto 50%;
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  transform: translate(-50%, -50%);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 24px 80px #15241440;
+}
+
+.signout-dialog h2 {
+  margin: 0 0 10px;
+  color: var(--green-deep);
+  font-size: 20px;
+}
+
+.signout-dialog p {
+  line-height: 1.55;
+}
+
+.signout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.sync-conflicts {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.sync-conflicts h3 {
+  margin: 0 0 6px;
+  color: var(--green-deep);
+  font-size: 15px;
+}
+
+.sync-conflict-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid #edf0ec;
+}
+
+.sync-conflict-row > span {
+  flex: 1 1 150px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sidebar-collapsed .team-account-identity,
+.sidebar-collapsed .team-account-menu .sync-status-bar span,
+.sidebar-collapsed .team-account-menu .sync-status-bar small,
+.sidebar-collapsed .team-account-menu .sync-status-bar button {
+  display: none;
+}
+
+.sidebar-collapsed .team-account-menu {
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
 }
 
 .members-list {
@@ -3980,4 +4116,3 @@ pre {
     font-size: 24px;
   }
 }
-

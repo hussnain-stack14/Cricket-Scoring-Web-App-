@@ -8,7 +8,21 @@ import {
   validateBackup,
 } from '../lib/db';
 import { Button, Field, Sheet } from './ui';
-export default function Settings({ w, data, run, setError, offline }) {
+import SignOutAction from './SignOutAction';
+import SyncStatus from './SyncStatus';
+export default function Settings({
+  w,
+  data,
+  run,
+  setError,
+  offline,
+  session,
+  workspaceId,
+  syncStatus,
+  pendingSync,
+  syncing,
+  onSync,
+}) {
   const [name, setName] = useState(w.name),
     [rules, setRules] = useState(w.rules),
     [backup, setBackup] = useState(null),
@@ -49,20 +63,43 @@ export default function Settings({ w, data, run, setError, offline }) {
     <>
       <section className="card" style={{ borderColor: 'var(--color-primary, #7fae42)' }}>
         <h2>Team Account & Sync</h2>
-        <p>
-          Connect a Crease team account to synchronize matches, teams, and statistics across phones, tablets, and desktops.
-        </p>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-          <a className="button primary" href="/account/">
-            Manage Team Account & Sync
-          </a>
-          <a className="button secondary" href="/account/login/">
-            Sign in
-          </a>
-          <a className="button secondary" href="/account/register/">
-            Create Account
-          </a>
-        </div>
+        {session ? (
+          <>
+            <p>
+              {session.teamName} · Team ID <strong>{session.teamId}</strong>
+            </p>
+            <SyncStatus
+              status={syncStatus}
+              pending={pendingSync}
+              syncing={syncing}
+              onSync={onSync}
+            />
+            <div className="actions">
+              <a className="button secondary" href="/account/settings/">
+                Account settings
+              </a>
+              <SignOutAction workspaceId={workspaceId} />
+            </div>
+          </>
+        ) : (
+          <>
+            <p>
+              Sign in to synchronize matches, teams, and statistics across phones, tablets, and
+              desktops.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <a className="button primary" href="/account/">
+                Manage Team Account & Sync
+              </a>
+              <a className="button secondary" href="/account/login/">
+                Sign in
+              </a>
+              <a className="button secondary" href="/account/register/">
+                Create Account
+              </a>
+            </div>
+          </>
+        )}
       </section>
       <section className="card">
         <h2>Your workspace</h2>

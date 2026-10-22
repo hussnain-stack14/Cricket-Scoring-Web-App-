@@ -4,7 +4,7 @@ import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 
-const ALLOWED_TABLES = [
+const ALLOWED_TABLES = new Set([
   'players',
   'teams',
   'memberships',
@@ -13,29 +13,41 @@ const ALLOWED_TABLES = [
   'events',
   'audits',
   'drafts',
-];
+]);
+const MAX_BATCH = 250;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const MAX_BATCH = 500; // max records per push
+function publicRecord(record) {
+  return record
+    ? {
+        table: record.table,
+        recordId: record.recordId,
+        data: record.data,
+        revision: record.revision,
+        lastChangeId: record.lastChangeId,
+        deletedAt: record.deletedAt,
+        updatedAt: record.updatedAt,
+      }
+    : null;
+}
 
-/**
- * POST /api/sync/push
- * Body: { changes: [{ table, recordId, data, revision, deletedAt? }] }
- *
- * Applies client changes to the server store idempotently.
- * Authorization: session teamId only.
- *
- * For matches: checks that the session holds the scoring lock before
- * accepting delivery events.
- */
+function conflict(change, serverRecord, reason) {
+  return {
+    table: change.table,
+    recordId: change.recordId,
+    reason,
+    serverRecord: publicRecord(serverRecord),
+  };
+}
+
+/** POST /api/sync/push — all data is namespaced by the authenticated team. */
 export async function POST(req) {
-  const res = NextResponse.json(null);
-  const session = await getIronSession(req, res, getSessionOptions());
-
+  const response = NextResponse.json(null);
+  const session = await getIronSession(req, response, getSessionOptions());
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });
   }
-
-  // Viewers cannot push changes
   if (session.role === 'viewer') {
     return NextResponse.json({ error: 'Viewers cannot push changes.' }, { status: 403 });
   }
@@ -46,81 +58,94 @@ export async function POST(req) {
   } catch {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
-
-  const { changes } = body ?? {};
-
-  if (!Array.isArray(changes)) {
+  if (!Array.isArray(body?.changes)) {
     return NextResponse.json({ error: 'changes must be an array.' }, { status: 400 });
   }
-  if (changes.length > MAX_BATCH) {
+  if (body.changes.length > MAX_BATCH) {
     return NextResponse.json({ error: `Maximum ${MAX_BATCH} changes per push.` }, { status: 400 });
   }
 
   await connectDB();
-
   const applied = [];
   const rejected = [];
 
-  for (const change of changes) {
-    const { table, recordId, data, revision, deletedAt } = change ?? {};
-
-    // Validate each change
+  for (const change of body.changes) {
+    const { table, recordId, data, baseRevision, changeId, deleted } = change ?? {};
     if (
-      typeof table !== 'string' ||
-      !ALLOWED_TABLES.includes(table) ||
+      !ALLOWED_TABLES.has(table) ||
       typeof recordId !== 'string' ||
-      !recordId ||
+      !UUID.test(recordId) ||
       typeof data !== 'object' ||
-      data === null
+      data === null ||
+      !Number.isInteger(baseRevision) ||
+      baseRevision < 0 ||
+      typeof changeId !== 'string' ||
+      !UUID.test(changeId) ||
+      typeof deleted !== 'boolean'
     ) {
-      rejected.push({ recordId, reason: 'Invalid change format.' });
+      rejected.push({ table, recordId, reason: 'Invalid change format.', serverRecord: null });
       continue;
     }
 
-    // UUID format check (prevents injection of server-generated IDs)
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(recordId)) {
-      rejected.push({ recordId, reason: 'Invalid record ID format.' });
-      continue;
-    }
-
+    const filter = { teamId: session.teamId, table, recordId };
+    const { workspaceId: _workspaceId, ...accountData } = data;
     try {
-      const existing = await SyncRecord.findOne({ teamId: session.teamId, table, recordId });
-
-      if (existing) {
-        // Reject stale writes (client must pull first)
-        if (typeof revision === 'number' && existing.revision > revision) {
-          rejected.push({ recordId, reason: 'Server has a newer revision. Pull first.' });
-          continue;
-        }
-        // Idempotent: same revision = already applied
-        if (typeof revision === 'number' && existing.revision === revision) {
-          applied.push({ recordId, revision: existing.revision });
-          continue;
-        }
-        await SyncRecord.updateOne(
-          { teamId: session.teamId, table, recordId },
-          {
-            data,
-            revision: (existing.revision || 0) + 1,
-            deletedAt: deletedAt ?? null,
-            updatedAt: new Date(),
-          },
+      const existing = await SyncRecord.findOne(filter);
+      if (existing?.lastChangeId === changeId) {
+        applied.push({ table, recordId, changeId, revision: existing.revision });
+        continue;
+      }
+      if ((existing?.revision ?? 0) !== baseRevision) {
+        rejected.push(
+          conflict(change, existing, 'The server has a newer version. Resolve the conflict first.'),
         );
-        applied.push({ recordId, revision: (existing.revision || 0) + 1 });
+        continue;
+      }
+
+      const now = new Date();
+      const update = {
+        data: accountData,
+        revision: baseRevision + 1,
+        lastChangeId: changeId,
+        deletedAt: deleted ? now : null,
+        updatedAt: now,
+      };
+      if (existing) {
+        const result = await SyncRecord.updateOne({ ...filter, revision: baseRevision }, update);
+        if (result.modifiedCount !== 1) {
+          const latest = await SyncRecord.findOne(filter);
+          if (latest?.lastChangeId === changeId) {
+            applied.push({ table, recordId, changeId, revision: latest.revision });
+          } else {
+            rejected.push(
+              conflict(change, latest, 'The server changed during this push. Resolve the conflict.'),
+            );
+          }
+          continue;
+        }
       } else {
-        // New record
-        await SyncRecord.create({
-          teamId: session.teamId,
+        await SyncRecord.create({ ...filter, ...update, createdAt: now });
+      }
+      applied.push({ table, recordId, changeId, revision: baseRevision + 1 });
+    } catch (error) {
+      if (error?.code === 11000) {
+        const latest = await SyncRecord.findOne(filter);
+        if (latest?.lastChangeId === changeId) {
+          applied.push({ table, recordId, changeId, revision: latest.revision });
+        } else {
+          rejected.push(
+            conflict(change, latest, 'Another device created this record. Resolve the conflict.'),
+          );
+        }
+      } else {
+        console.error('Sync push record failed:', {
           table,
           recordId,
-          data,
-          revision: 1,
-          deletedAt: deletedAt ?? null,
+          name: error?.name || 'Error',
+          code: error?.code,
         });
-        applied.push({ recordId, revision: 1 });
+        rejected.push({ table, recordId, reason: 'Server error applying change.', serverRecord: null });
       }
-    } catch (err) {
-      rejected.push({ recordId, reason: 'Server error applying change.' });
     }
   }
 

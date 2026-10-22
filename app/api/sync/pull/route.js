@@ -31,24 +31,28 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url);
   const since = searchParams.get('since');
-  const sinceDate = since ? new Date(since) : new Date(0);
+  const cursor = since ? new Date(since) : new Date(0);
 
-  if (isNaN(sinceDate.getTime())) {
+  if (isNaN(cursor.getTime())) {
     return NextResponse.json({ error: 'Invalid since parameter.' }, { status: 400 });
   }
 
   await connectDB();
 
+  const pulledAt = new Date();
+  const sinceDate = new Date(Math.max(0, cursor.getTime() - 1000));
   const records = await SyncRecord.find(
     {
       teamId: session.teamId, // ALWAYS filter by session — never by query param
-      updatedAt: { $gt: sinceDate },
+      updatedAt: { $gte: sinceDate, $lte: pulledAt },
     },
     { __v: 0, _id: 0 }, // never expose MongoDB _id
-  ).lean();
+  )
+    .sort({ updatedAt: 1, table: 1, recordId: 1 })
+    .lean();
 
   return NextResponse.json({
     records,
-    pulledAt: new Date().toISOString(),
+    pulledAt: pulledAt.toISOString(),
   });
 }

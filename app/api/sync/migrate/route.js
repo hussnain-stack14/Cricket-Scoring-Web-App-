@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
@@ -70,13 +71,15 @@ export async function POST(req) {
         continue;
       }
 
-      // Strip the old workspaceId from the data — on the server, teamId is the namespace
+      // A local workspace id is device-specific; the authenticated team is the server namespace.
       const { workspaceId: _w, ...cleanData } = record;
       await SyncRecord.findOneAndUpdate(
         { teamId: session.teamId, table, recordId: record.id },
         {
-          data: { ...cleanData, workspaceId: backup.workspace.id }, // preserve for client replay
+          data: cleanData,
           revision: 1,
+          lastChangeId: `migration-${crypto.randomUUID()}`,
+          deletedAt: null,
           updatedAt: new Date(),
         },
         { upsert: true, new: true },
