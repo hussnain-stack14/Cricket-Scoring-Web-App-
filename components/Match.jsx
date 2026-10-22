@@ -111,16 +111,12 @@ export default function Match({ w, data, run, error }) {
   function quickExtra(extra) {
     setSheetError('');
     setDelivery({
-      bat: 0,
-      extra,
-      extraRuns: 0,
-      running: 0,
-      boundary: false,
+      ...simpleDelivery(extra, 0),
       kind: '',
       player: s.striker,
       survivorEnd: 'striker',
     });
-    setSheet({ type: 'quick-extra', extra });
+    setSheet({ type: 'simple-delivery' });
   }
   function chooseWicket(kind) {
     setSheetError('');
@@ -149,20 +145,69 @@ export default function Match({ w, data, run, error }) {
       },
     });
   }
-  async function quickExtraRuns(extra, runs) {
-    const event =
-      extra === 'wide'
-        ? { bat: 0, extra: 'wide', extraRuns: runs, running: runs }
-        : extra === 'noBall'
-          ? {
-              bat: runs,
-              extra: 'noBall',
-              extraRuns: 0,
-              running: runs === 4 || runs === 6 ? 0 : runs,
-              boundary: runs === 4 || runs === 6,
-            }
-          : { bat: 0, extra, extraRuns: runs, running: runs };
-    return ball(event);
+  function simpleDelivery(extra, runs) {
+    if (extra === 'none')
+      return {
+        extra,
+        runs,
+        bat: runs,
+        extraRuns: 0,
+        running: runs === 4 || runs === 6 ? 0 : runs,
+        boundary: runs === 4 || runs === 6,
+      };
+    if (extra === 'wide')
+      return { extra, runs, bat: 0, extraRuns: runs, running: runs, boundary: false };
+    if (extra === 'noBall')
+      return {
+        extra,
+        runs,
+        bat: runs,
+        extraRuns: 0,
+        running: runs === 4 || runs === 6 ? 0 : runs,
+        boundary: runs === 4 || runs === 6,
+      };
+    return { extra, runs, bat: 0, extraRuns: runs, running: runs, boundary: false };
+  }
+  function selectDeliveryType(extra) {
+    setDelivery((current) => ({
+      ...current,
+      ...simpleDelivery(extra, current.runs ?? 0),
+      kind: '',
+    }));
+  }
+  function selectDeliveryRuns(runs) {
+    setDelivery((current) => ({
+      ...current,
+      ...simpleDelivery(current.extra, runs),
+      kind: runs === 0 || current.kind === 'run out' ? current.kind : '',
+    }));
+  }
+  function advancedDismissal() {
+    set('kind', '');
+    setSheet('advanced');
+  }
+  function recordSimpleDelivery() {
+    const wicket = delivery.kind
+      ? {
+          kind: delivery.kind,
+          player: delivery.player,
+          ...(delivery.kind === 'run out' ? { survivorEnd: delivery.survivorEnd } : {}),
+        }
+      : null;
+    return ball({
+      bat: delivery.bat,
+      extra: delivery.extra,
+      extraRuns: delivery.extraRuns,
+      running: delivery.running,
+      boundary: delivery.boundary,
+      wicket,
+    });
+  }
+  function getDismissalKinds(extra = 'none') {
+    if (extra === 'noBall' || s.freeHit) return ['run out'];
+    if (extra === 'wide') return ['run out', 'stumped', 'hit wicket'];
+    if (extra === 'bye' || extra === 'legBye') return ['run out'];
+    return ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'hit wicket'];
   }
   function undoLatest() {
     if (!latest || deliveryInFlight.current) return;
@@ -209,9 +254,7 @@ export default function Match({ w, data, run, error }) {
   }
   const set = (k, v) => setDelivery((d) => ({ ...d, [k]: v }));
   const latest = [...events].reverse().find((e) => e.type === 'delivery');
-  const dismissalKinds = s.freeHit
-    ? ['run out']
-    : ['bowled', 'caught', 'lbw', 'stumped', 'hit wicket', 'run out'];
+  const dismissalKinds = getDismissalKinds();
   return (
     <>
       <div className="match-meta">
@@ -555,13 +598,8 @@ export default function Match({ w, data, run, error }) {
               ? 'Advanced delivery'
               : sheet?.type === 'wicket'
                 ? 'Record wicket'
-                : sheet?.type === 'quick-extra'
-                  ? {
-                      wide: 'Wide',
-                      noBall: 'No-ball',
-                      bye: 'Byes',
-                      legBye: 'Leg byes',
-                    }[sheet.extra]
+                : sheet?.type === 'simple-delivery'
+                  ? 'Record delivery'
                   : sheet === 'chase'
                     ? 'Opening the chase'
                     : sheet.type === 'player'
@@ -624,6 +662,9 @@ export default function Match({ w, data, run, error }) {
                     {kind[0].toUpperCase() + kind.slice(1)}
                   </button>
                 ))}
+                <button type="button" onClick={advancedDismissal}>
+                  Other
+                </button>
               </div>
               <Select
                 label="Dismissed batter"
@@ -655,87 +696,123 @@ export default function Match({ w, data, run, error }) {
               </Button>
             </div>
           )}
-          {sheet?.type === 'quick-extra' && (
+          {sheet?.type === 'simple-delivery' && (
             <div className="quick-sheet-content">
-              {sheet.extra === 'wide' && (
+              <p className="simple-field-label">Delivery Type</p>
+              <div className="delivery-type-options">
+                {[
+                  ['none', 'Normal'],
+                  ['wide', 'Wide'],
+                  ['noBall', 'No Ball'],
+                  ['bye', 'Bye'],
+                  ['legBye', 'Leg Bye'],
+                ].map(([type, label]) => (
+                  <button
+                    type="button"
+                    key={type}
+                    className={delivery.extra === type ? 'selected' : ''}
+                    aria-pressed={delivery.extra === type}
+                    onClick={() => selectDeliveryType(type)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="simple-field-label">
+                {delivery.extra === 'wide'
+                  ? 'Completed runs'
+                  : delivery.extra === 'noBall'
+                    ? 'Runs off the bat'
+                    : delivery.extra === 'bye'
+                      ? 'Completed byes'
+                      : delivery.extra === 'legBye'
+                        ? 'Completed leg byes'
+                        : 'Runs'}
+              </p>
+              <div className="delivery-run-options">
+                {[0, 1, 2, 3, 4, 6].map((runs) => (
+                  <button
+                    type="button"
+                    key={runs}
+                    className={delivery.runs === runs ? 'selected' : ''}
+                    aria-pressed={delivery.runs === runs}
+                    onClick={() => selectDeliveryRuns(runs)}
+                  >
+                    {runs}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setSheet('advanced')}>
+                  Other
+                </button>
+              </div>
+              <div className="simple-total" aria-live="polite">
+                Team total for this ball:{' '}
+                <strong>
+                  {delivery.runs +
+                    (delivery.extra === 'wide' || delivery.extra === 'noBall' ? 1 : 0)}
+                </strong>
+              </div>
+              <label className="simple-wicket-toggle">
+                <input
+                  type="checkbox"
+                  checked={!!delivery.kind}
+                  onChange={(event) => {
+                    if (event.target.checked) {
+                      set('kind', getDismissalKinds(delivery.extra)[0]);
+                    } else set('kind', '');
+                  }}
+                />
+                Wicket
+              </label>
+              {delivery.kind && (
                 <>
-                  <p className="help">
-                    One wide penalty is added automatically. Tap the completed runs; the team total
-                    includes the penalty.
-                  </p>
-                  <div className="quick-choice-list">
-                    {[0, 1, 2, 3].map((runs) => (
-                      <button
-                        type="button"
-                        key={runs}
-                        disabled={savingDelivery}
-                        onClick={() => quickExtraRuns('wide', runs)}
-                      >
-                        <span>
-                          Wide + {runs} completed {runs === 1 ? 'run' : 'runs'}
-                        </span>
-                        <strong>
-                          {runs + 1} team {runs + 1 === 1 ? 'run' : 'runs'}
-                        </strong>
-                      </button>
-                    ))}
-                    <button type="button" onClick={() => detail('wide')}>
-                      Custom
+                  <div className="wicket-options">
+                    {getDismissalKinds(delivery.extra)
+                      .filter((kind) => delivery.runs === 0 || kind === 'run out')
+                      .map((kind) => (
+                        <button
+                          type="button"
+                          key={kind}
+                          className={delivery.kind === kind ? 'selected' : ''}
+                          onClick={() => set('kind', kind)}
+                        >
+                          {kind[0].toUpperCase() + kind.slice(1)}
+                        </button>
+                      ))}
+                    <button type="button" onClick={advancedDismissal}>
+                      Other
                     </button>
                   </div>
+                  <Select
+                    label="Dismissed batter"
+                    value={delivery.player}
+                    onChange={(event) => set('player', event.target.value)}
+                    options={[s.striker, s.nonStriker]
+                      .filter(Boolean)
+                      .map((playerId) => playerLabel(s.batting[playerId]))}
+                  />
+                  {delivery.kind === 'run out' && (
+                    <Select
+                      label="Which end does the not-out batter take?"
+                      value={delivery.survivorEnd}
+                      onChange={(event) => set('survivorEnd', event.target.value)}
+                      options={[
+                        { id: 'striker', name: 'Striker end' },
+                        { id: 'nonStriker', name: 'Non-striker end' },
+                      ]}
+                    />
+                  )}
                 </>
               )}
-              {sheet.extra === 'noBall' && (
-                <>
-                  <p className="help">
-                    The no-ball penalty is added automatically. Bat runs are separate, and the free
-                    hit follows this match&apos;s rules.
-                  </p>
-                  <div className="quick-choice-list">
-                    {[0, 1, 2, 4, 6].map((runs) => (
-                      <button
-                        type="button"
-                        key={runs}
-                        disabled={savingDelivery}
-                        onClick={() => quickExtraRuns('noBall', runs)}
-                      >
-                        <span>
-                          No-ball + {runs} bat {runs === 1 ? 'run' : 'runs'}
-                        </span>
-                        <strong>
-                          {runs + 1} team {runs + 1 === 1 ? 'run' : 'runs'}
-                        </strong>
-                      </button>
-                    ))}
-                    <button type="button" onClick={() => detail('noBall')}>
-                      Other extras / Custom
-                    </button>
-                  </div>
-                </>
-              )}
-              {(sheet.extra === 'bye' || sheet.extra === 'legBye') && (
-                <>
-                  <p className="help">
-                    {sheet.extra === 'bye' ? 'Byes' : 'Leg byes'} are added to the team, not the
-                    batter.
-                  </p>
-                  <div className="quick-choice-grid">
-                    {[1, 2, 3, 4].map((runs) => (
-                      <button
-                        type="button"
-                        key={runs}
-                        disabled={savingDelivery}
-                        onClick={() => quickExtraRuns(sheet.extra, runs)}
-                      >
-                        {runs}
-                      </button>
-                    ))}
-                    <button type="button" onClick={() => detail(sheet.extra)}>
-                      Custom
-                    </button>
-                  </div>
-                </>
-              )}
+              <Button
+                disabled={savingDelivery || (!!delivery.kind && !delivery.player)}
+                onClick={recordSimpleDelivery}
+              >
+                {savingDelivery ? 'Saving…' : 'Record Ball'}
+              </Button>
+              <Button secondary disabled={savingDelivery} onClick={() => setSheet('advanced')}>
+                Advanced
+              </Button>
             </div>
           )}
           {sheet === 'advanced' && (
@@ -821,7 +898,12 @@ export default function Match({ w, data, run, error }) {
                 label="Dismissal (optional)"
                 value={delivery.kind}
                 onChange={(e) => set('kind', e.target.value)}
-                options={['bowled', 'caught', 'lbw', 'stumped', 'hit wicket', 'run out']}
+                options={[
+                  { id: '', name: 'No wicket' },
+                  ...getDismissalKinds(delivery.extra).concat(
+                    getDismissalKinds(delivery.extra).includes('hit wicket') ? [] : ['hit wicket'],
+                  ),
+                ]}
               />
               {delivery.kind && (
                 <Select

@@ -808,6 +808,70 @@ td small {
 .quick-sheet-content {
   padding-bottom: 8px;
 }
+.simple-field-label {
+  margin: 12px 0 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.delivery-type-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.delivery-type-options button,
+.delivery-run-options button {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  color: var(--green);
+  font-weight: 650;
+}
+.delivery-type-options button.selected,
+.delivery-run-options button.selected {
+  border-color: var(--green);
+  background: #eaf1df;
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+.delivery-run-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.delivery-run-options button {
+  font-size: 17px;
+}
+.delivery-run-options button:last-child {
+  font-size: 13px;
+}
+.simple-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f0f4ed;
+  color: var(--muted);
+  font-size: 12px;
+}
+.simple-total strong {
+  color: var(--green);
+  font-size: 18px;
+}
+.simple-wicket-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  font-weight: 700;
+}
+.simple-wicket-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
+}
 .quick-choice-list {
   display: grid;
   gap: 8px;
