@@ -13,11 +13,9 @@ test('production install controls, manifest, icons and offline precache are accu
   });
 
   await page.goto('/');
-  await expect(
-    page.getByRole('heading', { name: 'Every Ball. Every Run. Every Moment.' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
   await expect(page.locator('.offline-setup-status').last()).toContainText(
-    'Ready for Offline Use',
+    'Ready to use offline.',
     {
       timeout: 45000,
     },

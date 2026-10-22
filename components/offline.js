@@ -9,6 +9,8 @@ function isStandalone() {
   );
 }
 
+const offlineFailure = "Offline setup couldn't finish. Connect to the internet and try again.";
+
 function waitForActivation(registration) {
   if (registration.active) return Promise.resolve(registration);
   return new Promise((resolve, reject) => {
@@ -52,12 +54,11 @@ export function useOffline() {
   const [installed, setInstalled] = useState(false);
   const [update, setUpdate] = useState(false);
   const registrationRef = useRef(null);
-  const precacheErrorRef = useRef(null);
 
   const verify = useCallback(async (reg) => {
     if (!reg?.active) {
       setReady(false);
-      setMessage('Offline Preparation Failed: no active service worker is available.');
+      setMessage(offlineFailure);
       return false;
     }
     const channel = new MessageChannel();
@@ -79,16 +80,12 @@ export function useOffline() {
       });
       const isReady = result?.ready === true;
       setReady(isReady);
-      setMessage(
-        isReady
-          ? 'Ready for Offline Use'
-          : `Offline Preparation Failed: ${result?.missing ?? 'some'} required assets are not cached. Connect to the internet and retry.`,
-      );
+      setMessage(isReady ? 'Ready to use offline.' : offlineFailure);
       return isReady;
     } catch (error) {
       channel.port1.close();
       setReady(false);
-      setMessage(`Offline Preparation Failed: ${error.message} Connect to the internet and retry.`);
+      setMessage(offlineFailure);
       return false;
     } finally {
       channel.port1.close();
@@ -98,22 +95,19 @@ export function useOffline() {
   const prepare = useCallback(async () => {
     setReady(false);
     if (process.env.NODE_ENV !== 'production') {
-      setMessage(
-        'Offline preparation is unavailable in the development server. Run the production build to prepare and verify offline assets.',
-      );
+      setMessage('Offline setup is available in the installed app or production site.');
       return false;
     }
     if (!window.isSecureContext) {
-      setMessage('Offline Preparation Failed: use HTTPS or localhost in a supported browser.');
+      setMessage('Offline setup needs a secure connection. Open Crease using HTTPS.');
       return false;
     }
     if (!('serviceWorker' in navigator)) {
-      setMessage('Offline Preparation Failed: this browser does not support service workers.');
+      setMessage('Offline use is not supported by this browser.');
       return false;
     }
 
     setMessage('Preparing Offline App…');
-    precacheErrorRef.current = null;
     try {
       let reg = await navigator.serviceWorker.getRegistration('/');
       if (!reg?.active) {
@@ -137,9 +131,7 @@ export function useOffline() {
       return await verify(reg);
     } catch (error) {
       setReady(false);
-      setMessage(
-        `Offline Preparation Failed: ${precacheErrorRef.current || error.message} Connect to the internet and retry.`,
-      );
+      setMessage(offlineFailure);
       return false;
     }
   }, [verify]);
@@ -163,11 +155,8 @@ export function useOffline() {
     };
     const onWorkerMessage = (event) => {
       if (event.data?.type === 'PRECACHE_FAILED') {
-        precacheErrorRef.current = event.data.message;
         setReady(false);
-        setMessage(
-          `Offline Preparation Failed: ${event.data.message} Connect to the internet and retry.`,
-        );
+        setMessage(offlineFailure);
       }
     };
     const media = window.matchMedia('(display-mode: standalone)');
@@ -210,7 +199,7 @@ export function useOffline() {
     } catch (error) {
       setInstallPrompt(null);
       setInstallState('instructions');
-      setMessage(`Installation prompt failed: ${error.message}`);
+      setMessage('Could not open the install prompt. Use your browser menu to install Crease.');
       return 'error';
     }
   }, [installed, installPrompt]);
@@ -234,14 +223,12 @@ export function useOffline() {
         active.postMessage({ type: 'REPAIR' }, [channel.port2]);
       });
       if (!result?.ready) {
-        setMessage(
-          `Offline Preparation Failed: ${result?.message || 'required assets could not be cached.'} Connect to the internet and retry.`,
-        );
+        setMessage(offlineFailure);
         return false;
       }
       return verify(registrationRef.current);
     } catch (error) {
-      setMessage(`Offline Preparation Failed: ${error.message} Connect to the internet and retry.`);
+      setMessage(offlineFailure);
       return false;
     } finally {
       channel.port1.close();

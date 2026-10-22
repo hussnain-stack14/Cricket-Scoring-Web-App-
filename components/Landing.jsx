@@ -118,13 +118,11 @@ export default function Landing() {
             <h1>
               Every Ball.
               <br />
-              Every Run.
-              <br />
               <em>Every Moment.</em>
             </h1>
             <p>
-              Meet Crease — your personal cricket scoring companion. Score matches, manage teams,
-              and track every performance, even without internet.
+              Meet Crease your personal cricket scoring companion. Score matches, manage teams, and
+              track every performance, even without internet.
             </p>
             <div className="hero-actions">
               <button className="button landing-primary" onClick={download}>

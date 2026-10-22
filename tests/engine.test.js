@@ -58,6 +58,18 @@ test('byes/leg-byes and no-ball byes exclude bowler runs', () => {
   assert.equal(s.extras.bye, 4);
   assert.equal(s.extras.legBye, 1);
 });
+test('dot balls are deliveries with no runs charged to the bowler', () => {
+  const s = replay(match, inn, [
+    ball({ extra: 'bye', extraRuns: 1, running: 1 }),
+    ball({ extra: 'wide' }),
+    ball(),
+  ]);
+  assert.equal(s.bowling.x.dots, 2);
+  assert.deepEqual(
+    s.deliveries.map((delivery) => delivery.chargedBowlerRuns),
+    [0, 1, 0],
+  );
+});
 test('free-hit survives wide, forbids caught and expires on legal delivery', () => {
   const start = [ball({ extra: 'noBall' }), ball({ extra: 'wide' })];
   assert.throws(

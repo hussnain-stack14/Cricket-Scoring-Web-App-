@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import { X, ArrowRight } from 'lucide-react';
-export function Button({ children, secondary, danger, ...props }) {
+import { X, ArrowRight, Leaf } from 'lucide-react';
+export function Button({ children, secondary, danger, compact, ...props }) {
   return (
     <button
-      className={`button ${secondary ? 'secondary' : ''} ${danger ? 'danger' : ''}`}
+      className={`button ${secondary ? 'secondary' : ''} ${danger ? 'danger' : ''} ${compact ? 'compact' : ''}`}
       {...props}
     >
       {children}
@@ -48,7 +48,9 @@ export function Avatar({ name }) {
 export function Empty({ title, children, href, action }) {
   return (
     <div className="empty">
-      <div className="empty-icon">✦</div>
+      <div className="empty-icon">
+        <Leaf size={24} aria-hidden="true" />
+      </div>
       <h2>{title}</h2>
       <p>{children}</p>
       {href && (
@@ -79,4 +81,4 @@ export function Sheet({ title, children, close }) {
     </dialog>
   );
 }
-export const playerLabel = (p) => ({ id: p.id, name: `${p.name} · ${p.id.slice(0, 6)}` });
+export const playerLabel = (p) => ({ id: p.id, name: p.name });

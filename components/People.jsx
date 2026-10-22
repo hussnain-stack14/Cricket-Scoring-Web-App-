@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
 import { deleteRecord, saveRecord, saveTeam } from '../lib/db';
 import { Avatar, Button, Empty, Field, Select, Sheet, playerLabel } from './ui';
+import TeamStatistics from './TeamStatistics';
 export default function People({ screen, w, data, run, error }) {
   const base = '/app';
   const isTeam = screen === 'teams',
     [edit, setEdit] = useState(null),
+    [statisticsTeam, setStatisticsTeam] = useState(null),
     [deleting, setDeleting] = useState(false),
     [members, setMembers] = useState([]),
     [query, setQuery] = useState(''),
@@ -21,6 +23,11 @@ export default function People({ screen, w, data, run, error }) {
         ((!role || p.role === role) &&
           (!team || data.memberships.some((m) => m.playerId === p.id && m.teamId === team)))),
   );
+  if (isTeam && statisticsTeam) {
+    return (
+      <TeamStatistics team={statisticsTeam} data={data} onBack={() => setStatisticsTeam(null)} />
+    );
+  }
   function open(p = {}) {
     setDeleting(false);
     setEdit(
@@ -84,7 +91,7 @@ export default function People({ screen, w, data, run, error }) {
               <p>
                 {isTeam
                   ? `${data.memberships.filter((m) => m.teamId === p.id).length} squad members`
-                  : `${p.role} · ${p.id.slice(0, 6)}`}
+                  : p.role}
               </p>
               {!isTeam && (
                 <small>
@@ -97,6 +104,26 @@ export default function People({ screen, w, data, run, error }) {
                 </small>
               )}
             </div>
+            {isTeam && (
+              <Button
+                secondary
+                compact
+                onClick={() =>
+                  setStatisticsTeam({
+                    ...p,
+                    squad: data.memberships
+                      .filter((membership) => membership.teamId === p.id)
+                      .map((membership) =>
+                        data.players.find((player) => player.id === membership.playerId),
+                      )
+                      .filter(Boolean)
+                      .map(({ id, name }) => ({ id, name })),
+                  })
+                }
+              >
+                Statistics
+              </Button>
+            )}
             <button className="icon-button" aria-label={`Edit ${p.name}`} onClick={() => open(p)}>
               <Pencil size={18} />
             </button>
@@ -190,7 +217,7 @@ export default function People({ screen, w, data, run, error }) {
                                 }
                               }}
                             />
-                            {p.name} · {p.id.slice(0, 6)}
+                            {p.name}
                           </label>
                         ))}
                     </div>

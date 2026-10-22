@@ -10,6 +10,20 @@ import Match from './Match';
 import Profile from './Profile';
 import Settings from './Settings';
 import { useOffline } from './offline';
+function userError(error) {
+  const message = error instanceof Error ? error.message : '';
+  if (/another tab|revision/i.test(message))
+    return 'This match was updated in another tab. Refresh to see the latest score.';
+  if (/indexeddb|dexie|transaction|quota|database|storage/i.test(message))
+    return 'Could not save your changes. Check available storage and try again.';
+  if (/service.?worker|precache|cache registration/i.test(message))
+    return "Offline setup couldn't finish. Connect to the internet and try again.";
+  if (/delivery validation|invalid delivery/i.test(message))
+    return 'Please check this ball and try again.';
+  if (/match missing|record missing|workspace missing/i.test(message))
+    return 'This record is no longer available. Refresh and try again.';
+  return message && message.length < 180 ? message : 'Something went wrong. Please try again.';
+}
 export default function App({ screen }) {
   const [w, setW] = useState(null),
     [data, setData] = useState(null),
@@ -29,7 +43,7 @@ export default function App({ screen }) {
   }
   useEffect(() => {
     refresh().catch((e) => {
-      setError(e.message);
+      setError(userError(e));
       setLoaded(true);
     });
   }, []);
@@ -44,7 +58,8 @@ export default function App({ screen }) {
       setStatus('Saved on this device');
       return value === undefined ? true : value;
     } catch (e) {
-      setError(e.message || 'Storage failed. Your input is still here.');
+      console.error('Crease operation failed', e);
+      setError(userError(e));
       setStatus('Save failed');
       return false;
     } finally {

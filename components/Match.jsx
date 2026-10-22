@@ -3,6 +3,7 @@ import { useState, useRef } from 'react';
 import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
 import { matchStates, overs, rate, result } from '../lib/engine';
 import { Button, Field, Select, Sheet, playerLabel } from './ui';
+import ReportActions from './ReportActions';
 export default function Match({ w, data, run, error }) {
   const base = '/app';
   const id = new URLSearchParams(window.location.search).get('id'),
@@ -265,6 +266,7 @@ export default function Match({ w, data, run, error }) {
               {m.date} · {m.venue || 'Local match'} · {m.rules.overs} overs
             </p>
           </div>
+          <ReportActions match={m} states={states} />
           {!frozen && (
             <Button secondary onClick={() => addPlayer()}>
               + Add player
@@ -577,16 +579,37 @@ export default function Match({ w, data, run, error }) {
               ))}
             </section>
           ))}
-          <h3>Correction audit</h3>
+          <h3>Correction history</h3>
           {data.audits
             .filter((a) => a.matchId === id)
             .map((a) => (
               <details key={a.id}>
                 <summary>
-                  {new Date(a.at).toLocaleString()} · {a.action} ·{' '}
-                  {a.events.filter((e) => e.type === 'delivery').length} deliveries
+                  {new Date(a.at).toLocaleString()} · {a.action === 'undo' ? 'Undo' : 'Correction'}{' '}
+                  · {a.events.filter((e) => e.type === 'delivery').length} deliveries
                 </summary>
-                <pre>{JSON.stringify(a.events, null, 2)}</pre>
+                <ul className="correction-history">
+                  {a.events
+                    .filter((event) => event.type === 'delivery')
+                    .map((event, index) => (
+                      <li key={event.id}>
+                        Delivery {index + 1}:{' '}
+                        {(event.bat || 0) +
+                          (event.extraRuns || 0) +
+                          (event.extra === 'wide' || event.extra?.startsWith('noBall')
+                            ? 1
+                            : 0)}{' '}
+                        run
+                        {(event.bat || 0) +
+                          (event.extraRuns || 0) +
+                          (event.extra === 'wide' || event.extra?.startsWith('noBall') ? 1 : 0) ===
+                        1
+                          ? ''
+                          : 's'}
+                        {event.wicket ? ` · ${event.wicket.kind}` : ''}
+                      </li>
+                    ))}
+                </ul>
               </details>
             ))}
         </>
@@ -879,13 +902,14 @@ export default function Match({ w, data, run, error }) {
                 />
               </div>
               <Field
-                label="Completed runs by running (for ends)"
+                label="Runs taken"
                 type="number"
                 min="0"
                 max="6"
                 value={delivery.running}
                 onChange={(e) => set('running', Number(e.target.value))}
               />
+              <p className="help">Enter runs completed by the batters, not penalties.</p>
               <label className="check">
                 <input
                   type="checkbox"

@@ -7,11 +7,9 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
 }) => {
   test.setTimeout(180000);
   await page.goto('/');
-  await expect(
-    page.getByRole('heading', { name: 'Every Ball. Every Run. Every Moment.' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
   await expect(page.locator('.offline-setup-status').last()).toContainText(
-    'Ready for Offline Use',
+    'Ready to use offline.',
     {
       timeout: 45000,
     },
@@ -42,7 +40,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
       });
       await page.getByRole('button', { name: 'Save player', exact: true }).click();
       await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
-        'Simulated storage full',
+        'Could not save your changes. Check available storage and try again.',
       );
       await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Amber');
     }
@@ -107,7 +105,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(page.getByRole('heading', { name: 'Tap to score' })).toBeVisible();
   await page.getByRole('button', { name: 'Advanced delivery' }).click();
   await expect(page.getByRole('heading', { name: 'Advanced delivery' })).toBeVisible();
-  await expect(page.getByLabel('Completed runs by running (for ends)')).toBeVisible();
+  await expect(page.getByLabel('Runs taken')).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('button', { name: '4', exact: true }).click();
   await expect(page.locator('.big-score')).toContainText('4/0');
@@ -194,6 +192,74 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByRole('button', { name: 'Finalize match', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm finalization' }).click();
   await expect(page.getByText('Finalized. Included in player career statistics.')).toBeVisible();
+
+  const resultReportPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Result PDF' }).click();
+  const resultReport = await resultReportPromise;
+  await expect(resultReport.getByRole('heading', { name: 'Match result', level: 1 })).toBeVisible();
+  await expect(resultReport.locator('body')).toContainText('North vs South');
+  await resultReport.close();
+
+  await page.goto('/app/teams/');
+  const northTeamRow = page.locator('.person-row').filter({ hasText: 'North' });
+  await northTeamRow.getByRole('button', { name: 'Statistics' }).click();
+  await expect(page.getByRole('heading', { name: 'North statistics' })).toBeVisible();
+  await expect(page.getByText('Matches played')).toBeVisible();
+  for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole('button', { name: 'Batting', exact: true }).click();
+  const battingDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'CSV', exact: true }).click();
+  const battingDownload = await battingDownloadPromise;
+  const battingCsv = await readFile(await battingDownload.path(), 'utf8');
+  expect(battingCsv).toContain('"Rank","Player","Matches"');
+  expect(battingCsv).toContain('Quick Striker');
+  for (const width of [320, 390, 768, 1024, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.getByRole('button', { name: 'Bowling', exact: true }).click();
+  await expect(page.getByRole('columnheader', { name: 'Legal balls' })).toBeVisible();
+  for (const width of [320, 390, 768, 1024, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  for (const width of [320, 390, 768, 1024, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const comparisonPopupPromise = page.waitForEvent('popup');
+  const comparisonDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export comparison' }).click();
+  const [comparisonReport] = await Promise.all([comparisonPopupPromise, comparisonDownloadPromise]);
+  await expect(
+    comparisonReport.getByRole('heading', { name: 'North · Player comparison' }),
+  ).toBeVisible();
+  await comparisonReport.close();
+
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  const teamReportPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Report PDF' }).click();
+  const teamReport = await teamReportPromise;
+  await expect(teamReport.getByRole('heading', { name: 'North · Team statistics' })).toBeVisible();
+  await teamReport.close();
+
   await page.goto('/app/more/');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export JSON backup' }).click();
@@ -208,7 +274,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
     mimeType: 'application/json',
     buffer: Buffer.from('{"app":"bad"}'),
   });
-  await expect(page.locator('.notice.error')).toContainText('invalid backup');
+  await expect(page.locator('.notice.error')).toContainText('valid Crease backup');
   await page.goto(matchUrl);
   await expect(page.getByText('Finalized. Included in player career statistics.')).toBeVisible();
   for (const width of [320, 390, 430, 1200]) {
@@ -235,7 +301,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
       timeout: 30000,
     });
     await page.getByRole('button', { name: 'Apply update & reload' }).click();
-    await expect(page.getByText('Ready for Offline Use', { exact: true })).toBeVisible({
+    await expect(page.getByText('Ready to use offline.', { exact: true })).toBeVisible({
       timeout: 30000,
     });
   } finally {
@@ -252,9 +318,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   const isolated = await browser.newContext();
   const fresh = await isolated.newPage();
   await fresh.goto('/');
-  await expect(
-    fresh.getByRole('heading', { name: 'Every Ball. Every Run. Every Moment.' }),
-  ).toBeVisible();
+  await expect(fresh.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
   await fresh.getByRole('link', { name: 'Open web app' }).click();
   await expect(fresh).toHaveURL(/\/app\/$/);
   await expect(fresh.getByText('A workspace of your own')).toBeVisible();

@@ -49,9 +49,7 @@ export default function Profile({ data }) {
         <p>
           {p.role} · {p.battingStyle}
         </p>
-        <small>
-          {p.bowlingStyle} · ID {p.id.slice(0, 6)}
-        </small>
+        {p.bowlingStyle && <small>{p.bowlingStyle}</small>}
       </div>
       <Select
         label="Format"

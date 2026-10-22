@@ -37,8 +37,12 @@ export default function Settings({ w, data, run, setError, offline }) {
       const b = validateBackup(JSON.parse(await file.text()));
       setBackup(b);
       setLocalError('');
-    } catch (e) {
-      setError(e.message);
+    } catch (error) {
+      setError(
+        error.message === 'Backup exceeds the 20 MB limit.'
+          ? error.message
+          : 'That backup file could not be read. Choose a valid Crease backup and try again.',
+      );
     }
   }
   return (
@@ -60,9 +64,7 @@ export default function Settings({ w, data, run, setError, offline }) {
           />
           <Button>Save name</Button>
         </form>
-        <p className="help">
-          Workspace {w.id.slice(0, 8)}. This is a local display name, not a secure login.
-        </p>
+        <p className="help">This is a local display name, not a secure login.</p>
       </section>
       <section className="card">
         <h2>Offline & installation</h2>
