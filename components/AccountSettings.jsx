@@ -16,8 +16,8 @@ import {
   ChevronRight,
   Link,
 } from 'lucide-react';
-import { db } from '../lib/db';
-import { sync, getSyncMeta, fetchSession, exportBackup } from '../lib/sync';
+import { db, exportBackup } from '../lib/db';
+import { sync, getSyncMeta, fetchSession } from '../lib/sync';
 
 const ROLE_LABELS = { owner: 'Owner', scorer: 'Scorer', viewer: 'Viewer' };
 const ROLE_DESCRIPTIONS = {

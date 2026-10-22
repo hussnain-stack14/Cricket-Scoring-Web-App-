@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { Resend } from 'resend';
-import { connectDB } from '../../../../lib/server/db';
-import { TeamAccount } from '../../../../lib/server/models';
-import { registerLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
+import { connectDB } from '../../../../../lib/server/db';
+import { TeamAccount } from '../../../../../lib/server/models';
+import { registerLimiter, checkRateLimit, getClientIp } from '../../../../../lib/server/rateLimit';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+}
 
 /**
  * POST /api/auth/recovery/request
@@ -59,19 +61,22 @@ export async function POST(req) {
 
       const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/account/reset-password/?token=${token}&teamId=${account.teamId}`;
 
-      await resend.emails.send({
-        from: 'Crease <noreply@crease.app>',
-        to: account.recoveryEmail,
-        subject: 'Reset your Crease password',
-        html: `
-          <p>Hi,</p>
-          <p>Someone requested a password reset for the Crease team account <strong>${account.teamId}</strong> (${account.name}).</p>
-          <p>Click the link below to reset your password. The link expires in 1 hour.</p>
-          <p><a href="${resetUrl}">${resetUrl}</a></p>
-          <p>If you did not request this, ignore this email. Your password has not changed.</p>
-          <p>— The Crease team</p>
-        `,
-      });
+      const resend = getResend();
+      if (resend) {
+        await resend.emails.send({
+          from: 'Crease <noreply@crease.app>',
+          to: account.recoveryEmail,
+          subject: 'Reset your Crease password',
+          html: `
+            <p>Hi,</p>
+            <p>Someone requested a password reset for the Crease team account <strong>${account.teamId}</strong> (${account.name}).</p>
+            <p>Click the link below to reset your password. The link expires in 1 hour.</p>
+            <p><a href="${resetUrl}">${resetUrl}</a></p>
+            <p>If you did not request this, ignore this email. Your password has not changed.</p>
+            <p>— The Crease team</p>
+          `,
+        });
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { connectDB } from '../../../../lib/server/db';
-import { TeamAccount } from '../../../../lib/server/models';
+import { connectDB } from '../../../../../lib/server/db';
+import { TeamAccount } from '../../../../../lib/server/models';
 
 /**
  * POST /api/auth/recovery/reset

@@ -17,10 +17,12 @@ import {
   Clock3,
   CheckCircle2,
   ArrowRight,
+  Shield,
 } from 'lucide-react';
 import { all, workspace, createWorkspace } from '../lib/db';
 import { matchStates, result } from '../lib/engine';
 import { teamStatistics } from '../lib/statistics';
+import { fetchSession } from '../lib/sync';
 import { Button, Field, Empty } from './ui';
 import People from './People';
 import Statistics from './Statistics';
@@ -53,6 +55,7 @@ export default function App({ screen }) {
     [name, setName] = useState(''),
     [filter, setFilter] = useState('live'),
     [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [session, setSession] = useState(null);
   const busy = useRef(false);
   const offline = useOffline();
   const base = '/app';
@@ -67,6 +70,7 @@ export default function App({ screen }) {
       setError(userError(e));
       setLoaded(true);
     });
+    fetchSession().then(setSession).catch(() => {});
   }, []);
   async function run(fn) {
     if (busy.current) return false;
@@ -223,6 +227,26 @@ export default function App({ screen }) {
               <span>{label}</span>
             </a>
           ))}
+          <p className="sidebar-section-label" style={{ marginTop: '1.25rem' }}>TEAM ACCOUNT</p>
+          {session ? (
+            <a
+              href="/account/settings/"
+              className="sidebar-link"
+              title={sidebarCollapsed ? `${session.teamName} (${session.teamId})` : undefined}
+            >
+              <Shield size={20} strokeWidth={1.9} />
+              <span>{session.teamName}</span>
+            </a>
+          ) : (
+            <a
+              href="/account/login/"
+              className="sidebar-link"
+              title={sidebarCollapsed ? 'Sign in' : undefined}
+            >
+              <Shield size={20} strokeWidth={1.9} />
+              <span>Sign in / Sync</span>
+            </a>
+          )}
         </nav>
         <div className="sidebar-footer">
           <span className="sidebar-offline-dot" />
@@ -254,6 +278,15 @@ export default function App({ screen }) {
             {w && ['dashboard', 'matches'].includes(screen) && (
               <a className="button compact" href={`${base}/setup/`}>
                 <Plus size={17} /> New match
+              </a>
+            )}
+            {session ? (
+              <a className="button compact secondary" href="/account/settings/" style={{ textDecoration: 'none' }}>
+                <Shield size={14} /> {session.teamName}
+              </a>
+            ) : (
+              <a className="button compact secondary" href="/account/login/" style={{ textDecoration: 'none' }}>
+                Sign in
               </a>
             )}
             <span className="desktop-user">{w?.name || 'Local scorer'}</span>

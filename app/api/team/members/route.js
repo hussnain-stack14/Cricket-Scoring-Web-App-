@@ -7,7 +7,9 @@ import { connectDB } from '../../../../lib/server/db';
 import { TeamMember } from '../../../../lib/server/models';
 import { sessionOptions } from '../../../../lib/server/session';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+}
 
 /**
  * GET /api/team/members — list members (owner + scorer + viewer)
@@ -93,18 +95,21 @@ export async function POST(req) {
 
   // Send invite email if provided
   if (typeof email === 'string' && email.includes('@')) {
-    await resend.emails.send({
-      from: 'Crease <noreply@crease.app>',
-      to: email,
-      subject: `You've been invited to ${session.teamName} on Crease`,
-      html: `
-        <p>Hi ${displayName.trim()},</p>
-        <p>You've been invited to join <strong>${session.teamName}</strong> on Crease as a <strong>${role}</strong>.</p>
-        <p>Click the link below to accept the invitation and set up your access. The link expires in 7 days.</p>
-        <p><a href="${inviteUrl}">${inviteUrl}</a></p>
-        <p>— The Crease team</p>
-      `,
-    }).catch(console.error); // Don't fail if email send fails
+    const resend = getResend();
+    if (resend) {
+      await resend.emails.send({
+        from: 'Crease <noreply@crease.app>',
+        to: email,
+        subject: `You've been invited to ${session.teamName} on Crease`,
+        html: `
+          <p>Hi ${displayName.trim()},</p>
+          <p>You've been invited to join <strong>${session.teamName}</strong> on Crease as a <strong>${role}</strong>.</p>
+          <p>Click the link below to accept the invitation and set up your access. The link expires in 7 days.</p>
+          <p><a href="${inviteUrl}">${inviteUrl}</a></p>
+          <p>— The Crease team</p>
+        `,
+      }).catch(console.error); // Don't fail if email send fails
+    }
   }
 
   return NextResponse.json(

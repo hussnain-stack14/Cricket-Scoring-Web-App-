@@ -49,11 +49,18 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'ACTIVATE') event.waitUntil(self.skipWaiting());
 });
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin)
+  const url = new URL(event.request.url);
+  // Never intercept or cache non-GET requests, cross-origin requests, API calls, or account auth pages
+  if (
+    event.request.method !== 'GET' ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/account/')
+  ) {
     return;
+  }
   event.respondWith(
     (async () => {
-      const url = new URL(event.request.url);
       const cache = await caches.open(CACHE);
       if (event.request.mode === 'navigate') {
         const path = url.pathname.endsWith('/')

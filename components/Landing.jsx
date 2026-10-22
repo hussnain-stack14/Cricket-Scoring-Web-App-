@@ -94,6 +94,9 @@ export default function Landing() {
           <a href="#how-it-works" onClick={() => setMenuOpen(false)}>
             How it works
           </a>
+          <a href="/account/login/" onClick={() => setMenuOpen(false)}>
+            Sign in
+          </a>
           <button
             className="landing-download-link"
             onClick={() => {
