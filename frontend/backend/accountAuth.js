@@ -1,7 +1,7 @@
 import 'server-only';
 import { connectDB } from './db.js';
 import { SessionRevocation, TeamAccount } from './models.js';
-import { isSessionVersionCurrent } from '../accountCredentials.js';
+import { isSessionVersionCurrent } from '../lib/accountCredentials.js';
 
 export async function getCurrentSessionAccount(session) {
   if (!session?.teamId) return null;
