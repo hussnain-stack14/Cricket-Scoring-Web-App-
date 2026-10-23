@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Leaf, Eye, EyeOff, ArrowRight, Users } from 'lucide-react';
+import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountJoin() {
   const [params, setParams] = useState({ token: '', teamId: '', memberId: '' });
@@ -37,7 +38,7 @@ export default function AccountJoin() {
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/team/join', {
+      const res = await fetchWithTimeout('/api/team/join', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

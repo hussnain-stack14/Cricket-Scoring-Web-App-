@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Leaf, KeyRound, Eye, EyeOff, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountResetPassword() {
   const [teamId, setTeamId] = useState('');
@@ -49,7 +50,7 @@ export default function AccountResetPassword() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/recovery/reset', {
+      const res = await fetchWithTimeout('/api/auth/recovery/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

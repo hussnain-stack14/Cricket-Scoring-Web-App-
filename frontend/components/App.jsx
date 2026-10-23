@@ -26,6 +26,7 @@ import {
   createWorkspace,
   findGuestWorkspace,
   getActiveCachedAccountSession,
+  invalidateCachedAccountSession,
   workspace,
 } from '../lib/db';
 import { matchStates, result } from '../lib/engine';
@@ -73,6 +74,11 @@ export default function App({ screen }) {
   const busy = useRef(false);
   const syncBusy = useRef(false);
   const syncRef = useRef(null);
+  const validatedSession = useRef(null);
+  const sessionRef = useRef(session);
+  const workspaceRef = useRef(w);
+  sessionRef.current = session;
+  workspaceRef.current = w;
   const offline = useOffline();
   const base = '/app';
   useEffect(() => {
@@ -95,21 +101,10 @@ export default function App({ screen }) {
     let cancelled = false;
     async function initialize() {
       try {
-        let currentSession;
-        try {
-          currentSession = await fetchSession();
-        } catch {
-          currentSession = await getActiveCachedAccountSession();
-        }
-        const ws = currentSession
-          ? await activateAccountWorkspace(
-              currentSession.workspaceKey || currentSession.teamId,
-              currentSession.teamName,
-              currentSession,
-            )
-          : await findGuestWorkspace();
+        const currentSession = await getActiveCachedAccountSession();
+        const ws = currentSession ? await workspace() : await findGuestWorkspace();
         if (cancelled) return;
-        setSession(currentSession);
+        setSession(currentSession ? { ...currentSession, offlineCached: true } : null);
         setW(ws);
         setData(ws ? await all(ws.id) : null);
         if (ws && currentSession) {
@@ -129,6 +124,48 @@ export default function App({ screen }) {
       cancelled = true;
     };
   }, []);
+  useEffect(() => {
+    if (!loaded || !isOnline) return undefined;
+    let cancelled = false;
+    async function restoreOnlineSession() {
+      try {
+        const currentSession = await fetchSession();
+        if (cancelled) return;
+        const previousSession = sessionRef.current;
+        if (!currentSession) {
+          if (previousSession?.offlineCached) {
+            await invalidateCachedAccountSession(workspaceRef.current?.id);
+            if (cancelled) return;
+            setSession(null);
+            setData(null);
+            setW(null);
+            window.location.assign('/account/login/');
+          }
+          return;
+        }
+        const ws = await activateAccountWorkspace(
+          currentSession.workspaceKey || currentSession.teamId,
+          currentSession.teamName,
+          currentSession,
+        );
+        const localData = await all(ws.id);
+        const syncState = await getSyncState(ws.id);
+        if (cancelled) return;
+        validatedSession.current = currentSession;
+        setSession(currentSession);
+        setW(ws);
+        setData(localData);
+        setSyncMeta(syncState.meta);
+        setPendingSync(syncState.pending);
+      } catch {
+        // Keep the local workspace usable when session validation is unavailable.
+      }
+    }
+    void restoreOnlineSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, loaded]);
   useEffect(() => {
     if (!w?.id || !session) return undefined;
     const handleSignedOut = (workspaceId) => {
@@ -172,7 +209,43 @@ export default function App({ screen }) {
     syncBusy.current = true;
     setSyncing(true);
     try {
-      const result = await sync(w.id);
+      let checkedSession = validatedSession.current;
+      validatedSession.current = null;
+      if (!checkedSession && session.offlineCached) {
+        checkedSession = await fetchSession();
+        if (!checkedSession) {
+          await invalidateCachedAccountSession(w.id);
+          setSession(null);
+          setData(null);
+          setW(null);
+          window.location.assign('/account/login/');
+          return;
+        }
+        validatedSession.current = checkedSession;
+        setSession(checkedSession);
+      }
+      const result = await sync(w.id, { session: checkedSession || undefined });
+      if (result.status === 'unauthenticated') {
+        if (result.session) {
+          const nextWorkspace = await activateAccountWorkspace(
+            result.session.workspaceKey || result.session.teamId,
+            result.session.teamName,
+            result.session,
+          );
+          validatedSession.current = result.session;
+          setSession(result.session);
+          setW(nextWorkspace);
+          setData(await all(nextWorkspace.id));
+          await refreshSyncState(nextWorkspace.id);
+        } else {
+          await invalidateCachedAccountSession(w.id);
+          setSession(null);
+          setData(null);
+          setW(null);
+          window.location.assign('/account/login/');
+        }
+        return;
+      }
       if (result.session) setSession(result.session);
       await refreshSyncState(w.id);
       await refresh();
@@ -185,7 +258,7 @@ export default function App({ screen }) {
   }
   syncRef.current = syncNow;
   useEffect(() => {
-    if (!loaded || !session || !w) return undefined;
+    if (!loaded || !session || session.offlineCached || !w) return undefined;
     const triggerSync = () => {
       if (document.visibilityState === 'visible') syncRef.current?.();
     };
@@ -198,7 +271,7 @@ export default function App({ screen }) {
       window.removeEventListener('online', triggerSync);
       document.removeEventListener('visibilitychange', triggerSync);
     };
-  }, [loaded, session?.teamId, w?.id]);
+  }, [loaded, session?.offlineCached, session?.teamId, w?.id]);
   async function run(fn) {
     if (busy.current) return false;
     busy.current = true;
@@ -262,7 +335,7 @@ export default function App({ screen }) {
   const recentMatches = [...matches]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 4);
-  const currentSyncStatus = !isOnline
+  const currentSyncStatus = !isOnline || session?.offlineCached
     ? 'offline'
     : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
   const currentSyncLabel = SYNC_STATUS_LABELS[currentSyncStatus] || 'Sync needs attention';

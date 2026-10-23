@@ -8,6 +8,7 @@ import {
   saveRecord,
   createWorkspace,
   getActiveCachedAccountSession,
+  invalidateCachedAccountSession,
   workspace,
 } from '../lib/db.js';
 import {
@@ -75,6 +76,69 @@ test('temporary session network failures restore the active authorized workspace
     assert.equal(sameAccount.id, accountWorkspace.id);
     assert.equal((await db.players.get(player.id)).name, 'Offline player');
     assert.equal((await getActiveCachedAccountSession()).teamId, 'royal-club');
+  } finally {
+    globalThis.fetch = priorFetch;
+    await db.delete();
+  }
+});
+
+test('session timeouts are distinct from invalid sessions and preserve cached records', async () => {
+  await resetDatabase();
+  const teamWorkspace = await activateAccountWorkspace('timeout-account', 'Timeout Team');
+  const player = await saveRecord(teamWorkspace.id, 'players', { name: 'Saved player' });
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = (_url, { signal }) =>
+    new Promise((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))),
+    );
+
+  try {
+    await assert.rejects(fetchSession({ timeoutMs: 5 }), (error) => error.name === 'TimeoutError');
+    assert.equal((await getActiveCachedAccountSession()).workspaceKey, 'timeout-account');
+    assert.equal((await db.players.get(player.id)).name, 'Saved player');
+    await invalidateCachedAccountSession(teamWorkspace.id);
+    assert.equal(await getActiveCachedAccountSession(), null);
+    assert.equal((await db.players.get(player.id)).name, 'Saved player');
+    assert.equal(await getPendingCount(teamWorkspace.id), 1);
+  } finally {
+    globalThis.fetch = priorFetch;
+    await db.delete();
+  }
+});
+
+test('concurrent session checks share one bounded auth request', async () => {
+  const priorFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests++;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return response({ authenticated: false }, 401);
+  };
+
+  try {
+    const results = await Promise.all([fetchSession(), fetchSession()]);
+    assert.deepEqual(results, [null, null]);
+    assert.equal(requests, 1);
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
+test('sync network failure preserves the active account and pending changes', async () => {
+  await resetDatabase();
+  const teamWorkspace = await activateAccountWorkspace('network-account', 'Network Team');
+  const player = await saveRecord(teamWorkspace.id, 'players', { name: 'Pending player' });
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError('Network unavailable');
+  };
+
+  try {
+    const result = await sync(teamWorkspace.id);
+    assert.equal(result.reason, 'network');
+    assert.equal((await getActiveCachedAccountSession()).workspaceKey, 'network-account');
+    assert.equal((await db.players.get(player.id)).name, 'Pending player');
+    assert.equal(await getPendingCount(teamWorkspace.id), 1);
   } finally {
     globalThis.fetch = priorFetch;
     await db.delete();

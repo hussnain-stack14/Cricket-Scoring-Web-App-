@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Leaf, UserPlus, Eye, EyeOff, Copy, Check, ArrowRight, ShieldCheck } from 'lucide-react';
 import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
+import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountRegister() {
   const [teamName, setTeamName] = useState('');
@@ -71,7 +72,7 @@ export default function AccountRegister() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetchWithTimeout('/api/auth/register', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

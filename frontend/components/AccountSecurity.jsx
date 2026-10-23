@@ -2,6 +2,7 @@
 import { useId, useState } from 'react';
 import { Eye, EyeOff, KeyRound, LoaderCircle, Shield, X } from 'lucide-react';
 import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
+import { fetchWithTimeout } from '../lib/request';
 
 function PasswordField({ label, value, onChange, autoComplete }) {
   const [visible, setVisible] = useState(false);
@@ -65,7 +66,7 @@ export default function AccountSecurity({ session, onTeamIdChanged }) {
     setBusy(true);
     setError('');
     try {
-      const response = await fetch('/api/account/team-id', {
+      const response = await fetchWithTimeout('/api/account/team-id', {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +100,7 @@ export default function AccountSecurity({ session, onTeamIdChanged }) {
     }
     setBusy(true);
     try {
-      const response = await fetch('/api/account/password', {
+      const response = await fetchWithTimeout('/api/account/password', {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

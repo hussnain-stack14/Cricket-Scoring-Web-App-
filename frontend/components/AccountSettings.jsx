@@ -9,6 +9,7 @@ import {
   listWorkspaces,
 } from '../lib/db';
 import { fetchSession, getSyncState, resolveConflict, sync } from '../lib/sync';
+import { fetchWithTimeout } from '../lib/request';
 import SignOutAction from './SignOutAction';
 import SyncStatus from './SyncStatus';
 import AccountSecurity from './AccountSecurity';
@@ -92,11 +93,13 @@ export default function AccountSettings() {
     if (!session || session.offlineCached) return;
     setMembersLoading(true);
     try {
-      const res = await fetch('/api/team/members', { credentials: 'include' });
+      const res = await fetchWithTimeout('/api/team/members', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setMembers(data.members ?? []);
       }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not load team members.');
     } finally {
       setMembersLoading(false);
     }
@@ -225,7 +228,7 @@ export default function AccountSettings() {
     setInviteError('');
     setInviteResult(null);
     try {
-      const res = await fetch('/api/team/members', {
+      const res = await fetchWithTimeout('/api/team/members', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -244,6 +247,8 @@ export default function AccountSettings() {
       setInviteDisplayName('');
       setInviteEmail('');
       await loadMembers();
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : 'Could not create invite.');
     } finally {
       setInviteBusy(false);
     }
@@ -251,16 +256,20 @@ export default function AccountSettings() {
 
   async function handleRemoveMember(memberId) {
     if (!confirm('Remove this team member? They will lose access immediately.')) return;
-    const res = await fetch('/api/team/members', {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ memberId }),
-    });
-    if (res.ok) await loadMembers();
-    else {
-      const data = await res.json();
-      setActionError(data.error || 'Could not remove member.');
+    try {
+      const res = await fetchWithTimeout('/api/team/members', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId }),
+      });
+      if (res.ok) await loadMembers();
+      else {
+        const data = await res.json();
+        setActionError(data.error || 'Could not remove member.');
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not remove member.');
     }
   }
 
@@ -296,7 +305,7 @@ export default function AccountSettings() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     try {
-      const res = await fetch('/api/sync/migrate', {
+      const res = await fetchWithTimeout('/api/sync/migrate', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

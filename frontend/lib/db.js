@@ -159,6 +159,13 @@ export async function getActiveCachedAccountSession() {
     role: meta.role || 'viewer',
   };
 }
+export async function invalidateCachedAccountSession(workspaceId) {
+  await db.transaction('rw', db.appState, async () => {
+    const active = await db.appState.get('active-workspace');
+    if (active?.workspaceId === workspaceId && active.teamId)
+      await db.appState.delete(active.id);
+  });
+}
 export async function createWorkspace(name) {
   must(name.trim(), 'Enter your display name.');
   return db.transaction('rw', db.workspaces, db.appState, db.syncMeta, async () => {

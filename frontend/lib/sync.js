@@ -1,15 +1,30 @@
 import { db, tables } from './db.js';
+import { fetchWithTimeout } from './request.js';
 
 const MAX_BATCH = 250;
+const SESSION_TIMEOUT_MS = 4000;
 const recordKey = (table, recordId) => `${table}:${recordId}`;
 const pendingKey = (workspaceId, table, recordId) => `${workspaceId}:${table}:${recordId}`;
+let sessionRequest;
 
-export async function fetchSession() {
-  const res = await fetch('/api/auth/me', { credentials: 'include' });
-  if (res.status === 401) return null;
-  if (!res.ok) throw new Error(`Session check failed: ${res.status}`);
-  const data = await res.json();
-  return data.authenticated ? data : null;
+export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
+  if (sessionRequest) return sessionRequest;
+  sessionRequest = (async () => {
+    const res = await fetchWithTimeout(
+      '/api/auth/me',
+      { credentials: 'include' },
+      timeoutMs,
+    );
+    if (res.status === 401) return null;
+    if (!res.ok) throw new Error(`Session check failed: ${res.status}`);
+    const data = await res.json();
+    return data.authenticated ? data : null;
+  })();
+  try {
+    return await sessionRequest;
+  } finally {
+    sessionRequest = null;
+  }
 }
 
 export async function getSyncMeta(workspaceId) {
@@ -77,7 +92,7 @@ export async function pushChanges(workspaceId) {
   for (const batch of batches(pending, MAX_BATCH)) {
     let result;
     try {
-      const res = await fetch('/api/sync/push', {
+      const res = await fetchWithTimeout('/api/sync/push', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -170,7 +185,7 @@ export async function pullChanges(workspaceId) {
 
   let result;
   try {
-    const res = await fetch(`/api/sync/pull?since=${encodeURIComponent(since)}`, {
+    const res = await fetchWithTimeout(`/api/sync/pull?since=${encodeURIComponent(since)}`, {
       credentials: 'include',
     });
     if (!res.ok) {
@@ -296,7 +311,7 @@ export async function resolveConflict(workspaceId, conflict, resolution) {
   );
 }
 
-export async function sync(workspaceId, { signOutToken } = {}) {
+export async function sync(workspaceId, { signOutToken, session: knownSession } = {}) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     await updateSyncMeta(workspaceId, { syncStatus: 'offline' });
     return { ok: false, status: 'offline', reason: 'offline' };
@@ -317,10 +332,13 @@ export async function sync(workspaceId, { signOutToken } = {}) {
   }, 20_000);
 
   try {
-    let session;
+    let session = knownSession;
     let meta;
     try {
-      [session, meta] = await Promise.all([fetchSession(), getSyncMeta(workspaceId)]);
+      [session, meta] = await Promise.all([
+        session ? Promise.resolve(session) : fetchSession(),
+        getSyncMeta(workspaceId),
+      ]);
     } catch (error) {
       await updateSyncMeta(workspaceId, {
         syncStatus: 'attention',
@@ -371,7 +389,7 @@ export async function sync(workspaceId, { signOutToken } = {}) {
 }
 
 export async function logoutTeamSession() {
-  const response = await fetch('/api/auth/logout', {
+  const response = await fetchWithTimeout('/api/auth/logout', {
     method: 'POST',
     credentials: 'include',
   });
@@ -459,7 +477,7 @@ export async function cancelSignOut(workspaceId, token) {
 }
 
 export async function acquireScoringLock(matchId, deviceName) {
-  const res = await fetch('/api/sync/lock', {
+  const res = await fetchWithTimeout('/api/sync/lock', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -469,7 +487,7 @@ export async function acquireScoringLock(matchId, deviceName) {
 }
 
 export async function releaseScoringLock(matchId) {
-  await fetch('/api/sync/lock', {
+  await fetchWithTimeout('/api/sync/lock', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -478,7 +496,7 @@ export async function releaseScoringLock(matchId) {
 }
 
 export async function heartbeatScoringLock(matchId) {
-  await fetch('/api/sync/lock', {
+  await fetchWithTimeout('/api/sync/lock', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -487,7 +505,7 @@ export async function heartbeatScoringLock(matchId) {
 }
 
 export async function takeoverScoringLock(matchId, deviceName) {
-  const res = await fetch('/api/sync/lock', {
+  const res = await fetchWithTimeout('/api/sync/lock', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -497,7 +515,7 @@ export async function takeoverScoringLock(matchId, deviceName) {
 }
 
 export async function getLockStatus(matchId) {
-  const res = await fetch(`/api/sync/lock?matchId=${encodeURIComponent(matchId)}`, {
+  const res = await fetchWithTimeout(`/api/sync/lock?matchId=${encodeURIComponent(matchId)}`, {
     credentials: 'include',
   });
   if (!res.ok) return { locked: false };

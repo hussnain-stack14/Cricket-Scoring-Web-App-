@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Leaf, KeyRound, Mail, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountRecovery() {
   const [teamId, setTeamId] = useState('');
@@ -26,7 +27,7 @@ export default function AccountRecovery() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/recovery/request', {
+      const res = await fetchWithTimeout('/api/auth/recovery/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

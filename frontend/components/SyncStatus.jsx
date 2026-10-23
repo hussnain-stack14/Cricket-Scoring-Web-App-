@@ -6,7 +6,7 @@ export const SYNC_STATUS_LABELS = {
   pending: 'Waiting to sync',
   conflict: 'Sync needs attention',
   attention: 'Sync needs attention',
-  offline: 'Offline – saved on this device',
+  offline: 'Offline — using saved data',
   syncing: 'Syncing…',
   unauthenticated: 'Sign in to sync',
 };

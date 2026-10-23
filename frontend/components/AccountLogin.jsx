@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Leaf, LogIn, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
+import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountLogin() {
   const [teamId, setTeamId] = useState('');
@@ -30,7 +31,7 @@ export default function AccountLogin() {
     }
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetchWithTimeout('/api/auth/login', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
