@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { getIronSession } from 'iron-session';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
@@ -32,6 +33,7 @@ export async function GET(req) {
   renewedSession.publicTeamId = loginTeamId;
   renewedSession.authVersion = account.authVersion ?? 0;
   renewedSession.teamName = account.name;
+  renewedSession.sessionId = session.sessionId || randomUUID();
   await renewedSession.save();
 
   return response;

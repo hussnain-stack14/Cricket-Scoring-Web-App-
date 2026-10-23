@@ -19,7 +19,9 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(page.getByText('A workspace of your own')).toBeVisible({ timeout: 15000 });
   await page.getByLabel('Your scorer name').fill('Local scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
-  await expect(page.getByText('Ready offline', { exact: true })).toBeVisible({ timeout: 45000 });
+  await expect(page.locator('.brand .offline-readiness-label')).toHaveText('Ready offline', {
+    timeout: 45000,
+  });
   await expect(page.getByText('Your scorebook starts here')).toBeVisible();
   await page.goto('/app/matches/');
   await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
@@ -281,6 +283,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await teamReport.close();
 
   await page.goto('/app/more/');
+  await page.getByRole('button', { name: /Storage & backup/ }).click();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export JSON backup' }).click();
   const download = await downloadPromise;
@@ -315,6 +318,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   // Install a new asset-cache version, prove it waits, then apply it without losing records.
   await context.setOffline(false);
   await page.goto('/app/more/');
+  await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
   const originalWorker = await readFile('public/sw.js', 'utf8');
   try {
     await writeFile(
@@ -329,6 +333,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
       timeout: 30000,
     });
     await page.getByRole('button', { name: 'Apply update & reload' }).click();
+    await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
     await expect(page.getByText('Ready to use offline.', { exact: true })).toBeVisible({
       timeout: 30000,
     });
@@ -361,7 +366,7 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
   await page.getByRole('button', { name: 'Get started' }).click();
   await expect(page.getByText('Your scorebook starts here')).toBeVisible();
 
-  for (const width of [360, 390, 768, 1024, 1280, 1440, 1920]) {
+  for (const width of [320, 360, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole('heading', { name: 'Your cricket, at a glance.' })).toBeVisible();
     const overflow = await page.evaluate(
@@ -375,7 +380,40 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
       await expect(page.locator('.desktop-sidebar')).toBeVisible();
       await expect(page.locator('.bottom-nav')).toBeHidden();
     }
+    if ([390, 1024, 1440].includes(width)) {
+      await page.screenshot({ path: `test-results/dashboard-${width}.png`, fullPage: true });
+    }
   }
+
+  for (const viewport of [
+    { width: 667, height: 375 },
+    { width: 844, height: 390 },
+  ]) {
+    await page.setViewportSize(viewport);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.bottom-nav a')).toHaveCount(5);
+  for (const label of ['Home', 'Matches', 'Teams', 'Players', 'More']) {
+    await expect(page.locator('.bottom-nav').getByRole('link', { name: label })).toBeVisible();
+  }
+  await page.goto('/app/more/');
+  await expect(page.getByRole('heading', { name: 'More' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/settings-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: /Storage & backup/ }).click();
+  await expect(page.getByText(/Records stay in this browser profile unless linked/)).toBeVisible();
+  await page.screenshot({ path: 'test-results/settings-storage-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'All settings' }).click();
+  await expect(
+    page.getByRole('link', { name: 'Statistics Explore team and player performance' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Reports Scorecards and match exports' }),
+  ).toBeVisible();
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('link', { name: 'Matches', exact: true }).click();

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { getCurrentSessionAccount, hasSameOrigin } from '../../../../lib/server/accountAuth';
@@ -109,6 +110,7 @@ export async function PATCH(req) {
     renewedSession.memberId = session.memberId;
     renewedSession.role = session.role;
     renewedSession.authVersion = authVersion + 1;
+    renewedSession.sessionId = session.sessionId || randomUUID();
     await renewedSession.save();
   } catch {
     return NextResponse.json(

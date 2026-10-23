@@ -1,7 +1,13 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { Leaf, UserPlus, Trash2, Copy, Check, Shield, Link } from 'lucide-react';
-import { activateAccountWorkspace, db, exportBackup, listWorkspaces } from '../lib/db';
+import {
+  activateAccountWorkspace,
+  db,
+  exportBackup,
+  getActiveCachedAccountSession,
+  listWorkspaces,
+} from '../lib/db';
 import { fetchSession, getSyncState, resolveConflict, sync } from '../lib/sync';
 import SignOutAction from './SignOutAction';
 import SyncStatus from './SyncStatus';
@@ -46,10 +52,16 @@ export default function AccountSettings() {
   const [online, setOnline] = useState(true);
 
   const loadSession = useCallback(async () => {
-    const s = await fetchSession();
+    let s;
+    try {
+      s = await fetchSession();
+    } catch (error) {
+      s = await getActiveCachedAccountSession();
+      if (!s) throw error;
+    }
     if (s) {
       const workspaceKey = s.workspaceKey || s.teamId;
-      const ws = await activateAccountWorkspace(workspaceKey, s.teamName);
+      const ws = await activateAccountWorkspace(workspaceKey, s.teamName, s);
       setWorkspaceId(ws.id);
       const workspaces = await listWorkspaces();
       const metadata = await db.syncMeta.toArray();
@@ -77,7 +89,7 @@ export default function AccountSettings() {
   );
 
   const loadMembers = useCallback(async () => {
-    if (!session) return;
+    if (!session || session.offlineCached) return;
     setMembersLoading(true);
     try {
       const res = await fetch('/api/team/members', { credentials: 'include' });
@@ -131,6 +143,42 @@ export default function AccountSettings() {
       window.removeEventListener('offline', updateOnline);
     };
   }, []);
+
+  useEffect(() => {
+    if (!workspaceId || !session) return undefined;
+    const handleSignedOut = (signedOutWorkspaceId) => {
+      if (signedOutWorkspaceId !== workspaceId) return;
+      setSession(null);
+      setWorkspaceId(null);
+      setMembers([]);
+      setSyncMeta(null);
+      setPendingSync(0);
+      setConflicts([]);
+      window.location.assign('/account/login/');
+    };
+    const onStorage = (event) => {
+      if (event.key !== 'crease-account-signed-out' || !event.newValue) return;
+      try {
+        handleSignedOut(JSON.parse(event.newValue).workspaceId);
+      } catch (parseError) {
+        console.error('Could not process account sign-out notification:', parseError);
+      }
+    };
+    const channel =
+      typeof BroadcastChannel === 'undefined'
+        ? null
+        : new BroadcastChannel('crease-account-session');
+    const onMessage = (event) => {
+      if (event.data?.type === 'signed-out') handleSignedOut(event.data.workspaceId);
+    };
+    channel?.addEventListener('message', onMessage);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      channel?.removeEventListener('message', onMessage);
+      channel?.close();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [session, workspaceId]);
 
   useEffect(() => {
     if (session) loadMembers();
@@ -573,8 +621,8 @@ export default function AccountSettings() {
             <section className="account-section">
               <h2>Sign out</h2>
               <p>
-                Signing out removes your session from this device. Your local scoring data is kept.
-                You can sign in again at any time using your Team ID and password.
+                Crease syncs your pending changes before asking for confirmation. Once confirmed,
+                this team&apos;s downloaded data is removed from this device; cloud records remain.
               </p>
               {actionError && <p className="auth-error">{actionError}</p>}
               <SignOutAction workspaceId={workspaceId} />

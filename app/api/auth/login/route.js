@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import {
@@ -64,7 +65,6 @@ export async function POST(req) {
     let ownerMember = await TeamMember.findOne({ teamId: account.teamId, role: 'owner' });
     if (!ownerMember) {
       // Legacy: create owner member if missing (migration path)
-      const { randomUUID } = await import('node:crypto');
       ownerMember = await TeamMember.create({
         teamId: account.teamId,
         memberId: randomUUID(),
@@ -92,6 +92,7 @@ export async function POST(req) {
     session.memberId = ownerMember.memberId;
     session.role = 'owner';
     session.authVersion = account.authVersion ?? 0;
+    session.sessionId = randomUUID();
     await session.save();
 
     return res;

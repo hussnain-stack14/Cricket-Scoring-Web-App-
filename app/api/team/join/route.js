@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
@@ -100,6 +101,7 @@ export async function POST(req) {
   session.memberId = memberId;
   session.role = member.role;
   session.authVersion = account?.authVersion ?? 0;
+  session.sessionId = randomUUID();
   await session.save();
 
   return res;

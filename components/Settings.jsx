@@ -1,6 +1,17 @@
 'use client';
 import { useState } from 'react';
 import {
+  ArrowLeft,
+  ChevronRight,
+  Cloud,
+  Database,
+  Info,
+  LockKeyhole,
+  ShieldAlert,
+  SlidersHorizontal,
+  UserRound,
+} from 'lucide-react';
+import {
   clearWorkspace,
   exportBackup,
   importBackup,
@@ -29,7 +40,52 @@ export default function Settings({
     [confirm, setConfirm] = useState(false),
     [erase, setErase] = useState(''),
     [storage, setStorage] = useState(''),
-    [localError, setLocalError] = useState('');
+    [localError, setLocalError] = useState(''),
+    [selectedCategory, setSelectedCategory] = useState(null);
+  const categories = [
+    {
+      id: 'account',
+      title: 'Team account',
+      description: session ? 'Manage your team and sign-in' : 'Link records and manage sign-in',
+      Icon: UserRound,
+    },
+    {
+      id: 'security',
+      title: 'Account security',
+      description: 'Team ID, members, and access',
+      Icon: LockKeyhole,
+    },
+    {
+      id: 'sync',
+      title: 'Cloud sync & offline',
+      description: 'Connection, installation, and offline readiness',
+      Icon: Cloud,
+    },
+    {
+      id: 'storage',
+      title: 'Storage & backup',
+      description: 'Export, import, and protect your scorebook',
+      Icon: Database,
+    },
+    {
+      id: 'defaults',
+      title: 'Match defaults',
+      description: 'Set rules for new matches',
+      Icon: SlidersHorizontal,
+    },
+    {
+      id: 'about',
+      title: 'About Crease',
+      description: 'Features and supported match rules',
+      Icon: Info,
+    },
+    {
+      id: 'danger',
+      title: 'Danger zone',
+      description: 'Permanently delete local records',
+      Icon: ShieldAlert,
+    },
+  ];
   async function download() {
     await run(async () => {
       const b = await exportBackup(w);
@@ -61,203 +117,295 @@ export default function Settings({
   }
   return (
     <>
-      <section className="card" style={{ borderColor: 'var(--color-primary, #7fae42)' }}>
-        <h2>Team Account & Sync</h2>
-        {session ? (
-          <>
-            <p>
-              {session.teamName} · Team ID <strong>{session.teamId}</strong>
-            </p>
-            <SyncStatus
-              status={syncStatus}
-              pending={pendingSync}
-              syncing={syncing}
-              onSync={onSync}
-            />
-            <div className="actions">
-              <a className="button secondary" href="/account/settings/">
-                Account settings
-              </a>
-              {session.role === 'owner' && (
-                <a className="button secondary" href="/account/settings/#security">
-                  Account security
-                </a>
-              )}
-              <SignOutAction workspaceId={workspaceId} />
-            </div>
-          </>
-        ) : (
-          <>
-            <p>
-              Sign in to synchronize matches, teams, and statistics across phones, tablets, and
-              desktops.
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-              <a className="button primary" href="/account/">
-                Manage Team Account & Sync
-              </a>
-              <a className="button secondary" href="/account/login/">
-                Sign in
-              </a>
-              <a className="button secondary" href="/account/register/">
-                Create Account
-              </a>
-            </div>
-          </>
-        )}
-      </section>
-      <section className="card">
-        <h2>Your workspace</h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(() => saveWorkspace({ ...w, name: name.trim() }));
-          }}
-        >
-          <Field
-            label="Local scorer name"
-            value={name}
-            required
-            maxLength={100}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button>Save name</Button>
-        </form>
-        <p className="help">This is a local display name, not a secure login.</p>
-      </section>
-      <section className="card">
-        <h2>Offline & installation</h2>
-        <p role="status">{offline.message}</p>
-        <Button secondary onClick={offline.retry}>
-          Retry offline preparation
-        </Button>
-        {offline.installed ? (
-          <a className="button" href="/app/">
-            Open Crease
-          </a>
-        ) : (
-          <Button onClick={offline.install}>Install Crease</Button>
-        )}
-        <p role="status">{offline.installationMessage}</p>
-        <p className="help">
-          Android / Chromium: use Install in your browser menu. iPhone / iPad: open in Safari, tap
-          Share, then Add to Home Screen. Prepare offline while connected before leaving for the
-          ground.
-        </p>
-        {offline.update && (
-          <div className="notice">
-            <p>
-              An update is ready. Finish scoring and save your drafts before applying it. Other open
-              tabs must also finish scoring.
-            </p>
-            <Button
-              disabled={data.matches.some((m) => m.status === 'live')}
-              onClick={offline.applyUpdate}
-            >
-              Apply update & reload
-            </Button>
-            {data.matches.some((m) => m.status === 'live') && (
-              <p className="help">Available after your live matches are finalized.</p>
-            )}
-          </div>
-        )}
-      </section>
-      <section className="card">
-        <h2>Storage & backup</h2>
-        <p>
-          Records live only in this browser profile. Clearing browser data, storage eviction, or
-          losing this device can remove them. Export regularly and keep the file somewhere safe.
-        </p>
-        <p className="help">
-          Last export requested: {w.lastExport ? new Date(w.lastExport).toLocaleString() : 'Never'}.
-          This is not ongoing backup protection; check that your downloaded file is saved.
-        </p>
-        <div className="actions">
-          <Button onClick={download}>Export JSON backup</Button>
-          <label className="button secondary">
-            Import backup
-            <input
-              className="file-input"
-              type="file"
-              accept="application/json,.json"
-              aria-label="Import backup"
-              onChange={(e) => {
-                preview(e.target.files[0]);
-                e.target.value = '';
-              }}
-            />
-          </label>
+      {!selectedCategory ? (
+        <div className="settings-home">
+          <section className="settings-shortcuts" aria-label="Scorebook">
+            <a className="settings-menu-row" href="/app/statistics/">
+              <span className="settings-menu-icon">
+                <SlidersHorizontal size={19} />
+              </span>
+              <span>
+                <strong>Statistics</strong>
+                <small>Explore team and player performance</small>
+              </span>
+              <ChevronRight size={18} />
+            </a>
+            <a className="settings-menu-row" href="/app/reports/">
+              <span className="settings-menu-icon">
+                <Info size={19} />
+              </span>
+              <span>
+                <strong>Reports</strong>
+                <small>Scorecards and match exports</small>
+              </span>
+              <ChevronRight size={18} />
+            </a>
+          </section>
+          <section className="settings-category-list" aria-label="Settings categories">
+            {categories.map(({ id, title, description, Icon }) => (
+              <button
+                type="button"
+                className="settings-menu-row"
+                key={id}
+                onClick={() => setSelectedCategory(id)}
+              >
+                <span className="settings-menu-icon">
+                  <Icon size={19} />
+                </span>
+                <span>
+                  <strong>{title}</strong>
+                  <small>{description}</small>
+                </span>
+                <ChevronRight size={18} />
+              </button>
+            ))}
+          </section>
         </div>
-        <Button
-          secondary
-          onClick={async () => {
-            const persisted = await navigator.storage?.persist?.();
-            const estimate = await navigator.storage?.estimate?.();
-            setStorage(
-              `${persisted ? 'Persistent storage granted.' : 'Persistent storage unavailable or not granted.'} Using approximately ${Math.round((estimate?.usage || 0) / 1024)} KB.`,
-            );
-          }}
-        >
-          Request persistent storage
-        </Button>
-        <p role="status" className="help">
-          {storage}
-        </p>
-      </section>
-      <section className="card">
-        <h2>Default match rules</h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (rules.maxBowler > rules.overs || rules.maxBowler * rules.size < rules.overs) {
-              setError('Bowler limit must cover the innings and not exceed match overs.');
-              return;
-            }
-            run(() => saveWorkspace({ ...w, rules }));
-          }}
-        >
-          {[
-            ['overs', 'Overs per innings', 1, 50],
-            ['size', 'Players per side', 2, 11],
-            ['maxBowler', 'Maximum overs per bowler', 1, 50],
-          ].map(([key, label, min, max]) => (
-            <Field
-              key={key}
-              label={label}
-              required
-              type="number"
-              min={min}
-              max={max}
-              value={rules[key]}
-              onChange={(e) => setRules({ ...rules, [key]: Number(e.target.value) })}
-            />
-          ))}
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={rules.freeHit}
-              onChange={(e) => setRules({ ...rules, freeHit: e.target.checked })}
-            />
-            Free hit after every no-ball
-          </label>
-          <Button>Save default rules</Button>
-        </form>
-      </section>
-      <section className="card">
-        <h2>About Crease</h2>
-        <p>
-          Your game, recorded. Six-ball limited-overs cricket with local teams, match history and
-          statistics. No cloud account or cross-device synchronization.
-        </p>
-        <p className="help">
-          Supports bowled, caught, LBW, stumped, hit wicket and run out. No retired batters, DLS,
-          penalty-run incidents, super overs or mid-over bowler substitutions. Full rule contract is
-          in the project documentation.
-        </p>
-        <Button danger secondary onClick={() => setConfirm(true)}>
-          Delete all local records
-        </Button>
-      </section>
+      ) : (
+        <>
+          <button className="settings-back" type="button" onClick={() => setSelectedCategory(null)}>
+            <ArrowLeft size={17} />
+            All settings
+          </button>
+          <h2 className="settings-category-title">
+            {categories.find((category) => category.id === selectedCategory)?.title}
+          </h2>
+        </>
+      )}
+      {selectedCategory === 'account' && (
+        <>
+          <section className="card">
+            <h2>Team Account & Sync</h2>
+            {session ? (
+              <>
+                <p>
+                  {session.teamName} · Team ID <strong>{session.teamId}</strong>
+                </p>
+                <SyncStatus
+                  status={syncStatus}
+                  pending={pendingSync}
+                  syncing={syncing}
+                  onSync={onSync}
+                />
+                <div className="actions">
+                  <a className="button secondary" href="/account/settings/">
+                    Account settings
+                  </a>
+                  {session.role === 'owner' && (
+                    <a className="button secondary" href="/account/settings/#security">
+                      Account security
+                    </a>
+                  )}
+                  <SignOutAction workspaceId={workspaceId} />
+                </div>
+              </>
+            ) : (
+              <>
+                <p>
+                  Sign in to synchronize matches, teams, and statistics across phones, tablets, and
+                  desktops.
+                </p>
+                <div
+                  style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}
+                >
+                  <a className="button primary" href="/account/">
+                    Manage Team Account & Sync
+                  </a>
+                  <a className="button secondary" href="/account/login/">
+                    Sign in
+                  </a>
+                  <a className="button secondary" href="/account/register/">
+                    Create Account
+                  </a>
+                </div>
+              </>
+            )}
+          </section>
+          <section className="card">
+            <h2>Your workspace</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                run(() => saveWorkspace({ ...w, name: name.trim() }));
+              }}
+            >
+              <Field
+                label="Local scorer name"
+                value={name}
+                required
+                maxLength={100}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Button>Save name</Button>
+            </form>
+            <p className="help">This is a local display name, not a secure login.</p>
+          </section>
+        </>
+      )}
+      {selectedCategory === 'security' && (
+        <section className="card">
+          <h2>Account security</h2>
+          <p>Manage your team ID, members, and account access in the secure account area.</p>
+          <a
+            className="button secondary"
+            href={session ? '/account/settings/#security' : '/account/login/'}
+          >
+            {session ? 'Open account security' : 'Sign in to manage security'}
+          </a>
+        </section>
+      )}
+      {selectedCategory === 'sync' && (
+        <section className="card">
+          <h2>Offline & installation</h2>
+          <p role="status">{offline.message}</p>
+          <Button secondary onClick={offline.retry}>
+            Retry offline preparation
+          </Button>
+          {offline.installed ? (
+            <a className="button" href="/app/">
+              Open Crease
+            </a>
+          ) : (
+            <Button onClick={offline.install}>Install Crease</Button>
+          )}
+          <p role="status">{offline.installationMessage}</p>
+          <p className="help">
+            Android / Chromium: use Install in your browser menu. iPhone / iPad: open in Safari, tap
+            Share, then Add to Home Screen. Prepare offline while connected before leaving for the
+            ground.
+          </p>
+          {offline.update && (
+            <div className="notice">
+              <p>
+                An update is ready. Finish scoring and save your drafts before applying it. Other
+                open tabs must also finish scoring.
+              </p>
+              <Button
+                disabled={data.matches.some((m) => m.status === 'live')}
+                onClick={offline.applyUpdate}
+              >
+                Apply update & reload
+              </Button>
+              {data.matches.some((m) => m.status === 'live') && (
+                <p className="help">Available after your live matches are finalized.</p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+      {selectedCategory === 'storage' && (
+        <section className="card">
+          <h2>Storage & backup</h2>
+          <p>
+            {session
+              ? 'Records are cached locally and synchronized with your team account when connected. Check sync status to confirm whether server updates have completed. Keep a separate backup for additional protection.'
+              : 'Records stay in this browser profile unless linked to a team account. Clearing browser data, storage eviction, or losing this device can remove them. Export regularly and keep the file somewhere safe.'}
+          </p>
+          <p className="help">
+            Last export requested:{' '}
+            {w.lastExport ? new Date(w.lastExport).toLocaleString() : 'Never'}. This is not ongoing
+            backup protection; check that your downloaded file is saved.
+          </p>
+          <div className="actions">
+            <Button onClick={download}>Export JSON backup</Button>
+            <label className="button secondary">
+              Import backup
+              <input
+                className="file-input"
+                type="file"
+                accept="application/json,.json"
+                aria-label="Import backup"
+                onChange={(e) => {
+                  preview(e.target.files[0]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+          <Button
+            secondary
+            onClick={async () => {
+              const persisted = await navigator.storage?.persist?.();
+              const estimate = await navigator.storage?.estimate?.();
+              setStorage(
+                `${persisted ? 'Persistent storage granted.' : 'Persistent storage unavailable or not granted.'} Using approximately ${Math.round((estimate?.usage || 0) / 1024)} KB.`,
+              );
+            }}
+          >
+            Request persistent storage
+          </Button>
+          <p role="status" className="help">
+            {storage}
+          </p>
+        </section>
+      )}
+      {selectedCategory === 'defaults' && (
+        <section className="card">
+          <h2>Default match rules</h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (rules.maxBowler > rules.overs || rules.maxBowler * rules.size < rules.overs) {
+                setError('Bowler limit must cover the innings and not exceed match overs.');
+                return;
+              }
+              run(() => saveWorkspace({ ...w, rules }));
+            }}
+          >
+            {[
+              ['overs', 'Overs per innings', 1, 50],
+              ['size', 'Players per side', 2, 11],
+              ['maxBowler', 'Maximum overs per bowler', 1, 50],
+            ].map(([key, label, min, max]) => (
+              <Field
+                key={key}
+                label={label}
+                required
+                type="number"
+                min={min}
+                max={max}
+                value={rules[key]}
+                onChange={(e) => setRules({ ...rules, [key]: Number(e.target.value) })}
+              />
+            ))}
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={rules.freeHit}
+                onChange={(e) => setRules({ ...rules, freeHit: e.target.checked })}
+              />
+              Free hit after every no-ball
+            </label>
+            <Button>Save default rules</Button>
+          </form>
+        </section>
+      )}
+      {selectedCategory === 'about' && (
+        <section className="card">
+          <h2>About Crease</h2>
+          <p>
+            Your game, recorded. Six-ball limited-overs cricket with local teams, match history and
+            statistics. A team account can synchronize records across devices when connected.
+          </p>
+          <p className="help">
+            Supports bowled, caught, LBW, stumped, hit wicket and run out. No retired batters, DLS,
+            penalty-run incidents, super overs or mid-over bowler substitutions. Full rule contract
+            is in the project documentation.
+          </p>
+        </section>
+      )}
+      {selectedCategory === 'danger' && (
+        <section className="card settings-danger-zone">
+          <h2>Delete local records</h2>
+          <p>
+            This permanently removes the current workspace and its local records. This cannot be
+            undone. Export a backup before continuing.
+          </p>
+          <Button danger secondary onClick={() => setConfirm(true)}>
+            Review deletion
+          </Button>
+        </section>
+      )}
       {backup && (
         <Sheet title="Preview backup replacement" close={() => setBackup(null)}>
           <p>

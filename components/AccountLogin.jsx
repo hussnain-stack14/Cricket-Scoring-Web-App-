@@ -18,7 +18,7 @@ export default function AccountLogin() {
 
     const normalised = normalizeLoginTeamId(teamId);
     if (!isValidLoginTeamId(normalised)) {
-      setError('Team ID must use CRS- followed by 4–12 letters or numbers.');
+      setError('Team ID must be 4–24 characters using letters, numbers, underscores, or hyphens.');
       setBusy(false);
       return;
     }
@@ -92,15 +92,15 @@ export default function AccountLogin() {
             <input
               id="teamId"
               type="text"
-              placeholder="CRS-YOUNGS01"
+              placeholder="royal-club"
               value={teamId}
               autoComplete="username"
               spellCheck={false}
-              maxLength={16}
+              maxLength={24}
               required
-              onChange={(e) => setTeamId(e.target.value.toUpperCase())}
+              onChange={(e) => setTeamId(e.target.value)}
             />
-            <p className="auth-field-hint">Your Team ID was shown when you registered.</p>
+            <p className="auth-field-hint">Use the Team ID you chose when you registered.</p>
           </div>
 
           <div className="auth-field">

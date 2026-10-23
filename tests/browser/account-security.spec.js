@@ -31,7 +31,7 @@ test('account owners can update login credentials in responsive security dialogs
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: true, teamId: 'CRS-YOUNGS01' }),
+      body: JSON.stringify({ ok: true, teamId: 'ROYAL-CLUB' }),
     });
   });
 
@@ -54,7 +54,7 @@ test('account owners can update login credentials in responsive security dialogs
 
   await security.getByRole('button', { name: 'Edit Team ID' }).click();
   const teamDialog = page.getByRole('dialog');
-  await teamDialog.getByRole('textbox', { name: 'New Team ID' }).fill('CRS-YOUNGS01');
+  await teamDialog.getByRole('textbox', { name: 'New Team ID' }).fill('royal-club');
   await teamDialog
     .getByRole('textbox', { name: 'Current Password', exact: true })
     .fill('CurrentPass123');
@@ -62,10 +62,10 @@ test('account owners can update login credentials in responsive security dialogs
   await expect(teamDialog.getByRole('heading', { name: 'Confirm your new Team ID' })).toBeVisible();
   await teamDialog.getByRole('button', { name: 'Confirm and save' }).click();
 
-  await expect(security.getByText('CRS-YOUNGS01')).toBeVisible();
+  await expect(security.getByText('ROYAL-CLUB')).toBeVisible();
   await expect(security.getByRole('status')).toContainText('Team ID updated');
   expect(teamIdRequest).toEqual({
-    newTeamId: 'CRS-YOUNGS01',
+    newTeamId: 'ROYAL-CLUB',
     currentPassword: 'CurrentPass123',
   });
 

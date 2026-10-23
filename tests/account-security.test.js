@@ -9,11 +9,18 @@ import {
 
 test('Team ID normalization and validation accept safe IDs and reject reserved or malformed IDs', () => {
   assert.equal(normalizeLoginTeamId(' crs-youngs01 '), 'CRS-YOUNGS01');
+  assert.equal(normalizeLoginTeamId(' RoyalClub '), 'ROYALCLUB');
   assert.equal(isValidLoginTeamId('CRS-YOUNGS01'), true);
   assert.equal(isValidLoginTeamId('CRS-123456'), true);
+  assert.equal(isValidLoginTeamId('ROYALCLUB202'), true);
+  assert.equal(isValidLoginTeamId('TEAM_786'), true);
+  assert.equal(isValidLoginTeamId('ROYAL-CLUB'), true);
+  assert.equal(isValidLoginTeamId('ABCD'), true);
   assert.equal(isValidLoginTeamId('CRS-ADMIN'), false);
-  assert.equal(isValidLoginTeamId('CRS-ABC'), false);
-  assert.equal(isValidLoginTeamId('CRS-TOO-LONG-ID'), false);
+  assert.equal(isValidLoginTeamId('ROOT'), false);
+  assert.equal(isValidLoginTeamId('ABC'), false);
+  assert.equal(isValidLoginTeamId('A'.repeat(25)), false);
+  assert.equal(isValidLoginTeamId('WITH SPACE'), false);
   assert.equal(isValidLoginTeamId('CRS-ÉQUIPE'), false);
 });
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { TeamAccount } from '../../../../lib/server/models';
@@ -65,7 +66,10 @@ export async function PATCH(req) {
   const newTeamId = normalizeLoginTeamId(body.newTeamId);
   if (!isValidLoginTeamId(newTeamId)) {
     return NextResponse.json(
-      { error: 'Use CRS- followed by 4–12 letters or numbers. That ID is invalid or reserved.' },
+      {
+        error:
+          'Use 4–24 letters, numbers, underscores, or hyphens. That ID is invalid or reserved.',
+      },
       { status: 400 },
     );
   }
@@ -114,6 +118,7 @@ export async function PATCH(req) {
     renewedSession.publicTeamId = newTeamId;
     renewedSession.teamName = updatedAccount.name;
     renewedSession.authVersion = updatedAccount.authVersion ?? 0;
+    renewedSession.sessionId = session.sessionId || randomUUID();
     renewedSession.memberId = session.memberId;
     renewedSession.role = session.role;
     await renewedSession.save();

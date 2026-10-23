@@ -1,9 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { Leaf, UserPlus, Eye, EyeOff, Copy, Check, ArrowRight, ShieldCheck } from 'lucide-react';
+import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
 
 export default function AccountRegister() {
   const [teamName, setTeamName] = useState('');
+  const [teamId, setTeamId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -40,6 +42,13 @@ export default function AccountRegister() {
       setError('Team name must be at least 2 characters.');
       return;
     }
+    const normalizedTeamId = normalizeLoginTeamId(teamId);
+    if (!isValidLoginTeamId(normalizedTeamId)) {
+      setError(
+        'Team ID must be 4–24 characters using letters, numbers, underscores, or hyphens. Some IDs are reserved.',
+      );
+      return;
+    }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
@@ -66,14 +75,23 @@ export default function AccountRegister() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamName: teamName.trim(), password, confirmPassword }),
+        body: JSON.stringify({
+          teamName: teamName.trim(),
+          teamId: normalizedTeamId,
+          password,
+          confirmPassword,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 429) {
-          setError(data.error || 'Too many attempts. Please wait a few minutes before trying again.');
+          setError(
+            data.error || 'Too many attempts. Please wait a few minutes before trying again.',
+          );
         } else if (res.status === 503) {
-          setError(data.error || 'Database service is temporarily unavailable. Please verify settings.');
+          setError(
+            data.error || 'Database service is temporarily unavailable. Please verify settings.',
+          );
         } else if (res.status === 409) {
           setError(data.error || 'A team account with this identifier already exists.');
         } else {
@@ -86,7 +104,9 @@ export default function AccountRegister() {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setError("You're offline. Connect to the internet to create an account.");
       } else {
-        setError('Could not reach the server. Please check your internet connection or try again shortly.');
+        setError(
+          'Could not reach the server. Please check your internet connection or try again shortly.',
+        );
       }
     } finally {
       setBusy(false);
@@ -98,18 +118,24 @@ export default function AccountRegister() {
       <div className="auth-shell">
         <header className="auth-header">
           <a className="auth-brand" href="/">
-            <span className="brand-mark"><Leaf size={20} /></span>
+            <span className="brand-mark">
+              <Leaf size={20} />
+            </span>
             crease<span>.</span>
           </a>
         </header>
         <main className="auth-main auth-main-narrow">
           <div className="auth-success-box">
-            <span className="auth-success-icon"><ShieldCheck size={36} /></span>
+            <span className="auth-success-icon">
+              <ShieldCheck size={36} />
+            </span>
             <h1>Team account created!</h1>
-            <p>Welcome to Crease, <strong>{success.teamName}</strong>.</p>
             <p>
-              Your Team ID is how you sign in from any device. Write it down or save it
-              somewhere safe — you'll need it every time you log in.
+              Welcome to Crease, <strong>{success.teamName}</strong>.
+            </p>
+            <p>
+              Your Team ID is how you sign in from any device. Write it down or save it somewhere
+              safe — you'll need it every time you log in.
             </p>
 
             <div className="auth-teamid-display">
@@ -129,7 +155,9 @@ export default function AccountRegister() {
             </div>
 
             <div className="auth-next-steps">
-              <p><strong>What's next?</strong></p>
+              <p>
+                <strong>What's next?</strong>
+              </p>
               <ul>
                 <li>Go to the app and start scoring — you're already signed in.</li>
                 <li>To sync existing local data, open Settings → Link local data.</li>
@@ -137,7 +165,11 @@ export default function AccountRegister() {
               </ul>
             </div>
 
-            <a className="auth-submit" href="/app/" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+            <a
+              className="auth-submit"
+              href="/app/"
+              style={{ display: 'inline-flex', justifyContent: 'center' }}
+            >
               Go to the app <ArrowRight size={17} style={{ marginLeft: 6 }} />
             </a>
           </div>
@@ -150,24 +182,30 @@ export default function AccountRegister() {
     <div className="auth-shell">
       <header className="auth-header">
         <a className="auth-brand" href="/">
-          <span className="brand-mark"><Leaf size={20} /></span>
+          <span className="brand-mark">
+            <Leaf size={20} />
+          </span>
           crease<span>.</span>
         </a>
       </header>
 
       <main className="auth-main auth-main-narrow">
         <div className="auth-hero">
-          <span className="auth-kicker"><UserPlus size={14} /> CREATE TEAM ACCOUNT</span>
+          <span className="auth-kicker">
+            <UserPlus size={14} /> CREATE TEAM ACCOUNT
+          </span>
           <h1>Register your team.</h1>
           <p>
-            Create an account to sync your cricket records across devices. A unique Team ID
-            will be generated for you.
+            Create an account to sync your cricket records across devices. Choose a unique Team ID
+            you can remember.
           </p>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
           {error && (
-            <div role="alert" className="auth-error">{error}</div>
+            <div role="alert" className="auth-error">
+              {error}
+            </div>
           )}
 
           <div className="auth-field">
@@ -182,6 +220,25 @@ export default function AccountRegister() {
               required
               onChange={(e) => setTeamName(e.target.value)}
             />
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="register-team-id">Team ID</label>
+            <input
+              id="register-team-id"
+              type="text"
+              placeholder="royal-club"
+              value={teamId}
+              minLength={4}
+              maxLength={24}
+              autoComplete="username"
+              spellCheck={false}
+              required
+              onChange={(event) => setTeamId(event.target.value)}
+            />
+            <p className="auth-field-hint">
+              4–24 letters, numbers, underscores, or hyphens. Team IDs are case-insensitive.
+            </p>
           </div>
 
           <div className="auth-field">
@@ -230,7 +287,13 @@ export default function AccountRegister() {
           </div>
 
           <button className="auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Creating account…' : <>Create team account <ArrowRight size={17} /></>}
+            {busy ? (
+              'Creating account…'
+            ) : (
+              <>
+                Create team account <ArrowRight size={17} />
+              </>
+            )}
           </button>
 
           <div className="auth-form-links">

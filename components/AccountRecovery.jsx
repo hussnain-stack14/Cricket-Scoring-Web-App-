@@ -118,12 +118,12 @@ export default function AccountRecovery() {
             <input
               id="teamId"
               type="text"
-              placeholder="CRS-YOUNGS01"
+              placeholder="royal-club"
               value={teamId}
               spellCheck={false}
-              maxLength={16}
+              maxLength={24}
               required
-              onChange={(e) => setTeamId(e.target.value.toUpperCase())}
+              onChange={(e) => setTeamId(e.target.value)}
             />
           </div>
 

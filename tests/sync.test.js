@@ -4,10 +4,20 @@ import assert from 'node:assert/strict';
 import {
   activateAccountWorkspace,
   db,
+  clearAccountWorkspace,
   saveRecord,
+  createWorkspace,
+  getActiveCachedAccountSession,
   workspace,
 } from '../lib/db.js';
-import { getPendingCount, pushChanges, sync } from '../lib/sync.js';
+import {
+  beginSignOut,
+  cancelSignOut,
+  fetchSession,
+  getPendingCount,
+  pushChanges,
+  sync,
+} from '../lib/sync.js';
 
 const response = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -34,6 +44,78 @@ test('team workspace mapping isolates local records when switching accounts', as
   assert.equal(restored.id, first.id);
   assert.equal(await db.players.get(player.id).then((record) => record.name), 'Hussnain');
   await db.delete();
+});
+
+test('temporary session network failures restore the active authorized workspace offline', async () => {
+  await resetDatabase();
+  const accountWorkspace = await activateAccountWorkspace('internal-account-key', 'Royal Club', {
+    publicTeamId: 'RoyalClub202',
+    teamName: 'Royal Club',
+    role: 'owner',
+  });
+  const player = await saveRecord(accountWorkspace.id, 'players', { name: 'Offline player' });
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError('Network unavailable');
+  };
+
+  try {
+    const cachedSession = await getActiveCachedAccountSession();
+    assert.equal(cachedSession.offlineCached, true);
+    assert.equal(cachedSession.teamId, 'RoyalClub202');
+    assert.equal(cachedSession.workspaceKey, 'internal-account-key');
+    assert.equal((await workspace()).id, accountWorkspace.id);
+    assert.equal((await db.players.get(player.id)).name, 'Offline player');
+    await assert.rejects(fetchSession(), /Network unavailable/);
+    const sameAccount = await activateAccountWorkspace('internal-account-key', 'Royal Club', {
+      publicTeamId: 'royal-club',
+      teamName: 'Royal Club',
+      role: 'owner',
+    });
+    assert.equal(sameAccount.id, accountWorkspace.id);
+    assert.equal((await db.players.get(player.id)).name, 'Offline player');
+    assert.equal((await getActiveCachedAccountSession()).teamId, 'royal-club');
+  } finally {
+    globalThis.fetch = priorFetch;
+    await db.delete();
+  }
+});
+
+test('sign-out write lock prevents new local edits and cleanup is account scoped', async () => {
+  await resetDatabase();
+  const first = await activateAccountWorkspace('account-one', 'First team');
+  const firstPlayer = await saveRecord(first.id, 'players', { name: 'First player' });
+  const second = await activateAccountWorkspace('account-two', 'Second team');
+  const secondPlayer = await saveRecord(second.id, 'players', { name: 'Second player' });
+  const guest = await createWorkspace('Guest workspace');
+  const guestPlayer = await saveRecord(guest.id, 'players', { name: 'Guest player' });
+  await db.syncMeta.update(first.id, {
+    syncLock: { id: 'in-progress', expiresAt: Date.now() + 60_000 },
+  });
+  await assert.rejects(beginSignOut(first.id), /Synchronization is still running/);
+  await db.syncMeta.update(first.id, { syncLock: null });
+  let token = await beginSignOut(first.id);
+
+  try {
+    await assert.rejects(
+      saveRecord(first.id, 'players', { ...firstPlayer, name: 'Edit during sign out' }),
+      /Sign out is in progress/,
+    );
+    await db.pendingChanges.where({ workspaceId: first.id }).delete();
+    await db.syncMeta.update(first.id, { syncStatus: 'attention', lastError: 'pull failed' });
+    await cancelSignOut(first.id, token);
+    assert.equal((await db.syncMeta.get(first.id)).syncStatus, 'attention');
+    token = await beginSignOut(first.id);
+    await clearAccountWorkspace(first.id, token);
+    await clearAccountWorkspace(first.id, token);
+    assert.equal(await db.workspaces.get(first.id), undefined);
+    assert.equal(await db.players.get(firstPlayer.id), undefined);
+    assert.equal((await db.players.get(secondPlayer.id)).name, 'Second player');
+    assert.equal((await db.players.get(guestPlayer.id)).name, 'Guest player');
+    assert.equal(await getPendingCount(first.id), 0);
+  } finally {
+    await db.delete();
+  }
 });
 
 test('sync pushes queued records and pulls remote records into the mapped workspace', async () => {

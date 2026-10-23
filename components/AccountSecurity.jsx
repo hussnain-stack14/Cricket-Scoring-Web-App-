@@ -188,15 +188,17 @@ export default function AccountSecurity({ session, onTeamIdChanged }) {
                   <span>New Team ID</span>
                   <input
                     value={newTeamId}
-                    onChange={(event) => setNewTeamId(event.target.value.toUpperCase())}
+                    onChange={(event) => setNewTeamId(event.target.value)}
                     autoComplete="off"
-                    placeholder="CRS-YOUNGS01"
-                    minLength={8}
-                    maxLength={16}
-                    pattern="CRS-[A-Za-z0-9]{4,12}"
+                    placeholder="royal-club"
+                    minLength={4}
+                    maxLength={24}
+                    pattern="[A-Za-z0-9_-]{4,24}"
                     required
                   />
-                  <small>Use CRS- followed by 4–12 letters or numbers.</small>
+                  <small>
+                    Use 4–24 letters, numbers, underscores, or hyphens. IDs are case-insensitive.
+                  </small>
                 </label>
                 <PasswordField
                   label="Current Password"
@@ -212,7 +214,7 @@ export default function AccountSecurity({ session, onTeamIdChanged }) {
                 </span>
                 <h2 id="team-id-dialog-title">Confirm your new Team ID</h2>
                 <p>
-                  New sign-ins will use <strong>{newTeamId.trim().toUpperCase()}</strong>. Your
+                  New sign-ins will use <strong>{normalizeLoginTeamId(newTeamId)}</strong>. Your
                   current signed-in devices will remain linked to the same team.
                 </p>
               </>
@@ -253,7 +255,7 @@ export default function AccountSecurity({ session, onTeamIdChanged }) {
                       const normalized = normalizeLoginTeamId(newTeamId);
                       if (!isValidLoginTeamId(normalized)) {
                         setError(
-                          'Use CRS- followed by 4–12 letters or numbers. Some IDs are reserved.',
+                          'Use 4–24 letters, numbers, underscores, or hyphens. Some IDs are reserved.',
                         );
                         return;
                       }

@@ -63,9 +63,9 @@ export default function AccountHub() {
           <div>
             <strong>What is a Team ID?</strong>
             <p>
-              A Team ID looks like <code>CRS-482916</code>. It's generated when your team registers
-              and can be changed later in Account Settings. Share your current Team ID with
-              teammates so they can request to join.
+              Choose a 4–24 character Team ID using letters, numbers, underscores, or hyphens. IDs
+              are case-insensitive and can be changed later in Account Settings. Share your current
+              Team ID with teammates so they can request to join.
             </p>
           </div>
           <div>

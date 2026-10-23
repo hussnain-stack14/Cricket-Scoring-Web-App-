@@ -11,19 +11,16 @@ import {
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { registerLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
+import { isValidLoginTeamId, normalizeLoginTeamId } from '../../../../lib/accountCredentials';
 
 /**
- * Generate a unique CRS-XXXXXX team ID.
- * Retries up to 5 times in the unlikely event of a collision.
+ * Generate a stable internal partition key for team-owned records.
  */
 async function generateTeamId(session) {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const digits = crypto.randomInt(100000, 999999);
-    const teamId = `CRS-${digits}`;
-    const exists = await TeamAccount.exists({ teamId }).session(session);
-    if (!exists) return teamId;
-  }
-  throw new Error('Could not generate a unique Team ID. Please try again.');
+  const teamId = crypto.randomUUID();
+  const exists = await TeamAccount.exists({ teamId }).session(session);
+  if (!exists) return teamId;
+  throw new Error('Could not generate an internal account ID. Please try again.');
 }
 
 /** POST /api/auth/register */
@@ -40,7 +37,18 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const { teamName, password, confirmPassword } = body ?? {};
+  const { teamName, teamId, password, confirmPassword } = body ?? {};
+
+  const loginTeamId = typeof teamId === 'string' ? normalizeLoginTeamId(teamId) : '';
+  if (!isValidLoginTeamId(loginTeamId)) {
+    return NextResponse.json(
+      {
+        error:
+          'Team ID must be 4–24 characters using letters, numbers, underscores, or hyphens. Some IDs are reserved.',
+      },
+      { status: 400 },
+    );
+  }
 
   // Validate team name
   if (typeof teamName !== 'string' || teamName.trim().length < 2 || teamName.trim().length > 100) {
@@ -77,12 +85,20 @@ export async function POST(req) {
     try {
       await dbSession.withTransaction(async () => {
         const teamId = await generateTeamId(dbSession);
+        const existingLoginId = await TeamAccount.exists({
+          $or: [{ loginTeamId }, { loginTeamId: { $exists: false }, teamId: loginTeamId }],
+        }).session(dbSession);
+        if (existingLoginId) {
+          const error = new Error('That Team ID is already in use.');
+          error.code = 11000;
+          throw error;
+        }
         memberId = crypto.randomUUID();
         [account] = await TeamAccount.create(
           [
             {
               teamId,
-              loginTeamId: teamId,
+              loginTeamId,
               name: teamName.trim(),
               passwordHash,
               authVersion: 0,
@@ -126,6 +142,7 @@ export async function POST(req) {
     session.memberId = memberId;
     session.role = 'owner';
     session.authVersion = account.authVersion ?? 0;
+    session.sessionId = crypto.randomUUID();
     await session.save();
 
     return res;
@@ -133,7 +150,7 @@ export async function POST(req) {
     console.error('Registration error:', getSafeErrorDetails(error));
     if (error.code === 11000) {
       return NextResponse.json(
-        { error: 'A team account with this identifier already exists. Please try again.' },
+        { error: 'That Team ID is already in use. Choose another identifier.' },
         { status: 409 },
       );
     }

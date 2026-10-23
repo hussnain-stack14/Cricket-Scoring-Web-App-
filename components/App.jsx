@@ -4,6 +4,7 @@ import {
   Users,
   UserRound,
   Ellipsis,
+  Home,
   Plus,
   ArrowUpRight,
   Leaf,
@@ -17,13 +18,14 @@ import {
   Clock3,
   CheckCircle2,
   ArrowRight,
-  Shield,
+  Cloud,
 } from 'lucide-react';
 import {
   activateAccountWorkspace,
   all,
   createWorkspace,
   findGuestWorkspace,
+  getActiveCachedAccountSession,
   workspace,
 } from '../lib/db';
 import { matchStates, result } from '../lib/engine';
@@ -38,7 +40,7 @@ import Profile from './Profile';
 import Settings from './Settings';
 import { useOffline } from './offline';
 import { DownloadScorecardButton } from './ReportActions';
-import SyncStatus from './SyncStatus';
+import SyncStatus, { SYNC_STATUS_LABELS } from './SyncStatus';
 import TeamAccountMenu from './TeamAccountMenu';
 function userError(error) {
   const message = error instanceof Error ? error.message : '';
@@ -67,11 +69,22 @@ export default function App({ screen }) {
   const [syncMeta, setSyncMeta] = useState(null);
   const [pendingSync, setPendingSync] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const busy = useRef(false);
   const syncBusy = useRef(false);
   const syncRef = useRef(null);
   const offline = useOffline();
   const base = '/app';
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+    updateOnlineState();
+    window.addEventListener('online', updateOnlineState);
+    window.addEventListener('offline', updateOnlineState);
+    return () => {
+      window.removeEventListener('online', updateOnlineState);
+      window.removeEventListener('offline', updateOnlineState);
+    };
+  }, []);
   async function refresh() {
     const ws = await workspace();
     setW(ws);
@@ -82,11 +95,17 @@ export default function App({ screen }) {
     let cancelled = false;
     async function initialize() {
       try {
-        const currentSession = await fetchSession();
+        let currentSession;
+        try {
+          currentSession = await fetchSession();
+        } catch {
+          currentSession = await getActiveCachedAccountSession();
+        }
         const ws = currentSession
           ? await activateAccountWorkspace(
               currentSession.workspaceKey || currentSession.teamId,
               currentSession.teamName,
+              currentSession,
             )
           : await findGuestWorkspace();
         if (cancelled) return;
@@ -110,6 +129,38 @@ export default function App({ screen }) {
       cancelled = true;
     };
   }, []);
+  useEffect(() => {
+    if (!w?.id || !session) return undefined;
+    const handleSignedOut = (workspaceId) => {
+      if (workspaceId !== w.id) return;
+      setSession(null);
+      setData(null);
+      setW(null);
+      window.location.assign('/account/login/');
+    };
+    const onStorage = (event) => {
+      if (event.key !== 'crease-account-signed-out' || !event.newValue) return;
+      try {
+        handleSignedOut(JSON.parse(event.newValue).workspaceId);
+      } catch (parseError) {
+        console.error('Could not process account sign-out notification:', parseError);
+      }
+    };
+    const channel =
+      typeof BroadcastChannel === 'undefined'
+        ? null
+        : new BroadcastChannel('crease-account-session');
+    const onMessage = (event) => {
+      if (event.data?.type === 'signed-out') handleSignedOut(event.data.workspaceId);
+    };
+    channel?.addEventListener('message', onMessage);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      channel?.removeEventListener('message', onMessage);
+      channel?.close();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [session, w?.id]);
   async function refreshSyncState(workspaceId = w?.id) {
     if (!workspaceId) return;
     const state = await getSyncState(workspaceId);
@@ -182,7 +233,7 @@ export default function App({ screen }) {
     player: 'Player profile',
   };
   const navItems = [
-    { label: 'Dashboard', href: `${base}/`, icon: LayoutDashboard, active: screen === 'dashboard' },
+    { label: 'Home', href: `${base}/`, icon: LayoutDashboard, active: screen === 'dashboard' },
     {
       label: 'Matches',
       href: `${base}/matches/`,
@@ -211,6 +262,10 @@ export default function App({ screen }) {
   const recentMatches = [...matches]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 4);
+  const currentSyncStatus = !isOnline
+    ? 'offline'
+    : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
+  const currentSyncLabel = SYNC_STATUS_LABELS[currentSyncStatus] || 'Sync needs attention';
 
   function renderMatchCard(match) {
     const states = matchStates(
@@ -296,7 +351,9 @@ export default function App({ screen }) {
             <a
               key={label}
               href={href}
-              className={`sidebar-link ${active ? 'selected' : ''}`}
+              className={`sidebar-link ${active ? 'selected' : ''} ${
+                ['Statistics', 'Reports'].includes(label) ? 'secondary-nav-item' : ''
+              }`}
               aria-current={active ? 'page' : undefined}
               title={sidebarCollapsed ? label : undefined}
             >
@@ -304,28 +361,10 @@ export default function App({ screen }) {
               <span>{label}</span>
             </a>
           ))}
-          <p className="sidebar-section-label" style={{ marginTop: '1.25rem' }}>
-            TEAM ACCOUNT
-          </p>
-          <TeamAccountMenu
-            session={session}
-            workspaceId={w?.id}
-            syncStatus={
-              !session
-                ? 'unauthenticated'
-                : typeof navigator !== 'undefined' && !navigator.onLine
-                  ? 'offline'
-                  : syncMeta?.syncStatus || 'pending'
-            }
-            pending={pendingSync}
-            syncing={syncing}
-            onSync={syncNow}
-            collapsed={sidebarCollapsed}
-          />
         </nav>
         <div className="sidebar-footer">
           <span className="sidebar-offline-dot" />
-          <span className="sidebar-footer-text">Your records stay on this device</span>
+          <span className="sidebar-footer-text">Offline-ready scorekeeping</span>
         </div>
       </aside>
       <div className="app-workspace">
@@ -334,11 +373,37 @@ export default function App({ screen }) {
             <span className="brand-mark">
               <Leaf size={22} />
             </span>{' '}
-            crease<span className="brand-dot">.</span>
+            <span className="mobile-brand-name">
+              crease<span className="brand-dot">.</span>
+            </span>
           </a>
-          <span className="local-badge">
-            <span /> {session ? 'TEAM ACCOUNT' : 'ON THIS DEVICE'}
-          </span>
+          <div className="mobile-header-actions">
+            <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
+              <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
+                <span className="header-status-dot" />
+                <Cloud size={17} />
+                <span className="offline-readiness-label">
+                  {offline.ready ? 'Ready offline' : 'Offline setup'}
+                </span>
+              </summary>
+              <div className="header-popover-panel">
+                <SyncStatus
+                  status={currentSyncStatus}
+                  pending={pendingSync}
+                  onSync={session ? syncNow : undefined}
+                  syncing={syncing}
+                />
+              </div>
+            </details>
+            <details className="header-popover account-popover">
+              <summary aria-label="Account menu" title="Account">
+                <UserRound size={19} />
+              </summary>
+              <div className="header-popover-panel account-popover-panel">
+                <TeamAccountMenu session={session} workspaceId={w?.id} />
+              </div>
+            </details>
+          </div>
         </header>
         <header className="desktop-topbar">
           <div>
@@ -346,46 +411,37 @@ export default function App({ screen }) {
             <h1>{titles[screen] || 'Crease'}</h1>
           </div>
           <div className="desktop-topbar-actions">
-            <span className={`offline-indicator ${offline.ready ? 'is-ready' : ''}`}>
-              <span />
-              {offline.ready ? 'Ready offline' : 'Offline setup needed'}
-            </span>
-            {session && (
-              <SyncStatus
-                status={
-                  typeof navigator !== 'undefined' && !navigator.onLine
-                    ? 'offline'
-                    : syncMeta?.syncStatus || 'pending'
-                }
-                pending={pendingSync}
-                onSync={syncNow}
-                syncing={syncing}
-                compact
-              />
-            )}
+            <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
+              <summary title={currentSyncLabel}>
+                <span className="header-status-dot" />
+                <Cloud size={17} />
+                <span className="offline-readiness-label">
+                  {offline.ready ? 'Ready offline' : 'Offline setup'}
+                </span>
+              </summary>
+              <div className="header-popover-panel">
+                <SyncStatus
+                  status={currentSyncStatus}
+                  pending={pendingSync}
+                  onSync={session ? syncNow : undefined}
+                  syncing={syncing}
+                />
+              </div>
+            </details>
             {w && ['dashboard', 'matches'].includes(screen) && (
               <a className="button compact" href={`${base}/setup/`}>
                 <Plus size={17} /> New match
               </a>
             )}
-            {session ? (
-              <a
-                className="button compact secondary"
-                href="/account/settings/"
-                style={{ textDecoration: 'none' }}
-              >
-                <Shield size={14} /> {session.teamName}
-              </a>
-            ) : (
-              <a
-                className="button compact secondary"
-                href="/account/login/"
-                style={{ textDecoration: 'none' }}
-              >
-                Sign in
-              </a>
-            )}
-            <span className="desktop-user">{w?.name || 'Local scorer'}</span>
+            <details className="header-popover account-popover">
+              <summary title={session?.teamName || 'Account'}>
+                <UserRound size={17} />
+                <span>{session?.teamName || 'Account'}</span>
+              </summary>
+              <div className="header-popover-panel account-popover-panel">
+                <TeamAccountMenu session={session} workspaceId={w?.id} />
+              </div>
+            </details>
           </div>
         </header>
         <main className={`app-content ${screen === 'setup' ? 'setup-page-content' : ''}`}>
@@ -480,6 +536,7 @@ export default function App({ screen }) {
                     </div>
                     <div className="dashboard-stat-grid">
                       {[
+                        ['Home', `${base}/`, Home, screen === 'dashboard'],
                         ['Total matches', matches.length, CalendarDays],
                         ['Live matches', liveMatches.length, Play],
                         ['Completed', completedMatches.length, CheckCircle2],
@@ -675,11 +732,7 @@ export default function App({ screen }) {
                     offline={offline}
                     session={session}
                     workspaceId={w.id}
-                    syncStatus={
-                      typeof navigator !== 'undefined' && !navigator.onLine
-                        ? 'offline'
-                        : syncMeta?.syncStatus || 'pending'
-                    }
+                    syncStatus={!isOnline ? 'offline' : syncMeta?.syncStatus || 'pending'}
                     pendingSync={pendingSync}
                     syncing={syncing}
                     onSync={syncNow}
@@ -691,15 +744,21 @@ export default function App({ screen }) {
         </main>
         <nav className="bottom-nav" aria-label="Main navigation">
           {[
+            ['Home', `${base}/`, Home, screen === 'dashboard'],
             [
               'Matches',
               `${base}/matches/`,
               CalendarDays,
               screen === 'matches' || screen === 'match' || screen === 'setup',
             ],
-            ['Teams', `${base}/teams/`, Users, screen === 'teams' || screen === 'statistics'],
+            ['Teams', `${base}/teams/`, Users, screen === 'teams'],
             ['Players', `${base}/players/`, UserRound, screen === 'players' || screen === 'player'],
-            ['More', `${base}/more/`, Ellipsis, screen === 'more'],
+            [
+              'More',
+              `${base}/more/`,
+              Ellipsis,
+              screen === 'more' || screen === 'statistics' || screen === 'reports',
+            ],
           ].map(([label, href, Icon, active]) => (
             <a key={label} href={href} className={active ? 'selected' : ''}>
               <Icon size={21} />

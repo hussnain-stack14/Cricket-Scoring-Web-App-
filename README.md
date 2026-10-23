@@ -58,7 +58,7 @@ Updates wait until explicitly applied from More. The update button is unavailabl
 
 ## Storage and backups
 
-Each browser profile/device has its own workspace; there is no account login or sync. Anyone sharing that browser profile can access its records. Browser clearing, eviction or device loss can remove data. More offers a persistent-storage request where supported.
+Each browser profile/device has its own local workspace. Optional team accounts synchronize players, teams, matches, innings, scoring events and related records through the authenticated sync APIs. Previously synchronized team records remain available offline in their account-scoped IndexedDB workspace; temporary network failures do not switch the active workspace to guest data. A deliberate sign-out first synchronizes and verifies the queue, then asks for confirmation before removing only that team's local workspace. It revokes the current server-side session and broadcasts local cleanup to the other tabs in this browser. If synchronization is incomplete, sign-out is blocked and the local backup can be exported. Anyone sharing an unlocked browser profile may access its locally cached records. Browser clearing, eviction or device loss can remove data. More offers a persistent-storage request where supported.
 
 Export downloads a version-2 JSON backup with workspace settings, players, teams, memberships, matches, innings, events, audits and setup draft. Verify the downloaded file and keep a copy outside this browser. The last-export timestamp records a download request, not ongoing backup protection.
 
