@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useEffect, useId, useRef } from 'react';
 import { X, ArrowRight, Leaf } from 'lucide-react';
 export function Button({ children, secondary, danger, compact, ...props }) {
   return (
@@ -54,15 +55,16 @@ export function Empty({ title, children, href, action }) {
       <h2>{title}</h2>
       <p>{children}</p>
       {href && (
-        <a className="button" href={href}>
+        <Link className="button" href={href}>
           {action}
           <ArrowRight size={17} />
-        </a>
+        </Link>
       )}
     </div>
   );
 }
 export function Sheet({ title, children, close }) {
+  const titleId = useId();
   const ref = useRef(null);
   useEffect(() => {
     const d = ref.current;
@@ -70,9 +72,9 @@ export function Sheet({ title, children, close }) {
     return () => d.close();
   }, []);
   return (
-    <dialog ref={ref} onCancel={close} className="sheet">
+    <dialog aria-labelledby={titleId} ref={ref} onCancel={close} className="sheet">
       <div className="sheet-heading">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button className="icon-button" aria-label="Close" onClick={close}>
           <X />
         </button>

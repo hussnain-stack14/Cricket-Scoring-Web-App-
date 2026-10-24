@@ -1,10 +1,21 @@
 'use client';
-import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Leaf, LogIn, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
 import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountLogin() {
+  const router = useRouter();
+  const [retryUntil, setRetryUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!retryUntil) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [retryUntil]);
+  const remaining = Math.max(0, Math.ceil((retryUntil - now) / 1000));
   const [teamId, setTeamId] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -13,7 +24,7 @@ export default function AccountLogin() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || remaining > 0) return;
     setBusy(true);
     setError('');
 
@@ -40,6 +51,9 @@ export default function AccountLogin() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 429) {
+          const receivedAt = Date.now();
+          setNow(receivedAt);
+          setRetryUntil(receivedAt + (Number(data.retryAfter) || 60) * 1000);
           setError(data.error || 'Too many sign-in attempts. Please wait a few minutes.');
         } else if (res.status === 503) {
           setError(data.error || 'Database service is temporarily unavailable.');
@@ -49,7 +63,7 @@ export default function AccountLogin() {
         return;
       }
       // Redirect to app after successful login
-      window.location.href = '/app/';
+      router.push('/app/');
     } catch {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setError("You're offline. Connect to the internet to sign in.");
@@ -64,12 +78,12 @@ export default function AccountLogin() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a className="auth-brand" href="/">
+        <Link className="auth-brand" href="/">
           <span className="brand-mark">
             <Leaf size={20} />
           </span>
           crease<span>.</span>
-        </a>
+        </Link>
       </header>
 
       <main className="auth-main auth-main-narrow">
@@ -85,6 +99,12 @@ export default function AccountLogin() {
           {error && (
             <div role="alert" className="auth-error">
               {error}
+              {remaining > 0 && (
+                <p>
+                  Try again in {Math.floor(remaining / 60)}:
+                  {String(remaining % 60).padStart(2, '0')}.
+                </p>
+              )}
             </div>
           )}
 
@@ -127,7 +147,7 @@ export default function AccountLogin() {
             </div>
           </div>
 
-          <button className="auth-submit" type="submit" disabled={busy}>
+          <button className="auth-submit" type="submit" disabled={busy || remaining > 0}>
             {busy ? (
               'Signing in…'
             ) : (
@@ -138,13 +158,13 @@ export default function AccountLogin() {
           </button>
 
           <div className="auth-form-links">
-            <a href="/account/recovery/">Forgot your password?</a>
-            <a href="/account/register/">Create a team account</a>
+            <Link href="/account/recovery/">Forgot your password?</Link>
+            <Link href="/account/register/">Create a team account</Link>
           </div>
         </form>
 
         <div className="auth-back">
-          <a href="/app/">← Back to the app without signing in</a>
+          <Link href="/app/">← Back to the app without signing in</Link>
         </div>
       </main>
     </div>

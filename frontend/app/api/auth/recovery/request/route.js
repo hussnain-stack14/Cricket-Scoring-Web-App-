@@ -4,7 +4,12 @@ import crypto from 'node:crypto';
 import { Resend } from 'resend';
 import { connectDB } from '../../../../../lib/server/db';
 import { TeamAccount } from '../../../../../lib/server/models';
-import { registerLimiter, checkRateLimit, getClientIp } from '../../../../../lib/server/rateLimit';
+import {
+  registerLimiter,
+  recoveryAccountLimiter,
+  checkRateLimit,
+  getClientIp,
+} from '../../../../../lib/server/rateLimit';
 import { normalizeLoginTeamId } from '../../../../../lib/accountCredentials';
 
 function getResend() {
@@ -39,6 +44,8 @@ export async function POST(req) {
   await connectDB();
 
   const normalizedTeamId = normalizeLoginTeamId(teamId);
+  const accountLimit = await checkRateLimit(recoveryAccountLimiter, normalizedTeamId);
+  if (accountLimit) return accountLimit;
   const account = await TeamAccount.findOne({
     $or: [
       { loginTeamId: normalizedTeamId },

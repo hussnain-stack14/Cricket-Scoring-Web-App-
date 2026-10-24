@@ -4671,3 +4671,26 @@ pre {
     transition: none;
   }
 }
+
+/* Compact, readable layouts at narrow ground-side scoring widths. */
+.app-workspace, .dashboard-panel, .match-card-item, .person-row .grow { min-width: 0; }
+.dashboard-view > .dashboard-panel { margin-bottom: 20px; }
+.match-card-item > .button { margin: 0 16px 12px; }
+.match-team-line strong, .person-row .grow, .dashboard-panel h3 { overflow-wrap: anywhere; }
+.sheet { max-height: 90dvh; overflow-y: auto; max-width: calc(100vw - 24px); }
+.setup-actions, .actions { flex-wrap: wrap; }
+.status-cancelled { color: var(--muted); }
+.tabs { overflow-x: auto; max-width: 100%; }
+.button, .icon-button, .bottom-nav a { min-height: 44px; }
+:focus-visible { outline: 3px solid #25815e; outline-offset: 3px; }
+@media (max-width: 430px) {
+  .dashboard-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-welcome h2 { font-size: 1.5rem; }
+  .person-row { gap: 8px; }
+  .bottom-nav a { font-size: 10px; }
+  .match-card-details { flex-wrap: wrap; }
+  .sheet { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { liveQuery } from 'dexie';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users,
   UserRound,
@@ -21,6 +23,8 @@ import {
   Cloud,
 } from 'lucide-react';
 import {
+  deleteMatch,
+  deleteRecord,
   activateAccountWorkspace,
   all,
   createWorkspace,
@@ -32,13 +36,15 @@ import {
 import { matchStates, result } from '../lib/engine';
 import { teamStatistics } from '../lib/statistics';
 import { fetchSession, getSyncState, sync } from '../lib/sync';
-import { Button, Field, Empty } from './ui';
+import { Button, Field, Empty, Sheet } from './ui';
+import dynamic from 'next/dynamic';
+import { upcomingMatches, matchLabel } from '../lib/matchLifecycle';
 import People from './People';
-import Statistics from './Statistics';
+const Statistics = dynamic(() => import('./Statistics'));
 import Setup from './Setup';
-import Match from './Match';
-import Profile from './Profile';
-import Settings from './Settings';
+const Match = dynamic(() => import('./Match'));
+const Profile = dynamic(() => import('./Profile'));
+const Settings = dynamic(() => import('./Settings'));
 import { useOffline } from './offline';
 import { DownloadScorecardButton } from './ReportActions';
 import SyncStatus, { SYNC_STATUS_LABELS } from './SyncStatus';
@@ -66,6 +72,12 @@ export default function App({ screen }) {
     [name, setName] = useState(''),
     [filter, setFilter] = useState('live'),
     [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   const [session, setSession] = useState(null);
   const [syncMeta, setSyncMeta] = useState(null);
   const [pendingSync, setPendingSync] = useState(0);
@@ -91,6 +103,15 @@ export default function App({ screen }) {
       window.removeEventListener('offline', updateOnlineState);
     };
   }, []);
+  useEffect(() => {
+    // Scoring keeps its revision snapshot so a stale second scorer is rejected.
+    if (!w?.id || screen === 'match') return;
+    const subscription = liveQuery(() => all(w.id)).subscribe({
+      next: setData,
+      error: (e) => setError(userError(e)),
+    });
+    return () => subscription.unsubscribe();
+  }, [w?.id, screen]);
   async function refresh() {
     const ws = await workspace();
     setW(ws);
@@ -292,7 +313,8 @@ export default function App({ screen }) {
       busy.current = false;
     }
   }
-  const ctx = { w, data, run, refresh, setError, error };
+  const ctx = { w, data, run, refresh, setError, error, session };
+  const canDelete = !session || session.role === 'owner';
   const titles = {
     dashboard: 'Dashboard',
     matches: 'Matches',
@@ -306,7 +328,7 @@ export default function App({ screen }) {
     player: 'Player profile',
   };
   const navItems = [
-    { label: 'Home', href: `${base}/`, icon: LayoutDashboard, active: screen === 'dashboard' },
+    { label: 'Dashboard', href: `${base}/`, icon: LayoutDashboard, active: screen === 'dashboard' },
     {
       label: 'Matches',
       href: `${base}/matches/`,
@@ -332,23 +354,72 @@ export default function App({ screen }) {
   const matches = data?.matches ?? [];
   const liveMatches = matches.filter((match) => match.status === 'live');
   const completedMatches = matches.filter((match) => match.status === 'completed');
-  const recentMatches = [...matches]
+  const upcoming = upcomingMatches(matches, clock);
+  const drafts = data?.drafts ?? [];
+  const listedMatches =
+    filter === 'upcoming' ? upcoming : matches.filter((m) => m.status === filter);
+  const teamStats = useMemo(
+    () =>
+      new Map(
+        (data?.teams ?? []).map((team) => [
+          team.id,
+          teamStatistics(team.id, data.matches, data.innings, data.events),
+        ]),
+      ),
+    [data],
+  );
+  const recentMatches = [...completedMatches]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 4);
-  const currentSyncStatus = !isOnline || session?.offlineCached
-    ? 'offline'
-    : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
+  const currentSyncStatus =
+    !isOnline || session?.offlineCached
+      ? 'offline'
+      : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
   const currentSyncLabel = SYNC_STATUS_LABELS[currentSyncStatus] || 'Sync needs attention';
 
-  function renderMatchCard(match) {
-    const states = matchStates(
-      match,
-      data.innings.filter((inning) => inning.matchId === match.id),
-      data.events.filter((event) => event.matchId === match.id),
+  function renderDraftCard(draft) {
+    const title = [draft.teamA, draft.teamB]
+      .map(
+        (id, i) =>
+          data.teams.find((t) => t.id === id)?.name ||
+          draft[i ? 'teamNameB' : 'teamNameA'] ||
+          'Team ' + (i ? 'B' : 'A'),
+      )
+      .join(' vs ');
+    return (
+      <div className="dashboard-panel" key={draft.id}>
+        <span className="match-status">Draft</span>
+        <h3>{title}</h3>
+        <p>{draft.rules?.overs || '?'} overs ? Setup saved</p>
+        <div className="actions">
+          <Link className="button secondary compact" href={`/app/setup/?draft=${draft.id}`}>
+            Resume setup
+          </Link>
+          {canDelete && (
+            <Button
+              secondary
+              compact
+              danger
+              onClick={() => setDeleting({ table: 'drafts', record: { ...draft, title } })}
+            >
+              Delete draft
+            </Button>
+          )}
+        </div>
+      </div>
     );
+  }
+  function renderMatchCard(match) {
+    const states = ['upcoming', 'cancelled'].includes(match.status)
+      ? []
+      : matchStates(
+          match,
+          data.innings.filter((inning) => inning.matchId === match.id),
+          data.events.filter((event) => event.matchId === match.id),
+        );
     return (
       <div className="match-card-item" key={match.id}>
-        <a className="match-card" href={`${base}/match/?id=${match.id}`}>
+        <Link className="match-card" href={`${base}/match/?id=${match.id}`}>
           <div className="match-card-topline">
             <span className={`match-status status-${match.status}`}>
               {match.status === 'live' ? (
@@ -362,9 +433,18 @@ export default function App({ screen }) {
                 ? 'Live'
                 : match.status === 'completed'
                   ? 'Completed'
-                  : 'Upcoming'}
+                  : match.status === 'cancelled'
+                    ? 'Cancelled'
+                    : 'Upcoming'}
             </span>
-            <small>{new Date(match.date).toLocaleDateString()}</small>
+            <small>
+              {new Date(match.scheduledAt || match.date).toLocaleString(
+                [],
+                match.scheduledAt
+                  ? { dateStyle: 'medium', timeStyle: 'short' }
+                  : { dateStyle: 'medium' },
+              )}
+            </small>
           </div>
           <div className="match-teams">
             {match.teams.map((team, index) => {
@@ -389,7 +469,17 @@ export default function App({ screen }) {
                 : 'Open match'}
             <ArrowUpRight size={17} />
           </div>
-        </a>
+        </Link>
+        {canDelete && (
+          <Button
+            secondary
+            compact
+            danger
+            onClick={() => setDeleting({ table: 'matches', record: match })}
+          >
+            Delete match
+          </Button>
+        )}
         {match.status === 'completed' && (
           <div className="match-card-history-action">
             <DownloadScorecardButton match={match} states={states} compact />
@@ -400,16 +490,52 @@ export default function App({ screen }) {
   }
   return (
     <div className={`app app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {deleting && (
+        <Sheet
+          title={deleting.table === 'drafts' ? 'Delete draft?' : 'Delete match?'}
+          close={() => setDeleting(null)}
+        >
+          <p>
+            <strong>{deleting.record.title || matchLabel(deleting.record)}</strong>
+          </p>
+          <p>
+            {deleting.table === 'drafts'
+              ? 'This saved setup will be removed.'
+              : 'This match and its score will be removed from lists and statistics. Historical snapshots are retained for audit. Other matches and players are kept.'}
+          </p>
+          {error && <p role="alert">{error}</p>}
+          <div className="actions">
+            <Button secondary onClick={() => setDeleting(null)}>
+              Keep it
+            </Button>
+            <Button
+              danger
+              onClick={async () => {
+                if (
+                  await run(() =>
+                    deleting.table === 'drafts'
+                      ? deleteRecord(w.id, 'drafts', deleting.record.id)
+                      : deleteMatch(w.id, deleting.record.id),
+                  )
+                )
+                  setDeleting(null);
+              }}
+            >
+              Confirm delete
+            </Button>
+          </div>
+        </Sheet>
+      )}
       <aside className="desktop-sidebar">
         <div className="sidebar-brand">
-          <a href={`${base}/`} aria-label="Crease dashboard">
+          <Link href={`${base}/`} aria-label="Crease dashboard">
             <span className="brand-mark">
               <Leaf size={21} />
             </span>
             <span className="sidebar-brand-name">
               crease<span>.</span>
             </span>
-          </a>
+          </Link>
           <button
             className="sidebar-collapse-button"
             aria-label={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
@@ -421,7 +547,7 @@ export default function App({ screen }) {
         <nav className="sidebar-nav" aria-label="Main navigation">
           <p className="sidebar-section-label">WORKSPACE</p>
           {navItems.map(({ label, href, icon: Icon, active }) => (
-            <a
+            <Link
               key={label}
               href={href}
               className={`sidebar-link ${active ? 'selected' : ''} ${
@@ -432,7 +558,7 @@ export default function App({ screen }) {
             >
               <Icon size={20} strokeWidth={1.9} />
               <span>{label}</span>
-            </a>
+            </Link>
           ))}
         </nav>
         <div className="sidebar-footer">
@@ -442,14 +568,14 @@ export default function App({ screen }) {
       </aside>
       <div className="app-workspace">
         <header className="brand">
-          <a href={`${base}/`} aria-label="Crease home">
+          <Link href={`${base}/`} aria-label="Crease home">
             <span className="brand-mark">
               <Leaf size={22} />
             </span>{' '}
             <span className="mobile-brand-name">
               crease<span className="brand-dot">.</span>
             </span>
-          </a>
+          </Link>
           <div className="mobile-header-actions">
             <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
               <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
@@ -502,9 +628,9 @@ export default function App({ screen }) {
               </div>
             </details>
             {w && ['dashboard', 'matches'].includes(screen) && (
-              <a className="button compact" href={`${base}/setup/`}>
+              <Link className="button compact" href={`${base}/setup/?new=1`}>
                 <Plus size={17} /> New match
-              </a>
+              </Link>
             )}
             <details className="header-popover account-popover">
               <summary title={session?.teamName || 'Account'}>
@@ -525,9 +651,9 @@ export default function App({ screen }) {
                 <h1>{titles[screen]}</h1>
               </div>
               {['dashboard', 'matches'].includes(screen) && w && (
-                <a className="button compact" href={`${base}/setup/`}>
+                <Link className="button compact" href={`${base}/setup/?new=1`}>
                   <Plus size={18} /> New match
-                </a>
+                </Link>
               )}
             </div>
           ) : (
@@ -609,7 +735,6 @@ export default function App({ screen }) {
                     </div>
                     <div className="dashboard-stat-grid">
                       {[
-                        ['Home', `${base}/`, Home, screen === 'dashboard'],
                         ['Total matches', matches.length, CalendarDays],
                         ['Live matches', liveMatches.length, Play],
                         ['Completed', completedMatches.length, CheckCircle2],
@@ -624,6 +749,31 @@ export default function App({ screen }) {
                         </div>
                       ))}
                     </div>
+                    {liveMatches.length > 0 && (
+                      <section className="dashboard-panel">
+                        <h2>Live matches</h2>
+                        <div className="match-grid">{liveMatches.map(renderMatchCard)}</div>
+                      </section>
+                    )}
+                    <section className="dashboard-panel">
+                      <h2>Upcoming matches</h2>
+                      {upcoming.length ? (
+                        <div className="match-grid">
+                          {upcoming.slice(0, 4).map(renderMatchCard)}
+                        </div>
+                      ) : (
+                        <p className="dashboard-empty-note">
+                          No scheduled matches.{' '}
+                          <Link href="/app/setup/?new=1">Schedule a match</Link>
+                        </p>
+                      )}
+                    </section>
+                    {drafts.length > 0 && (
+                      <section className="dashboard-panel">
+                        <h2>Draft matches</h2>
+                        <div className="match-grid">{drafts.map(renderDraftCard)}</div>
+                      </section>
+                    )}
                     <div className="dashboard-main-grid">
                       <section className="dashboard-panel dashboard-recent">
                         <div className="dashboard-panel-heading">
@@ -631,9 +781,9 @@ export default function App({ screen }) {
                             <h2>Recent matches</h2>
                             <p>Your latest scorebook activity</p>
                           </div>
-                          <a href={`${base}/matches/`}>
+                          <Link href={`${base}/matches/`}>
                             All matches <ArrowRight size={15} />
-                          </a>
+                          </Link>
                         </div>
                         {liveMatches.length > 0 && (
                           <div className="continue-scoring">
@@ -645,12 +795,12 @@ export default function App({ screen }) {
                                 progress
                               </small>
                             </div>
-                            <a
+                            <Link
                               className="button compact"
                               href={`${base}/match/?id=${liveMatches[0].id}`}
                             >
                               Resume
-                            </a>
+                            </Link>
                           </div>
                         )}
                         {recentMatches.length ? (
@@ -659,58 +809,61 @@ export default function App({ screen }) {
                           </div>
                         ) : (
                           <Empty
-                            title="Your scorebook starts here"
-                            href={`${base}/setup/`}
+                            title={
+                              matches.length
+                                ? 'No completed matches yet'
+                                : 'Your scorebook starts here'
+                            }
+                            href={`${base}/setup/?new=1`}
                             action="Set up a match"
                           >
-                            Create a match to start building your local cricket history.
+                            {matches.length
+                              ? 'Completed scorecards will appear here.'
+                              : 'Create a match to start building your local cricket history.'}
                           </Empty>
                         )}
                       </section>
                       <aside className="dashboard-side-column">
-                        <section className="dashboard-panel">
-                          <div className="dashboard-panel-heading">
-                            <div>
-                              <h2>Team performance</h2>
-                              <p>Completed matches only</p>
+                        {data.teams.some((team) => !team.archived) && (
+                          <section className="dashboard-panel">
+                            <div className="dashboard-panel-heading">
+                              <div>
+                                <h2>Team performance</h2>
+                                <p>Completed matches only</p>
+                              </div>
                             </div>
-                          </div>
-                          {data.teams
-                            .filter((team) => !team.archived)
-                            .slice(0, 4)
-                            .map((team) => {
-                              const stats = teamStatistics(
-                                team.id,
-                                data.matches,
-                                data.innings,
-                                data.events,
-                              );
-                              return (
-                                <a
-                                  className="performance-row"
-                                  key={team.id}
-                                  href={`${base}/statistics/`}
-                                >
-                                  <span>
-                                    <strong>{team.name}</strong>
-                                    <small>
-                                      {stats.matches} matches · {stats.won} wins
-                                    </small>
-                                  </span>
-                                  <b>
-                                    {stats.winPercentage === null
-                                      ? '—'
-                                      : `${stats.winPercentage.toFixed(0)}%`}
-                                  </b>
-                                </a>
-                              );
-                            })}
-                          {!data.teams.length && (
-                            <p className="dashboard-empty-note">
-                              Add a team to see its match record here.
-                            </p>
-                          )}
-                        </section>
+                            {data.teams
+                              .filter((team) => !team.archived)
+                              .slice(0, 4)
+                              .map((team) => {
+                                const stats = teamStats.get(team.id);
+                                return (
+                                  <Link
+                                    className="performance-row"
+                                    key={team.id}
+                                    href={`${base}/statistics/`}
+                                  >
+                                    <span>
+                                      <strong>{team.name}</strong>
+                                      <small>
+                                        {stats.matches} matches · {stats.won} wins
+                                      </small>
+                                    </span>
+                                    <b>
+                                      {stats.winPercentage === null
+                                        ? '—'
+                                        : `${stats.winPercentage.toFixed(0)}%`}
+                                    </b>
+                                  </Link>
+                                );
+                              })}
+                            {!data.teams.length && (
+                              <p className="dashboard-empty-note">
+                                Add a team to see its match record here.
+                              </p>
+                            )}
+                          </section>
+                        )}
                         <section className="dashboard-panel quick-actions-panel">
                           <div className="dashboard-panel-heading">
                             <div>
@@ -718,21 +871,21 @@ export default function App({ screen }) {
                               <p>Pick up where you left off</p>
                             </div>
                           </div>
-                          <a className="quick-action-link" href={`${base}/setup/`}>
+                          <Link className="quick-action-link" href={`${base}/setup/?new=1`}>
                             <Plus size={18} />
                             <span>Start a new match</span>
                             <ArrowRight size={15} />
-                          </a>
-                          <a className="quick-action-link" href={`${base}/teams/`}>
+                          </Link>
+                          <Link className="quick-action-link" href={`${base}/teams/`}>
                             <Users size={18} />
                             <span>Manage teams</span>
                             <ArrowRight size={15} />
-                          </a>
-                          <a className="quick-action-link" href={`${base}/players/`}>
+                          </Link>
+                          <Link className="quick-action-link" href={`${base}/players/`}>
                             <UserRound size={18} />
                             <span>Manage players</span>
                             <ArrowRight size={15} />
-                          </a>
+                          </Link>
                         </section>
                       </aside>
                     </div>
@@ -741,20 +894,28 @@ export default function App({ screen }) {
                 {screen === 'matches' && (
                   <section className="matches-view">
                     <div className="tabs" aria-label="Match status">
-                      {['live', 'upcoming', 'completed'].map((value) => (
+                      {['live', 'upcoming', 'drafts', 'completed', 'cancelled'].map((value) => (
                         <button
                           key={value}
                           className={filter === value ? 'active' : ''}
                           onClick={() => setFilter(value)}
                         >
                           {value[0].toUpperCase() + value.slice(1)}{' '}
-                          <span>{matches.filter((match) => match.status === value).length}</span>
+                          <span>
+                            {value === 'drafts'
+                              ? drafts.length
+                              : value === 'upcoming'
+                                ? upcoming.length
+                                : matches.filter((match) => match.status === value).length}
+                          </span>
                         </button>
                       ))}
                     </div>
                     <div className="match-grid">
-                      {matches.filter((match) => match.status === filter).length ? (
-                        matches.filter((match) => match.status === filter).map(renderMatchCard)
+                      {filter === 'drafts' && drafts.length ? (
+                        drafts.map(renderDraftCard)
+                      ) : listedMatches.length ? (
+                        listedMatches.map(renderMatchCard)
                       ) : (
                         <Empty
                           title={
@@ -762,13 +923,13 @@ export default function App({ screen }) {
                               ? 'No completed matches yet'
                               : 'No matches here yet'
                           }
-                          href={`${base}/setup/`}
+                          href={`${base}/setup/?new=1`}
                           action="Set up a match"
                         >
                           {filter === 'live'
                             ? 'Start a match to see live scoring here.'
                             : filter === 'upcoming'
-                              ? 'New matches will appear here before the first ball.'
+                              ? 'Schedule a match from setup to see it here.'
                               : 'Completed matches and their scorecards will appear here.'}
                         </Empty>
                       )}
@@ -817,7 +978,7 @@ export default function App({ screen }) {
         </main>
         <nav className="bottom-nav" aria-label="Main navigation">
           {[
-            ['Home', `${base}/`, Home, screen === 'dashboard'],
+            ['Dashboard', `${base}/`, Home, screen === 'dashboard'],
             [
               'Matches',
               `${base}/matches/`,
@@ -833,10 +994,10 @@ export default function App({ screen }) {
               screen === 'more' || screen === 'statistics' || screen === 'reports',
             ],
           ].map(([label, href, Icon, active]) => (
-            <a key={label} href={href} className={active ? 'selected' : ''}>
+            <Link key={label} href={href} className={active ? 'selected' : ''}>
               <Icon size={21} />
               <span>{label}</span>
-            </a>
+            </Link>
           ))}
         </nav>
       </div>

@@ -1,14 +1,22 @@
 'use client';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createMatch, saveRecord } from '../lib/db';
 import { validateSetup } from '../lib/engine';
 import { Button, Field, Select, playerLabel } from './ui';
 
 export default function Setup({ w, data, run, setError }) {
+  const router = useRouter();
   const [draft, setDraft] = useState(() => {
-    const saved = data.drafts[0];
+    const params = new URLSearchParams(window.location.search);
+    const saved = params.has('draft')
+      ? data.drafts.find((d) => d.id === params.get('draft'))
+      : !params.has('new')
+        ? data.drafts[0]
+        : null;
     return saved
-      ? { ...saved, step: Math.min(saved.step, 1), teamNameA: '', teamNameB: '' }
+      ? { teamNameA: '', teamNameB: '', ...saved, step: Math.min(saved.step, 1) }
       : {
           id: crypto.randomUUID(),
           step: 0,
@@ -25,6 +33,7 @@ export default function Setup({ w, data, run, setError }) {
           decision: 'bat',
         };
   });
+  const schedule = !!draft.scheduleForLater;
   const steps = ['Choose teams', 'Match rules & toss'];
   const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
   const selectedTeams = [draft.teamA, draft.teamB].map((id) =>
@@ -70,7 +79,10 @@ export default function Setup({ w, data, run, setError }) {
         throw new Error('Choose or create two different teams.');
       if (draft.step === 0) {
         const updated = { ...draft, step: 1 };
-        if (await run(() => saveRecord(w.id, 'drafts', updated))) setDraft(updated);
+        if (await run(() => saveRecord(w.id, 'drafts', updated))) {
+          setDraft(updated);
+          window.history.replaceState(null, '', `/app/setup/?draft=${draft.id}`);
+        }
         return;
       }
 
@@ -79,16 +91,18 @@ export default function Setup({ w, data, run, setError }) {
         rules: draft.rules,
         venue: draft.venue.trim(),
         date: draft.date,
+        scheduledAt: schedule ? new Date(draft.scheduledAt).toISOString() : null,
         firstBat,
         toss: draft.toss,
         decision: draft.decision,
       };
+      if (schedule && !(Date.parse(match.scheduledAt) > Date.now()))
+        throw new Error('Choose a future date and time.');
       validateSetup(match);
       const created = await run(() =>
-        createMatch(w.id, match, { striker: '', nonStriker: '', bowler: '' }),
+        createMatch(w.id, match, { striker: '', nonStriker: '', bowler: '' }, draft.id),
       );
-      if (created && typeof created === 'object')
-        window.location.assign(`/app/match/?id=${created.id}`);
+      if (created && typeof created === 'object') router.push(`/app/match/?id=${created.id}`);
     } catch (error) {
       setError(error.message);
     }
@@ -168,8 +182,8 @@ export default function Setup({ w, data, run, setError }) {
                         ))}
                       {!data.memberships.some((membership) => membership.teamId === team.id) && (
                         <p className="help">
-                          No players are assigned yet. <a href="/app/players/">Add players</a> or
-                          continue and create them during the match.
+                          No players are assigned yet. <Link href="/app/players/">Add players</Link>{' '}
+                          or continue and create them during the match.
                         </p>
                       )}
                     </details>
@@ -260,10 +274,37 @@ export default function Setup({ w, data, run, setError }) {
               Back
             </Button>
           )}
-          <Button secondary onClick={() => run(() => saveRecord(w.id, 'drafts', draft))}>
+          <Button
+            secondary
+            onClick={() =>
+              run(() => saveRecord(w.id, 'drafts', draft)).then((saved) => {
+                if (saved) window.history.replaceState(null, '', `/app/setup/?draft=${draft.id}`);
+              })
+            }
+          >
             Save draft
           </Button>
-          <Button onClick={next}>{draft.step === 1 ? 'Start match' : 'Continue'} →</Button>
+          {draft.step === 1 && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={schedule}
+                onChange={(e) => set('scheduleForLater', e.target.checked)}
+              />
+              Schedule for later
+            </label>
+          )}
+          {schedule && (
+            <Field
+              label="Start date and time"
+              type="datetime-local"
+              value={draft.scheduledAt || ''}
+              onChange={(e) => set('scheduledAt', e.target.value)}
+            />
+          )}
+          <Button onClick={next}>
+            {draft.step === 1 ? (schedule ? 'Schedule match' : 'Start match') : 'Continue'} →
+          </Button>
         </div>
       </section>
     </div>

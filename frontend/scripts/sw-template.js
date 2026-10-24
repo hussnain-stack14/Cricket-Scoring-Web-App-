@@ -61,6 +61,10 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(
     (async () => {
+      // Flight responses are not HTML documents. Let Next handle an offline
+      // navigation fallback instead of returning cached HTML as component data.
+      if (event.request.headers.get('RSC') === '1' || url.searchParams.has('_rsc'))
+        return fetch(event.request);
       const cache = await caches.open(CACHE);
       if (event.request.mode === 'navigate') {
         const path =

@@ -398,7 +398,7 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.bottom-nav a')).toHaveCount(5);
-  for (const label of ['Home', 'Matches', 'Teams', 'Players', 'More']) {
+  for (const label of ['Dashboard', 'Matches', 'Teams', 'Players', 'More']) {
     await expect(page.locator('.bottom-nav').getByRole('link', { name: label })).toBeVisible();
   }
   await page.goto('/app/more/');

@@ -1,3 +1,4 @@
+import { syncPolicyError } from '../../../../backend/syncPolicy.js';
 import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
@@ -100,6 +101,25 @@ export async function POST(req) {
       if (existing?.lastChangeId === changeId) {
         applied.push({ table, recordId, changeId, revision: existing.revision });
         continue;
+      }
+      const policyError = syncPolicyError(change, existing, session.role);
+      if (policyError) {
+        rejected.push(conflict(change, existing, policyError));
+        continue;
+      }
+      if (deleted && ['players', 'teams'].includes(table)) {
+        const reference = table === 'players' ? 'data.teams.squad.id' : 'data.teams.id';
+        const history = await SyncRecord.exists({
+          teamId: session.teamId,
+          table: 'matches',
+          [reference]: recordId,
+        });
+        if (history) {
+          rejected.push(
+            conflict(change, existing, 'Match history references this record. Archive it instead.'),
+          );
+          continue;
+        }
       }
       if ((existing?.revision ?? 0) !== baseRevision) {
         rejected.push(

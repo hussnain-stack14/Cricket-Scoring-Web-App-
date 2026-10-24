@@ -38,6 +38,7 @@ export async function queueSyncChange(workspaceId, table, recordId, data, delete
   if (!meta?.teamId) return;
   if (meta.signOutLock?.expiresAt > Date.now())
     throw new Error('Sign out is in progress. Finish or cancel it before changing team data.');
+  if (meta.role === 'viewer') throw new Error('Viewers cannot change team records.');
   const id = `${workspaceId}:${table}:${recordId}`;
   const previous = await db.pendingChanges.get(id);
   const key = `${table}:${recordId}`;
@@ -60,23 +61,20 @@ export async function workspace() {
   if (active) return active;
 
   const linkedIds = new Set(
-    (await db.syncMeta.toArray())
-      .filter((meta) => meta.teamId)
-      .map((meta) => meta.workspaceId),
+    (await db.syncMeta.toArray()).filter((meta) => meta.teamId).map((meta) => meta.workspaceId),
   );
   return (await db.workspaces.toArray()).find((item) => !linkedIds.has(item.id)) ?? null;
 }
 export async function findGuestWorkspace() {
   const linkedIds = new Set(
-    (await db.syncMeta.toArray())
-      .filter((meta) => meta.teamId)
-      .map((meta) => meta.workspaceId),
+    (await db.syncMeta.toArray()).filter((meta) => meta.teamId).map((meta) => meta.workspaceId),
   );
   const state = await db.appState.get('active-workspace');
   const active = state?.workspaceId && (await db.workspaces.get(state.workspaceId));
-  const guest = active && !linkedIds.has(active.id)
-    ? active
-    : (await db.workspaces.toArray()).find((item) => !linkedIds.has(item.id)) ?? null;
+  const guest =
+    active && !linkedIds.has(active.id)
+      ? active
+      : ((await db.workspaces.toArray()).find((item) => !linkedIds.has(item.id)) ?? null);
   if (guest) await setActiveWorkspace(guest.id);
   else if (state?.teamId) await db.appState.delete(state.id);
   return guest;
@@ -162,8 +160,7 @@ export async function getActiveCachedAccountSession() {
 export async function invalidateCachedAccountSession(workspaceId) {
   await db.transaction('rw', db.appState, async () => {
     const active = await db.appState.get('active-workspace');
-    if (active?.workspaceId === workspaceId && active.teamId)
-      await db.appState.delete(active.id);
+    if (active?.workspaceId === workspaceId && active.teamId) await db.appState.delete(active.id);
   });
 }
 export async function createWorkspace(name) {
@@ -187,7 +184,15 @@ export async function createWorkspace(name) {
 }
 export async function all(workspaceId) {
   const rows = await Promise.all(tables.map((t) => db[t].where({ workspaceId }).toArray()));
-  return Object.fromEntries(tables.map((t, i) => [t, rows[i]]));
+  const activeMatches = new Set(
+    rows[tables.indexOf('matches')].filter((m) => !m.deletedAt).map((m) => m.id),
+  );
+  return Object.fromEntries(
+    tables.map((t, i) => [
+      t,
+      rows[i].filter((r) => !r.deletedAt && (!r.matchId || activeMatches.has(r.matchId))),
+    ]),
+  );
 }
 export async function saveWorkspace(w) {
   must(await db.workspaces.get(w.id), 'Workspace missing.');
@@ -202,20 +207,23 @@ export async function saveRecord(workspaceId, table, record) {
     db.syncMeta,
     db.pendingChanges,
     async () => {
-    must(await db.workspaces.get(workspaceId), 'Workspace missing.');
-    const old = record.id && (await db[table].get(record.id));
-    must(!old || old.workspaceId === workspaceId, 'Record belongs to another workspace.');
-    if (table !== 'drafts')
-      must(
-        typeof record.name === 'string' &&
-          record.name.trim().length > 0 &&
-          record.name.length <= 100,
-        'Name must be 1–100 characters.',
-      );
-    const value = { ...record, id: record.id || uuid(), workspaceId };
-    await db[table].put(value);
-    await queueSyncChange(workspaceId, table, value.id, value);
-    return value;
+      must(await db.workspaces.get(workspaceId), 'Workspace missing.');
+      const old = record.id && (await db[table].get(record.id));
+      must(!old || old.workspaceId === workspaceId, 'Record belongs to another workspace.');
+      const meta = await db.syncMeta.get(workspaceId);
+      if (table !== 'drafts' && !!old?.archived !== !!record.archived)
+        must(!meta?.teamId || meta.role === 'owner', 'Only the account owner can archive records.');
+      if (table !== 'drafts')
+        must(
+          typeof record.name === 'string' &&
+            record.name.trim().length > 0 &&
+            record.name.length <= 100,
+          'Name must be 1–100 characters.',
+        );
+      const value = { ...record, id: record.id || uuid(), workspaceId };
+      await db[table].put(value);
+      await queueSyncChange(workspaceId, table, value.id, value);
+      return value;
     },
   );
 }
@@ -230,33 +238,33 @@ export async function saveTeam(workspaceId, team, members) {
     db.syncMeta,
     db.pendingChanges,
     async () => {
-    for (const id of members)
-      must((await db.players.get(id))?.workspaceId === workspaceId, 'Player not in workspace.');
-    must(!team.captain || members.includes(team.captain), 'Captain must be a squad member.');
-    must(!team.keeper || members.includes(team.keeper), 'Wicketkeeper must be a squad member.');
-    const saved = await saveRecord(workspaceId, 'teams', team);
-    const oldMemberships = await db.memberships
-      .where({ workspaceId })
-      .filter((m) => m.teamId === saved.id)
-      .toArray();
-    for (const membership of oldMemberships) {
-      await queueSyncChange(workspaceId, 'memberships', membership.id, membership, true);
-      await db.memberships.delete(membership.id);
-    }
-    const newMemberships = members.map((playerId) => ({
-      id: uuid(),
-      workspaceId,
-      teamId: saved.id,
-      playerId,
-    }));
-    await db.memberships.bulkAdd(newMemberships);
-    for (const membership of newMemberships)
-      await queueSyncChange(workspaceId, 'memberships', membership.id, membership);
+      for (const id of members)
+        must((await db.players.get(id))?.workspaceId === workspaceId, 'Player not in workspace.');
+      must(!team.captain || members.includes(team.captain), 'Captain must be a squad member.');
+      must(!team.keeper || members.includes(team.keeper), 'Wicketkeeper must be a squad member.');
+      const saved = await saveRecord(workspaceId, 'teams', team);
+      const oldMemberships = await db.memberships
+        .where({ workspaceId })
+        .filter((m) => m.teamId === saved.id)
+        .toArray();
+      for (const membership of oldMemberships) {
+        await queueSyncChange(workspaceId, 'memberships', membership.id, membership, true);
+        await db.memberships.delete(membership.id);
+      }
+      const newMemberships = members.map((playerId) => ({
+        id: uuid(),
+        workspaceId,
+        teamId: saved.id,
+        playerId,
+      }));
+      await db.memberships.bulkAdd(newMemberships);
+      for (const membership of newMemberships)
+        await queueSyncChange(workspaceId, 'memberships', membership.id, membership);
     },
   );
 }
 export async function deleteRecord(workspaceId, table, id) {
-  must(['players', 'teams'].includes(table), 'Unsupported record type.');
+  must(['players', 'teams', 'drafts'].includes(table), 'Unsupported record type.');
   const deletingTeam = table === 'teams';
   return db.transaction(
     'rw',
@@ -271,6 +279,13 @@ export async function deleteRecord(workspaceId, table, id) {
       must(await db.workspaces.get(workspaceId), 'Workspace missing.');
       const record = await db[table].get(id);
       must(record?.workspaceId === workspaceId, 'Record missing.');
+      const meta = await db.syncMeta.get(workspaceId);
+      must(!meta?.teamId || meta.role === 'owner', 'Only the account owner can delete records.');
+      if (table === 'drafts') {
+        await queueSyncChange(workspaceId, table, id, record, true);
+        await db[table].delete(id);
+        return;
+      }
       const matches = await db.matches.where({ workspaceId }).toArray();
       const usedInMatch = matches.some((match) =>
         deletingTeam
@@ -328,8 +343,11 @@ export async function createMatch(
   workspaceId,
   match,
   opening = { striker: '', nonStriker: '', bowler: '' },
+  draftId = null,
 ) {
   validateSetup(match);
+  if (match.scheduledAt)
+    must(Date.parse(match.scheduledAt) > Date.now(), 'Choose a future date and time.');
   return db.transaction(
     'rw',
     db.matches,
@@ -359,7 +377,7 @@ export async function createMatch(
         id: uuid(),
         workspaceId,
         revision: 0,
-        status: 'live',
+        status: match.scheduledAt ? 'upcoming' : 'live',
         createdAt: new Date().toISOString(),
       };
       const inn = { ...opening, id: uuid(), workspaceId, matchId: m.id, number: 1 };
@@ -368,7 +386,12 @@ export async function createMatch(
       await db.innings.add(inn);
       await queueSyncChange(workspaceId, 'matches', m.id, m);
       await queueSyncChange(workspaceId, 'innings', inn.id, inn);
-      const drafts = await db.drafts.where({ workspaceId }).toArray();
+      const drafts = draftId
+        ? await db.drafts
+            .where({ workspaceId })
+            .filter((d) => d.id === draftId)
+            .toArray()
+        : [];
       for (const draft of drafts) {
         await queueSyncChange(workspaceId, 'drafts', draft.id, draft, true);
         await db.drafts.delete(draft.id);
@@ -508,98 +531,105 @@ export async function changeMatch(workspaceId, id, revision, action) {
     db.syncMeta,
     db.pendingChanges,
     async () => {
-    const m = await db.matches.get(id);
-    must(m?.workspaceId === workspaceId, 'Match missing.');
-    if (action.type === 'finalize' && m.status === 'completed') return m;
-    if (action.type === 'event') {
-      const existing = await db.events.get(action.event.id);
-      if (existing?.workspaceId === workspaceId && existing.matchId === id) return m;
-    }
-    must(
-      m.revision === revision,
-      'This match changed in another tab. Refresh the match before continuing.',
-    );
-    let inns = await db.innings
-      .where({ workspaceId })
-      .filter((i) => i.matchId === id)
-      .toArray();
-    inns.sort((a, b) => a.number - b.number);
-    let evs = await db.events
-      .where({ workspaceId })
-      .filter((e) => e.matchId === id)
-      .toArray();
-    evs.sort((a, b) => a.seq - b.seq);
-    const states = matchStates(m, inns, evs);
-    if (action.type === 'reopen') {
-      must(m.status === 'completed', 'Match is not finalized.');
-      m.status = 'live';
-    } else {
-      must(m.status !== 'completed', 'Reopen this match before editing.');
-      if (action.type === 'finalize') {
-        must(states.length === 2 && states[1].done, 'Finish both innings first.');
-        m.status = 'completed';
-      } else if (action.type === 'startChase') {
-        must(inns.length === 1 && states[0].done, 'First innings must be complete.');
-        const inn = { ...action.opening, id: uuid(), workspaceId, matchId: id, number: 2 };
-        replay(m, inn, [], states[0].runs + 1);
-        await db.innings.add(inn);
-        await queueSyncChange(workspaceId, 'innings', inn.id, inn);
+      const m = await db.matches.get(id);
+      must(m?.workspaceId === workspaceId && !m.deletedAt, 'Match missing.');
+      if (action.type === 'finalize' && m.status === 'completed') return m;
+      if (action.type === 'event') {
+        const existing = await db.events.get(action.event.id);
+        if (existing?.workspaceId === workspaceId && existing.matchId === id) return m;
+      }
+      must(
+        m.revision === revision,
+        'This match changed in another tab. Refresh the match before continuing.',
+      );
+      let inns = await db.innings
+        .where({ workspaceId })
+        .filter((i) => i.matchId === id)
+        .toArray();
+      inns.sort((a, b) => a.number - b.number);
+      let evs = await db.events
+        .where({ workspaceId })
+        .filter((e) => e.matchId === id)
+        .toArray();
+      evs.sort((a, b) => a.seq - b.seq);
+      const states = matchStates(m, inns, evs);
+      if (action.type === 'start' || action.type === 'cancel' || action.type === 'reschedule') {
+        must(m.status === 'upcoming', 'Only scheduled matches can be changed here.');
+        if (action.type === 'reschedule') {
+          must(Date.parse(action.scheduledAt) > Date.now(), 'Choose a future date and time.');
+          m.scheduledAt = action.scheduledAt;
+          m.date = action.scheduledAt.slice(0, 10);
+        } else m.status = action.type === 'start' ? 'live' : 'cancelled';
+      } else if (action.type === 'reopen') {
+        must(m.status === 'completed', 'Match is not finalized.');
         m.status = 'live';
-      } else if (action.type === 'rewind' || action.type === 'undo') {
-        const selected =
-          action.type === 'undo'
-            ? [...evs].reverse().find((e) => e.type === 'delivery')
-            : evs.find((e) => e.id === action.eventId);
-        must(selected, 'No delivery to reverse.');
-        const removed = evs.filter((e) => e.seq >= selected.seq);
-        const audit = {
-          id: uuid(),
-          workspaceId,
-          matchId: id,
-          at: new Date().toISOString(),
-          action: action.type,
-          events: removed,
-          innings: inns,
-          reason: action.reason || 'Scorer correction',
-        };
-        await db.audits.add(audit);
-        await queueSyncChange(workspaceId, 'audits', audit.id, audit);
-        for (const event of removed)
-          await queueSyncChange(workspaceId, 'events', event.id, event, true);
-        const selectedInning = inns.find((i) => i.id === selected.inningsId);
-        const removedInnings = inns.filter((i) => i.number > selectedInning.number);
-        for (const inning of removedInnings)
-          await queueSyncChange(workspaceId, 'innings', inning.id, inning, true);
-        await db.events.bulkDelete(removed.map((e) => e.id));
-        await db.innings.bulkDelete(
-          inns.filter((i) => i.number > selectedInning.number).map((i) => i.id),
-        );
-        m.status = 'live';
-      } else if (action.type === 'event') {
-        if (await db.events.get(action.event.id)) return m;
-        const inn = inns.at(-1);
-        const e = {
-          ...action.event,
-          workspaceId,
-          matchId: id,
-          inningsId: inn.id,
-          seq: (evs.at(-1)?.seq || 0) + 1,
-        };
-        replay(
-          m,
-          inn,
-          [...evs.filter((x) => x.inningsId === inn.id), e],
-          inns.length === 2 ? states[0].runs + 1 : null,
-        );
-        await db.events.add(e);
-        await queueSyncChange(workspaceId, 'events', e.id, e);
-        m.status = 'live';
-      } else throw new Error('Unknown match action.');
-    }
-    m.revision++;
-    await db.matches.put(m);
-    await queueSyncChange(workspaceId, 'matches', m.id, m);
-    return m;
+      } else {
+        must(m.status === 'live', 'Start or reopen this match before scoring.');
+        if (action.type === 'finalize') {
+          must(states.length === 2 && states[1].done, 'Finish both innings first.');
+          m.status = 'completed';
+        } else if (action.type === 'startChase') {
+          must(inns.length === 1 && states[0].done, 'First innings must be complete.');
+          const inn = { ...action.opening, id: uuid(), workspaceId, matchId: id, number: 2 };
+          replay(m, inn, [], states[0].runs + 1);
+          await db.innings.add(inn);
+          await queueSyncChange(workspaceId, 'innings', inn.id, inn);
+          m.status = 'live';
+        } else if (action.type === 'rewind' || action.type === 'undo') {
+          const selected =
+            action.type === 'undo'
+              ? [...evs].reverse().find((e) => e.type === 'delivery')
+              : evs.find((e) => e.id === action.eventId);
+          must(selected, 'No delivery to reverse.');
+          const removed = evs.filter((e) => e.seq >= selected.seq);
+          const audit = {
+            id: uuid(),
+            workspaceId,
+            matchId: id,
+            at: new Date().toISOString(),
+            action: action.type,
+            events: removed,
+            innings: inns,
+            reason: action.reason || 'Scorer correction',
+          };
+          await db.audits.add(audit);
+          await queueSyncChange(workspaceId, 'audits', audit.id, audit);
+          for (const event of removed)
+            await queueSyncChange(workspaceId, 'events', event.id, event, true);
+          const selectedInning = inns.find((i) => i.id === selected.inningsId);
+          const removedInnings = inns.filter((i) => i.number > selectedInning.number);
+          for (const inning of removedInnings)
+            await queueSyncChange(workspaceId, 'innings', inning.id, inning, true);
+          await db.events.bulkDelete(removed.map((e) => e.id));
+          await db.innings.bulkDelete(
+            inns.filter((i) => i.number > selectedInning.number).map((i) => i.id),
+          );
+          m.status = 'live';
+        } else if (action.type === 'event') {
+          if (await db.events.get(action.event.id)) return m;
+          const inn = inns.at(-1);
+          const e = {
+            ...action.event,
+            workspaceId,
+            matchId: id,
+            inningsId: inn.id,
+            seq: (evs.at(-1)?.seq || 0) + 1,
+          };
+          replay(
+            m,
+            inn,
+            [...evs.filter((x) => x.inningsId === inn.id), e],
+            inns.length === 2 ? states[0].runs + 1 : null,
+          );
+          await db.events.add(e);
+          await queueSyncChange(workspaceId, 'events', e.id, e);
+          m.status = 'live';
+        } else throw new Error('Unknown match action.');
+      }
+      m.revision++;
+      await db.matches.put(m);
+      await queueSyncChange(workspaceId, 'matches', m.id, m);
+      return m;
     },
   );
 }
@@ -680,7 +710,7 @@ export function validateBackup(b) {
   for (const m of b.matches) {
     validateSetup(m);
     must(
-      ['upcoming', 'live', 'completed'].includes(m.status) &&
+      ['upcoming', 'live', 'completed', 'cancelled'].includes(m.status) &&
         Number.isInteger(m.revision) &&
         m.revision >= 0,
       'Invalid match state.',
@@ -723,7 +753,6 @@ export function validateBackup(b) {
       has('matches', a.matchId) && Array.isArray(a.events) && Array.isArray(a.innings),
       'Invalid audit.',
     );
-  must(b.drafts.length <= 1, 'Only one active setup draft is supported.');
   for (const d of b.drafts) {
     must(
       Number.isInteger(d.step) &&
@@ -774,8 +803,7 @@ export async function importBackup(workspaceId, backup) {
             : {}),
         }));
         await db[t].bulkAdd(imported);
-        for (const record of imported)
-          await queueSyncChange(workspaceId, t, record.id, record);
+        for (const record of imported) await queueSyncChange(workspaceId, t, record.id, record);
       }
       await db.workspaces.put({ ...b.workspace, id: workspaceId });
     },
@@ -834,6 +862,43 @@ export async function clearAccountWorkspace(workspaceId, signOutToken) {
       await db.workspaces.delete(workspaceId);
       const active = await db.appState.get('active-workspace');
       if (active?.workspaceId === workspaceId) await db.appState.delete(active.id);
+    },
+  );
+}
+
+// Preserve local snapshots and cloud tombstones; statistics use only active records.
+export async function deleteMatch(workspaceId, id) {
+  return db.transaction(
+    'rw',
+    db.matches,
+    db.innings,
+    db.events,
+    db.audits,
+    db.syncMeta,
+    db.pendingChanges,
+    async () => {
+      const meta = await db.syncMeta.get(workspaceId);
+      must(!meta?.teamId || meta.role === 'owner', 'Only the account owner can delete matches.');
+      const match = await db.matches.get(id);
+      must(match?.workspaceId === workspaceId && !match.deletedAt, 'Match missing.');
+      const deletedAt = new Date().toISOString();
+      for (const table of ['matches', 'innings', 'events', 'audits']) {
+        const records =
+          table === 'matches'
+            ? [match]
+            : await db[table]
+                .where({ workspaceId })
+                .filter((r) => r.matchId === id)
+                .toArray();
+        for (const record of records) {
+          const tombstone = { ...record, deletedAt };
+          await db[table].put(tombstone);
+          // The parent tombstone hides the whole match on every device. Do not
+        // independently delete children: a parent revision conflict must never
+        // leave a remote live match with missing deliveries.
+        if (table === 'matches') await queueSyncChange(workspaceId, table, record.id, tombstone, true);
+        }
+      }
     },
   );
 }

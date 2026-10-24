@@ -1,3 +1,9 @@
+import {
+  resetIpLimiter,
+  resetAccountLimiter,
+  checkRateLimit,
+  getClientIp,
+} from '../../../../../lib/server/rateLimit';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '../../../../../lib/server/db';
@@ -12,6 +18,8 @@ import {
  * Body: { teamId, token, newPassword, confirmPassword }
  */
 export async function POST(req) {
+  const limited = await checkRateLimit(resetIpLimiter, getClientIp(req));
+  if (limited) return limited;
   let body;
   try {
     body = await req.json();
@@ -33,6 +41,8 @@ export async function POST(req) {
   await connectDB();
 
   const normalizedTeamId = normalizeLoginTeamId(teamId);
+  const accountLimit = await checkRateLimit(resetAccountLimiter, normalizedTeamId);
+  if (accountLimit) return accountLimit;
   const account = await TeamAccount.findOne({
     recoveryTokenExpiry: { $gt: new Date() },
     $or: [

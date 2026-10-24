@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState, useRef } from 'react';
 import { FileText } from 'lucide-react';
 import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
@@ -21,8 +22,67 @@ export default function Match({ w, data, run, error }) {
   if (!m)
     return (
       <p>
-        Match not found on this device. <a href={`${base}/`}>View matches</a>
+        Match not found on this device. <Link href={`${base}/`}>View matches</Link>
       </p>
+    );
+  if (m.status === 'upcoming' || m.status === 'cancelled')
+    return (
+      <section className="card">
+        <span className="match-status">{m.status === 'cancelled' ? 'Cancelled' : 'Scheduled'}</span>
+        <h2>{m.teams.map((t) => t.name).join(' vs ')}</h2>
+        <p>
+          {new Date(m.scheduledAt || m.date).toLocaleString()} ? {m.rules.overs} overs ?{' '}
+          {m.venue || 'Venue to be confirmed'}
+        </p>
+        {m.status === 'upcoming' && (
+          <>
+            <Field
+              label="Reschedule start"
+              type="datetime-local"
+              onChange={(e) => setSelection(e.target.value)}
+            />
+            <div className="actions">
+              <Button
+                onClick={() => run(() => changeMatch(w.id, m.id, m.revision, { type: 'start' }))}
+              >
+                Start match
+              </Button>
+              <Button
+                secondary
+                disabled={!selection}
+                onClick={() =>
+                  run(() =>
+                    changeMatch(w.id, m.id, m.revision, {
+                      type: 'reschedule',
+                      scheduledAt: new Date(selection).toISOString(),
+                    }),
+                  )
+                }
+              >
+                Save schedule
+              </Button>
+              <Button secondary danger onClick={() => setSheet('cancel')}>
+                Cancel match
+              </Button>
+            </div>
+          </>
+        )}
+        {sheet === 'cancel' && (
+          <Sheet title="Cancel this match?" close={() => setSheet(null)}>
+            <p>{m.teams.map((t) => t.name).join(' vs ')} will be marked cancelled.</p>
+            <Button
+              danger
+              onClick={async () => {
+                if (await run(() => changeMatch(w.id, m.id, m.revision, { type: 'cancel' })))
+                  setSheet(null);
+              }}
+            >
+              Confirm cancellation
+            </Button>
+          </Sheet>
+        )}
+        <Link href="/app/matches/">All matches</Link>
+      </section>
     );
   const inns = data.innings.filter((i) => i.matchId === id).sort((a, b) => a.number - b.number),
     events = data.events.filter((e) => e.matchId === id).sort((a, b) => a.seq - b.seq);

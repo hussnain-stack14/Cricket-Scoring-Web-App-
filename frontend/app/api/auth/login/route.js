@@ -1,3 +1,4 @@
+import { loginAttempt, lockedResponse } from '../../../../backend/loginAttempts.js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -40,6 +41,8 @@ export async function POST(req) {
     await connectDB();
 
     const normalizedTeamId = normalizeLoginTeamId(teamId);
+    const before = await loginAttempt(normalizedTeamId);
+    if (before.blocked) return lockedResponse(before.retryAfter);
     const account = await TeamAccount.findOne({
       $or: [
         { loginTeamId: normalizedTeamId },
@@ -48,10 +51,12 @@ export async function POST(req) {
     });
 
     // Constant-time comparison to resist timing attacks
-    const dummyHash = '$2b$12$invalidhashpaddingtoresisttimingattacks.invalidsalt.xxx';
+    const dummyHash = '$2b$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW';
     const hash = account?.passwordHash ?? dummyHash;
     const match = await bcrypt.compare(password, hash);
 
+    const attempt = await loginAttempt(normalizedTeamId, !!account && match);
+    if (attempt.blocked) return lockedResponse(attempt.retryAfter);
     if (!account || !match) {
       return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
     }

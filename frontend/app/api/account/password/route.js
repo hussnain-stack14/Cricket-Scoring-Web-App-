@@ -19,9 +19,6 @@ export async function PATCH(req) {
     return NextResponse.json({ error: 'Request origin could not be verified.' }, { status: 403 });
   }
 
-  const limited = await checkRateLimit(accountSecurityIpLimiter, getClientIp(req));
-  if (limited) return limited;
-
   const session = await getIronSession(req, NextResponse.json(null), getSessionOptions());
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to change account credentials.' }, { status: 401 });
@@ -32,6 +29,9 @@ export async function PATCH(req) {
       { status: 403 },
     );
   }
+
+  const limited = await checkRateLimit(accountSecurityIpLimiter, getClientIp(req));
+  if (limited) return limited;
 
   const account = await getCurrentSessionAccount(session);
   if (!account) {

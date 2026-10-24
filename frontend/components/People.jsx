@@ -1,11 +1,14 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
 import { deleteRecord, saveRecord, saveTeam } from '../lib/db';
 import { Avatar, Button, Empty, Field, Select, Sheet, playerLabel } from './ui';
 import TeamStatistics from './TeamStatistics';
-export default function People({ screen, w, data, run, error }) {
+export default function People({ screen, w, data, run, error, session }) {
   const base = '/app';
+  const canDelete = !session || session.role === 'owner';
+  const [sort, setSort] = useState('name');
   const isTeam = screen === 'teams',
     [edit, setEdit] = useState(null),
     [statisticsTeam, setStatisticsTeam] = useState(null),
@@ -23,6 +26,16 @@ export default function People({ screen, w, data, run, error }) {
         ((!role || p.role === role) &&
           (!team || data.memberships.some((m) => m.playerId === p.id && m.teamId === team)))),
   );
+  rows.sort((a, b) =>
+    sort === 'role'
+      ? (a.role || '').localeCompare(b.role || '') || a.name.localeCompare(b.name)
+      : a.name.localeCompare(b.name),
+  );
+  const hasHistory =
+    edit?.id &&
+    data.matches.some((m) =>
+      m.teams.some((t) => (isTeam ? t.id === edit.id : t.squad.some((p) => p.id === edit.id))),
+    );
   if (isTeam && statisticsTeam) {
     return (
       <TeamStatistics team={statisticsTeam} data={data} onBack={() => setStatisticsTeam(null)} />
@@ -72,6 +85,15 @@ export default function People({ screen, w, data, run, error }) {
           />
         </div>
       )}
+      <Select
+        label="Sort by"
+        value={sort}
+        onChange={(e) => setSort(e.target.value)}
+        options={[
+          { id: 'name', name: 'Name' },
+          { id: 'role', name: 'Role' },
+        ]}
+      />
       <label className="check">
         <input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
         Show archived {screen}
@@ -84,9 +106,9 @@ export default function People({ screen, w, data, run, error }) {
               {isTeam ? (
                 <strong>{p.name}</strong>
               ) : (
-                <a className="name-link" href={`${base}/player/?id=${p.id}`}>
+                <Link className="name-link" href={`${base}/player/?id=${p.id}`}>
                   {p.name}
-                </a>
+                </Link>
               )}
               <p>
                 {isTeam
@@ -260,7 +282,7 @@ export default function People({ screen, w, data, run, error }) {
                 )}
                 <Button>Save {isTeam ? 'team' : 'player'}</Button>
               </form>
-              {edit.id && (
+              {edit.id && canDelete && (
                 <>
                   <Button
                     secondary
@@ -276,7 +298,7 @@ export default function People({ screen, w, data, run, error }) {
                   >
                     {edit.archived ? 'Restore' : 'Archive'} {isTeam ? 'team' : 'player'}
                   </Button>
-                  <Button secondary danger onClick={() => setDeleting(true)}>
+                  <Button secondary danger disabled={hasHistory} onClick={() => setDeleting(true)}>
                     Delete {isTeam ? 'team' : 'player'}
                   </Button>
                 </>

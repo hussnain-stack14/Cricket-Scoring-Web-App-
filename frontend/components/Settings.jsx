@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import {
   ArrowLeft,
@@ -120,7 +121,7 @@ export default function Settings({
       {!selectedCategory ? (
         <div className="settings-home">
           <section className="settings-shortcuts" aria-label="Scorebook">
-            <a className="settings-menu-row" href="/app/statistics/">
+            <Link className="settings-menu-row" href="/app/statistics/">
               <span className="settings-menu-icon">
                 <SlidersHorizontal size={19} />
               </span>
@@ -129,8 +130,8 @@ export default function Settings({
                 <small>Explore team and player performance</small>
               </span>
               <ChevronRight size={18} />
-            </a>
-            <a className="settings-menu-row" href="/app/reports/">
+            </Link>
+            <Link className="settings-menu-row" href="/app/reports/">
               <span className="settings-menu-icon">
                 <Info size={19} />
               </span>
@@ -139,7 +140,7 @@ export default function Settings({
                 <small>Scorecards and match exports</small>
               </span>
               <ChevronRight size={18} />
-            </a>
+            </Link>
           </section>
           <section className="settings-category-list" aria-label="Settings categories">
             {categories.map(({ id, title, description, Icon }) => (
@@ -188,13 +189,13 @@ export default function Settings({
                   onSync={onSync}
                 />
                 <div className="actions">
-                  <a className="button secondary" href="/account/settings/">
+                  <Link className="button secondary" href="/account/settings/">
                     Account settings
-                  </a>
+                  </Link>
                   {session.role === 'owner' && (
-                    <a className="button secondary" href="/account/settings/#security">
+                    <Link className="button secondary" href="/account/settings/#security">
                       Account security
-                    </a>
+                    </Link>
                   )}
                   <SignOutAction workspaceId={workspaceId} />
                 </div>
@@ -208,15 +209,15 @@ export default function Settings({
                 <div
                   style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}
                 >
-                  <a className="button primary" href="/account/">
+                  <Link className="button primary" href="/account/">
                     Manage Team Account & Sync
-                  </a>
-                  <a className="button secondary" href="/account/login/">
+                  </Link>
+                  <Link className="button secondary" href="/account/login/">
                     Sign in
-                  </a>
-                  <a className="button secondary" href="/account/register/">
+                  </Link>
+                  <Link className="button secondary" href="/account/register/">
                     Create Account
-                  </a>
+                  </Link>
                 </div>
               </>
             )}
@@ -246,12 +247,12 @@ export default function Settings({
         <section className="card">
           <h2>Account security</h2>
           <p>Manage your team ID, members, and account access in the secure account area.</p>
-          <a
+          <Link
             className="button secondary"
             href={session ? '/account/settings/#security' : '/account/login/'}
           >
             {session ? 'Open account security' : 'Sign in to manage security'}
-          </a>
+          </Link>
         </section>
       )}
       {selectedCategory === 'sync' && (
@@ -262,9 +263,9 @@ export default function Settings({
             Retry offline preparation
           </Button>
           {offline.installed ? (
-            <a className="button" href="/app/">
+            <Link className="button" href="/app/">
               Open Crease
-            </a>
+            </Link>
           ) : (
             <Button onClick={offline.install}>Install Crease</Button>
           )}

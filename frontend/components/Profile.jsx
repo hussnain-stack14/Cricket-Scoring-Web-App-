@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import { career } from '../lib/engine';
 import { Avatar, Select } from './ui';
@@ -11,7 +12,7 @@ export default function Profile({ data }) {
   if (!p)
     return (
       <p>
-        Player not found on this device. <a href={`${base}/players/`}>View players</a>
+        Player not found on this device. <Link href={`${base}/players/`}>View players</Link>
       </p>
     );
   const stats = career(id, data.matches, data.innings, data.events, format);
@@ -79,12 +80,12 @@ export default function Profile({ data }) {
               (format === 'all' || String(m.rules.overs) === format),
           )
           .map((m) => (
-            <a className="list-link" key={m.id} href={`${base}/match/?id=${m.id}`}>
+            <Link className="list-link" key={m.id} href={`${base}/match/?id=${m.id}`}>
               <strong>{m.teams.map((t) => t.name).join(' vs ')}</strong>
               <small>
                 {m.date} · {m.status}
               </small>
-            </a>
+            </Link>
           ))
       ) : (
         <div className="stats-grid">

@@ -1,14 +1,15 @@
 'use client';
+import Link from 'next/link';
 import { Shield } from 'lucide-react';
 import SignOutAction from './SignOutAction';
 
 export default function TeamAccountMenu({ session, workspaceId }) {
   if (!session) {
     return (
-      <a href="/account/login/" className="sidebar-link">
+      <Link href="/account/login/" className="sidebar-link">
         <Shield size={20} strokeWidth={1.9} />
         <span>Sign in / Sync</span>
-      </a>
+      </Link>
     );
   }
 
@@ -18,15 +19,15 @@ export default function TeamAccountMenu({ session, workspaceId }) {
         <strong title={session.teamName}>{session.teamName}</strong>
         <small>{session.teamId}</small>
       </div>
-      <a href="/account/settings/" className="sidebar-link">
+      <Link href="/account/settings/" className="sidebar-link">
         <Shield size={18} />
         <span>Account settings</span>
-      </a>
+      </Link>
       {session.role === 'owner' && (
-        <a href="/account/settings/#security" className="sidebar-link">
+        <Link href="/account/settings/#security" className="sidebar-link">
           <Shield size={18} />
           <span>Security</span>
-        </a>
+        </Link>
       )}
       <SignOutAction workspaceId={workspaceId} compact />
     </div>

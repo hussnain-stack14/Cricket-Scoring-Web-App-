@@ -1,5 +1,28 @@
 import mongoose from 'mongoose';
 
+const LoginAttemptSchema = new mongoose.Schema(
+  {
+    _id: String,
+    failures: Number,
+    lockedUntil: Number,
+    revision: Number,
+  },
+  { collection: 'loginAttempts' },
+);
+export const LoginAttempt =
+  mongoose.models.LoginAttempt || mongoose.model('LoginAttempt', LoginAttemptSchema);
+
+const RateLimitSchema = new mongoose.Schema(
+  {
+    _id: String,
+    count: Number,
+    expiresAt: Date,
+  },
+  { collection: 'rateLimits' },
+);
+RateLimitSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+export const RateLimit = mongoose.models.RateLimit || mongoose.model('RateLimit', RateLimitSchema);
+
 // ─── TeamAccount ─────────────────────────────────────────────────────────────
 // One document per registered team account.
 const TeamAccountSchema = new mongoose.Schema(
