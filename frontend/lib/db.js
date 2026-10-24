@@ -399,7 +399,13 @@ export async function createMatch(
             .toArray()
         : [];
       for (const draft of drafts) {
-        await queueSyncChange(workspaceId, 'drafts', draft.id, draft, true);
+        await queueSyncChange(
+          workspaceId,
+          'drafts',
+          draft.id,
+          { ...draft, consumedByMatchId: m.id },
+          true,
+        );
         await db.drafts.delete(draft.id);
       }
       return m;
@@ -948,6 +954,11 @@ export async function clearAccountWorkspace(workspaceId, signOutToken) {
         throw new Error('The account cleanup could not be verified. Retry sign out.');
       if (meta.syncLock?.expiresAt > Date.now())
         throw new Error('Synchronization is still running. Retry local cleanup shortly.');
+      must(meta.signOutLock.expiresAt > Date.now(), 'Sign out expired. Retry synchronization.');
+      must(
+        !(await db.pendingChanges.where({ workspaceId }).count()) && !meta.conflicts?.length,
+        'Unsynced changes must be acknowledged before removing local records.',
+      );
       for (const table of tables) await db[table].where({ workspaceId }).delete();
       await db.pendingChanges.where({ workspaceId }).delete();
       await db.syncMeta.delete(workspaceId);

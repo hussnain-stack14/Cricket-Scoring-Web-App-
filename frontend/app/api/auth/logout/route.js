@@ -8,6 +8,14 @@ import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 export async function POST(req) {
   const res = NextResponse.json({ ok: true });
   const session = await getIronSession(req, res, getSessionOptions());
+  if (
+    req.headers.get('x-crease-workspace') &&
+    req.headers.get('x-crease-workspace') !== session.teamId
+  )
+    return NextResponse.json(
+      { error: 'The signed-in account changed. Cancel and sign in to the original account.' },
+      { status: 409 },
+    );
   try {
     const account = await getCurrentSessionAccount(session);
     if (session.sessionId) {

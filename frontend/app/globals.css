@@ -5339,3 +5339,42 @@ pre {
     animation: none !important;
   }
 }
+/* Local player leaderboards */
+.leaderboards [role=tablist] { display:flex; gap:6px; flex-wrap:wrap; padding:5px; background:#edf2ee; border-radius:12px; margin-bottom:18px; }
+.leaderboards [role=tab] { flex:1; min-height:44px; padding:9px 12px; border:0; border-radius:9px; background:transparent; color:#355b44; font:inherit; cursor:pointer; }
+.leaderboards [aria-selected=true] { background:white; box-shadow:0 2px 5px #173b2412; font-weight:700; }
+.ranking-filters { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:14px 0; }
+.ranking-filters .field { margin:0; }
+.ranking-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:20px 0 12px; }
+.ranking-heading h2 { font-size:20px; margin:0; }
+.ranking-heading>span { font-size:12px; color:#687a6d; }
+.ranking-qualification { margin:12px 0; font-size:13px; }
+.ranking-qualification summary { cursor:pointer; min-height:32px; }
+.ranking-desktop { border:1px solid #e0e8e1; border-radius:14px; overflow:auto; background:white; }
+.ranking-desktop table { width:100%; border-collapse:collapse; }
+.ranking-desktop th,.ranking-desktop td { padding:13px 10px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; }
+.ranking-desktop th:first-child,.ranking-desktop td:first-child { width:55px; text-align:center; }
+.ranking-desktop th:nth-child(2),.ranking-desktop td:nth-child(2) { text-align:left; width:26%; min-width:140px; overflow-wrap:anywhere; }
+.ranking-desktop a { color:#1b6840; font-weight:650; }
+.ranking-desktop small { display:block; color:#718078; font-size:10px; }
+.rank-badge { display:inline-grid; place-items:center; width:30px; height:30px; border-radius:50%; font-weight:750; color:#486052; background:#f0f4f1; }
+.rank-1 { background:#faf0cd; color:#80600e; } .rank-2 { background:#e9edf0; color:#52616c; } .rank-3 { background:#f6e8db; color:#815934; }
+.ranking-mobile { display:none; }
+.leaderboards [role=tabpanel] { animation:surface-in 160ms ease-out; }
+.ranking-mobile details { transition:box-shadow 150ms ease; }
+.ranking-mobile details:hover { box-shadow:0 3px 12px #183c2410; }
+@media(max-width:767px) {
+ .ranking-desktop { display:none; } .ranking-mobile { display:grid; gap:10px; }
+ .ranking-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .ranking-filters select { min-width:0; width:100%; }
+ .leaderboards [role=tab] { flex:1 1 40%; font-size:13px; }
+ .ranking-mobile details { padding:12px; background:white; border:1px solid #e0e8e1; border-radius:12px; min-width:0; }
+ .ranking-mobile summary { display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; min-height:44px; }
+ .ranking-player { flex:1; min-width:0; overflow-wrap:anywhere; font-size:13px; font-weight:650; }
+ .ranking-mobile small { display:block; font-size:10px; font-weight:400; color:#718078; margin-top:4px; }
+ .ranking-primary { text-align:right; font-weight:750; color:#1c633d; max-width:95px; font-variant-numeric:tabular-nums; }
+ .ranking-mobile dl { display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:12px; }
+ .ranking-mobile dd { margin:3px 0 0; font-weight:700; } .ranking-mobile dt { color:#718078; }
+ .ranking-mobile details>a { display:block; margin-top:16px; color:#1c633d; font-size:12px; }
+}
+@media(prefers-reduced-motion:reduce) { .leaderboards [role=tabpanel] { animation:none!important; } .ranking-mobile details { transition:none; } }

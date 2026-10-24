@@ -72,7 +72,15 @@ export function Sheet({ title, children, close }) {
     return () => d.close();
   }, []);
   return (
-    <dialog aria-labelledby={titleId} ref={ref} onCancel={close} className="sheet">
+    <dialog
+      aria-labelledby={titleId}
+      ref={ref}
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+      className="sheet"
+    >
       <div className="sheet-heading">
         <h2 id={titleId}>{title}</h2>
         <button className="icon-button" aria-label="Close" onClick={close}>

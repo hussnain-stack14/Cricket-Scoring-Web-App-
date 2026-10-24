@@ -29,6 +29,17 @@ export async function GET(req) {
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });
   }
+  if (
+    req.headers.get('x-crease-workspace') &&
+    req.headers.get('x-crease-workspace') !== session.teamId
+  )
+    return NextResponse.json(
+      {
+        error:
+          'The signed-in account changed. Sign in to the original account to sync these records.',
+      },
+      { status: 409 },
+    );
   if (!(await getCurrentSessionAccount(session))) {
     return NextResponse.json(
       { error: 'Your session has expired. Sign in again.' },

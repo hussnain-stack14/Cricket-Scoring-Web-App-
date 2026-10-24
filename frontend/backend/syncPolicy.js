@@ -1,10 +1,16 @@
 import { validateMatchStart } from '../lib/matchLifecycle.js';
-export function syncPolicyError({ table, deleted, data }, existing, role) {
+export function syncPolicyError(
+  { table, deleted, data },
+  existing,
+  role,
+  { consumedDraft = false } = {},
+) {
   if (!['owner', 'scorer'].includes(role)) return 'Viewers cannot push changes.';
   if (
     deleted &&
     ['matches', 'players', 'teams', 'drafts', 'memberships'].includes(table) &&
-    role !== 'owner'
+    role !== 'owner' &&
+    !(table === 'drafts' && consumedDraft)
   )
     return 'Only the account owner can delete these records.';
   if (

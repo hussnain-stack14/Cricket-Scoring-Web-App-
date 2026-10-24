@@ -6,6 +6,7 @@ const SESSION_TIMEOUT_MS = 4000;
 const recordKey = (table, recordId) => `${table}:${recordId}`;
 const pendingKey = (workspaceId, table, recordId) => `${workspaceId}:${table}:${recordId}`;
 let sessionRequest;
+const syncJobs = new Map();
 
 export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
   if (sessionRequest) return sessionRequest;
@@ -95,7 +96,7 @@ export async function pushChanges(workspaceId) {
       const res = await fetchWithTimeout('/api/sync/push', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Crease-Workspace': meta.teamId },
         body: JSON.stringify({
           changes: batch.map((change) => ({
             table: change.table,
@@ -109,7 +110,10 @@ export async function pushChanges(workspaceId) {
       });
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
-        throw new Error(error.error || `Push failed: ${res.status}`);
+        throw Object.assign(
+          new Error(error.error || `Sync service unavailable (${res.status}). Retry shortly.`),
+          { status: res.status },
+        );
       }
       result = await res.json();
       if (!Array.isArray(result.applied) || !Array.isArray(result.rejected))
@@ -119,7 +123,7 @@ export async function pushChanges(workspaceId) {
         syncStatus: 'pending',
         lastError: error instanceof Error ? error.message : 'Push failed.',
       });
-      return { pushed, rejected, error: error.message };
+      return { pushed, rejected, error: error.message, httpStatus: error.status };
     }
 
     await db.transaction('rw', db.pendingChanges, db.syncMeta, async () => {
@@ -128,9 +132,17 @@ export async function pushChanges(workspaceId) {
       const conflicts = [...(currentMeta.conflicts ?? [])];
       for (const applied of result.applied) {
         const change = batch.find(
-          (item) => item.recordId === applied.recordId && item.changeId === applied.changeId,
+          (item) =>
+            item.table === applied.table &&
+            item.recordId === applied.recordId &&
+            item.changeId === applied.changeId,
         );
-        if (!change || !Number.isInteger(applied.revision)) continue;
+        if (
+          !change ||
+          !Number.isInteger(applied.revision) ||
+          applied.revision <= change.baseRevision
+        )
+          continue;
         revisions[recordKey(change.table, change.recordId)] = applied.revision;
         const current = await db.pendingChanges.get(change.id);
         if (current?.changeId === change.changeId) await db.pendingChanges.delete(change.id);
@@ -169,7 +181,8 @@ export async function pushChanges(workspaceId) {
         conflicts,
         lastPush: result.pushedAt,
         syncStatus: rejected.length ? 'conflict' : 'pending',
-        lastError: null,
+        lastError: rejected[0]?.reason || null,
+        rejections: rejected.map(({ table, recordId, reason }) => ({ table, recordId, reason })),
       });
     });
   }
@@ -187,10 +200,14 @@ export async function pullChanges(workspaceId) {
   try {
     const res = await fetchWithTimeout(`/api/sync/pull?since=${encodeURIComponent(since)}`, {
       credentials: 'include',
+      headers: { 'X-Crease-Workspace': meta.teamId },
     });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new Error(error.error || `Pull failed: ${res.status}`);
+      throw Object.assign(
+        new Error(error.error || `Sync service unavailable (${res.status}). Retry shortly.`),
+        { status: res.status },
+      );
     }
     result = await res.json();
     if (!Array.isArray(result.records) || typeof result.pulledAt !== 'string')
@@ -200,7 +217,7 @@ export async function pullChanges(workspaceId) {
       syncStatus: 'pending',
       lastError: error instanceof Error ? error.message : 'Pull failed.',
     });
-    return { merged: 0, error: error.message };
+    return { merged: 0, error: error.message, httpStatus: error.status };
   }
 
   let merged = 0;
@@ -330,7 +347,15 @@ export async function resolveConflict(workspaceId, conflict, resolution) {
   );
 }
 
-export async function sync(workspaceId, { signOutToken, session: knownSession } = {}) {
+export function sync(workspaceId, options = {}) {
+  if (syncJobs.has(workspaceId)) return syncJobs.get(workspaceId);
+  const job = performSync(workspaceId, options).finally(() => {
+    if (syncJobs.get(workspaceId) === job) syncJobs.delete(workspaceId);
+  });
+  syncJobs.set(workspaceId, job);
+  return job;
+}
+async function performSync(workspaceId, { signOutToken, session: knownSession } = {}) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     await updateSyncMeta(workspaceId, { syncStatus: 'offline' });
     return { ok: false, status: 'offline', reason: 'offline' };
@@ -372,15 +397,22 @@ export async function sync(workspaceId, { signOutToken, session: knownSession } 
     }
     if (!session || !meta?.teamId || (session.workspaceKey || session.teamId) !== meta.teamId) {
       await updateSyncMeta(workspaceId, { syncStatus: 'unauthenticated' });
-      return { ok: false, status: 'unauthenticated', reason: 'unauthenticated', session };
+      return {
+        ok: false,
+        status: 'unauthenticated',
+        reason: 'unauthenticated',
+        session,
+        error: 'Sign in to the same account again. Your changes are still saved on this device.',
+      };
     }
 
     await updateSyncMeta(workspaceId, { syncStatus: 'syncing', lastError: null });
     const pushResult = await pushChanges(workspaceId);
-    const pullResult = await pullChanges(workspaceId);
+    const pullResult = pushResult.error ? { merged: 0 } : await pullChanges(workspaceId);
     const state = await getSyncState(workspaceId);
-    const status =
-      state.conflicts.length || pushResult.rejected?.length
+    const status = [401, 409].includes(pushResult.httpStatus || pullResult.httpStatus)
+      ? 'unauthenticated'
+      : state.conflicts.length || pushResult.rejected?.length
         ? 'conflict'
         : pushResult.error || pullResult.error
           ? 'attention'
@@ -389,6 +421,7 @@ export async function sync(workspaceId, { signOutToken, session: knownSession } 
             : 'synced';
     await updateSyncMeta(workspaceId, {
       syncStatus: status,
+      lastError: pushResult.error || pullResult.error || pushResult.rejected?.[0]?.reason || null,
       ...(status === 'synced'
         ? { lastSuccessfulSync: new Date().toISOString(), lastError: null }
         : {}),
@@ -398,8 +431,8 @@ export async function sync(workspaceId, { signOutToken, session: knownSession } 
       pushed: pushResult.pushed,
       merged: pullResult.merged,
       status,
-      error: pushResult.error || pullResult.error || null,
-      session,
+      error: pushResult.error || pullResult.error || pushResult.rejected?.[0]?.reason || null,
+      session: status === 'unauthenticated' ? null : session,
     };
   } finally {
     globalThis.clearInterval(heartbeat);
@@ -407,9 +440,11 @@ export async function sync(workspaceId, { signOutToken, session: knownSession } 
   }
 }
 
-export async function logoutTeamSession() {
+export async function logoutTeamSession(workspaceId) {
+  const meta = workspaceId ? await getSyncMeta(workspaceId) : null;
   const response = await fetchWithTimeout('/api/auth/logout', {
     method: 'POST',
+    headers: meta?.teamId ? { 'X-Crease-Workspace': meta.teamId } : {},
     credentials: 'include',
   });
   if (!response.ok) {
@@ -419,6 +454,7 @@ export async function logoutTeamSession() {
 }
 
 export async function beginSignOut(workspaceId) {
+  if (syncJobs.has(workspaceId)) await syncJobs.get(workspaceId);
   const token = crypto.randomUUID();
   await db.transaction('rw', db.syncMeta, async () => {
     const meta = await db.syncMeta.get(workspaceId);

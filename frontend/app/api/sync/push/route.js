@@ -49,6 +49,17 @@ export async function POST(req) {
   if (!session.teamId) {
     return NextResponse.json({ error: 'Sign in to sync your data.' }, { status: 401 });
   }
+  if (
+    req.headers.get('x-crease-workspace') &&
+    req.headers.get('x-crease-workspace') !== session.teamId
+  )
+    return NextResponse.json(
+      {
+        error:
+          'The signed-in account changed. Sign in to the original account to sync these records.',
+      },
+      { status: 409 },
+    );
   if (!(await getCurrentSessionAccount(session))) {
     return NextResponse.json(
       { error: 'Your session has expired. Sign in again.' },
@@ -124,7 +135,22 @@ export async function POST(req) {
           continue;
         }
       }
-      const policyError = syncPolicyError(change, existing, session.role);
+      let consumedDraft = false;
+      if (table === 'drafts' && deleted && data.consumedByMatchId) {
+        const match = await SyncRecord.findOne({
+          teamId: session.teamId,
+          table: 'matches',
+          recordId: data.consumedByMatchId,
+          deletedAt: null,
+        });
+        consumedDraft =
+          !!match &&
+          match.data?.teams?.[0]?.id === data.teamA &&
+          match.data?.teams?.[1]?.id === data.teamB &&
+          (!existing ||
+            (existing.data?.teamA === data.teamA && existing.data?.teamB === data.teamB));
+      }
+      const policyError = syncPolicyError(change, existing, session.role, { consumedDraft });
       if (policyError) {
         rejected.push(conflict(change, existing, policyError));
         continue;

@@ -1,5 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Sheet } from './ui';
+import { inspectSync } from '../lib/syncDiagnostics';
 import { LogOut } from 'lucide-react';
 import { clearAccountWorkspace, db, exportBackup } from '../lib/db';
 import {
@@ -13,7 +16,7 @@ import {
 } from '../lib/sync';
 
 const UNSYNCED_MESSAGE =
-  'Some changes are not yet synchronized. Connect to the internet and sync before signing out.';
+  'Your changes are saved on this device. The cloud could not be reached. Please retry when the connection is available.';
 
 export default function SignOutAction({ workspaceId, compact = false }) {
   const busyRef = useRef(false);
@@ -22,6 +25,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [reauthenticate, setReauthenticate] = useState(false);
   const [error, setError] = useState('');
   const [signOutToken, setSignOutToken] = useState(null);
   const [sessionInvalidated, setSessionInvalidated] = useState(false);
@@ -47,6 +51,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     setReady(false);
     setBlocked(false);
     setError('');
+    setReauthenticate(false);
     let token;
     try {
       const initialState = await getSyncState(workspaceId);
@@ -70,7 +75,13 @@ export default function SignOutAction({ workspaceId, compact = false }) {
         await cancelSignOut(workspaceId, token);
         setSignOutToken(null);
         setBlocked(true);
-        setError(UNSYNCED_MESSAGE);
+        setReauthenticate(result.status === 'unauthenticated');
+        setError(
+          result.error ||
+            (finalState.conflicts.length
+              ? 'Some records differ from the cloud. Review conflicts in account settings before signing out.'
+              : UNSYNCED_MESSAGE),
+        );
         return;
       }
       setReady(true);
@@ -142,8 +153,11 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     try {
       if (!(await renewSignOut(workspaceId, signOutToken)))
         throw new Error('Sign out expired. Retry synchronization before continuing.');
+      const state = await getSyncState(workspaceId);
+      if (state.pending || state.conflicts.length)
+        throw new Error('New changes are waiting. Sync again before signing out.');
       if (!sessionInvalidated) {
-        await logoutTeamSession();
+        await logoutTeamSession(workspaceId);
         setSessionInvalidated(true);
       }
       await clearAccountWorkspace(workspaceId, signOutToken);
@@ -187,8 +201,12 @@ export default function SignOutAction({ workspaceId, compact = false }) {
         <span>Sign out</span>
       </button>
       {open && (
-        <dialog className="signout-dialog" open aria-labelledby="signout-title">
-          <h2 id="signout-title">{ready ? 'Sign out of Crease?' : 'Check team synchronization'}</h2>
+        <Sheet
+          title={ready ? 'Sign out of Crease?' : 'Unsynced changes'}
+          close={() => {
+            if (!busy && !sessionInvalidated) void closeConfirmation();
+          }}
+        >
           {ready ? (
             <>
               <p>
@@ -203,7 +221,8 @@ export default function SignOutAction({ workspaceId, compact = false }) {
               <p>{busy ? 'Syncing changes before sign out…' : UNSYNCED_MESSAGE}</p>
               {pending > 0 && (
                 <p role="status">
-                  {pending} change{pending === 1 ? ' is' : 's are'} waiting to sync.
+                  You have {pending} change{pending === 1 ? '' : 's'} saved on this device that
+                  haven't reached the cloud.
                 </p>
               )}
             </>
@@ -212,6 +231,26 @@ export default function SignOutAction({ workspaceId, compact = false }) {
             <p role="alert" className="auth-error">
               {error}
             </p>
+          )}
+          {reauthenticate && <Link href="/account/login/">Sign in to the same account</Link>}
+          {blocked && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={async () => {
+                const report = await inspectSync(workspaceId);
+                const url = URL.createObjectURL(
+                  new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }),
+                );
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'crease-sync-diagnostics.json';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }}
+            >
+              Export sync diagnostics
+            </button>
           )}
           <div className="signout-actions">
             {ready ? (
@@ -231,7 +270,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
                   disabled={busy}
                 >
                   <LogOut size={15} />
-                  {busy ? 'Signing out…' : 'Sign Out & Remove Local Data'}
+                  {busy ? 'Signing out…' : 'Confirm Sign Out'}
                 </button>
               </>
             ) : (
@@ -239,7 +278,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
                 {blocked && (
                   <>
                     <button className="button" type="button" onClick={checkAndSync} disabled={busy}>
-                      Retry Sync
+                      Sync & Sign Out
                     </button>
                     <button
                       className="button secondary"
@@ -247,7 +286,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
                       onClick={downloadBackup}
                       disabled={busy}
                     >
-                      Export Offline Backup
+                      Export Backup
                     </button>
                   </>
                 )}
@@ -262,7 +301,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
               </>
             )}
           </div>
-        </dialog>
+        </Sheet>
       )}
     </>
   );
