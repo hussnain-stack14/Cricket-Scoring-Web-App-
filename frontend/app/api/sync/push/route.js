@@ -76,7 +76,9 @@ export async function POST(req) {
   const applied = [];
   const rejected = [];
 
-  for (const change of body.changes) {
+  for (const change of [...body.changes].sort(
+    (a, b) => Number(b?.table === 'matches') - Number(a?.table === 'matches'),
+  )) {
     const { table, recordId, data, baseRevision, changeId, deleted } = change ?? {};
     if (
       !ALLOWED_TABLES.has(table) ||
@@ -101,6 +103,26 @@ export async function POST(req) {
       if (existing?.lastChangeId === changeId) {
         applied.push({ table, recordId, changeId, revision: existing.revision });
         continue;
+      }
+      if (!deleted && ['innings', 'events'].includes(table) && data.matchId) {
+        const parent = await SyncRecord.findOne({
+          teamId: session.teamId,
+          table: 'matches',
+          recordId: data.matchId,
+        });
+        if (
+          (parent?.data?.startId && data.startId !== parent.data.startId) ||
+          (data.startId && (!parent || parent.data?.startId !== data.startId))
+        ) {
+          rejected.push(
+            conflict(
+              change,
+              existing,
+              'This record belongs to a different match start. Resolve the match conflict first.',
+            ),
+          );
+          continue;
+        }
       }
       const policyError = syncPolicyError(change, existing, session.role);
       if (policyError) {

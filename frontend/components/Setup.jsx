@@ -86,15 +86,18 @@ export default function Setup({ w, data, run, setError }) {
         return;
       }
 
+      if (schedule && !(Date.parse(draft.scheduledAt) > Date.now()))
+        throw new Error('Choose a future date and time.');
       const match = {
         teams: selectedTeams.map((team, index) => ({ ...team, squad: squads[index] })),
         rules: draft.rules,
         venue: draft.venue.trim(),
         date: draft.date,
         scheduledAt: schedule ? new Date(draft.scheduledAt).toISOString() : null,
-        firstBat,
-        toss: draft.toss,
-        decision: draft.decision,
+        firstBat: schedule ? 0 : firstBat,
+        toss: schedule ? null : draft.toss,
+        decision: schedule ? null : draft.decision,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
       if (schedule && !(Date.parse(match.scheduledAt) > Date.now()))
         throw new Error('Choose a future date and time.');
@@ -230,21 +233,58 @@ export default function Setup({ w, data, run, setError }) {
               value={draft.date}
               onChange={(event) => set('date', event.target.value)}
             />
-            <Select
-              label="Toss winner"
-              value={draft.toss}
-              onChange={(event) => set('toss', event.target.value)}
-              options={selectedTeams.map((team, index) => ({ id: String(index), name: team.name }))}
-            />
-            <Select
-              label="Decision"
-              value={draft.decision}
-              onChange={(event) => set('decision', event.target.value)}
-              options={[
-                { id: 'bat', name: 'Bat first' },
-                { id: 'field', name: 'Field first' },
-              ]}
-            />
+            {draft.step === 1 && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={schedule}
+                  onChange={(e) => set('scheduleForLater', e.target.checked)}
+                />
+                Schedule for later
+              </label>
+            )}
+            {schedule && (
+              <Field
+                label="Start date and time"
+                type="datetime-local"
+                value={draft.scheduledAt || ''}
+                onChange={(e) => set('scheduledAt', e.target.value)}
+              />
+            )}
+            {schedule && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={draft.rules.allowEarlyStart !== false}
+                  onChange={(e) =>
+                    set('rules', { ...draft.rules, allowEarlyStart: e.target.checked })
+                  }
+                />
+                Allow the owner to start early
+              </label>
+            )}
+            {!schedule && (
+              <>
+                <Select
+                  label="Toss winner"
+                  value={draft.toss}
+                  onChange={(event) => set('toss', event.target.value)}
+                  options={selectedTeams.map((team, index) => ({
+                    id: String(index),
+                    name: team.name,
+                  }))}
+                />
+                <Select
+                  label="Decision"
+                  value={draft.decision}
+                  onChange={(event) => set('decision', event.target.value)}
+                  options={[
+                    { id: 'bat', name: 'Bat first' },
+                    { id: 'field', name: 'Field first' },
+                  ]}
+                />
+              </>
+            )}
             <label className="check">
               <input
                 type="checkbox"
@@ -263,7 +303,9 @@ export default function Setup({ w, data, run, setError }) {
               <strong>{selectedTeams.map((team) => team.name).join(' vs ')}</strong>
               <p>
                 {draft.rules.overs} overs · up to {draft.rules.size} players per side ·{' '}
-                {selectedTeams[firstBat].name} bats first
+                {schedule
+                  ? 'Toss and lineup saved before play'
+                  : selectedTeams[firstBat].name + ' bats first'}
               </p>
             </div>
           </>
@@ -284,24 +326,6 @@ export default function Setup({ w, data, run, setError }) {
           >
             Save draft
           </Button>
-          {draft.step === 1 && (
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={schedule}
-                onChange={(e) => set('scheduleForLater', e.target.checked)}
-              />
-              Schedule for later
-            </label>
-          )}
-          {schedule && (
-            <Field
-              label="Start date and time"
-              type="datetime-local"
-              value={draft.scheduledAt || ''}
-              onChange={(e) => set('scheduledAt', e.target.value)}
-            />
-          )}
           <Button onClick={next}>
             {draft.step === 1 ? (schedule ? 'Schedule match' : 'Start match') : 'Continue'} →
           </Button>

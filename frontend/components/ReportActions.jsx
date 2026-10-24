@@ -31,7 +31,7 @@ export function DownloadScorecardButton({ match, states, compact = false }) {
   );
 }
 
-export default function ReportActions({ match, states }) {
+export default function ReportActions({ match, states, compact = false }) {
   const [error, setError] = useState('');
   const [canShare, setCanShare] = useState(false);
   useEffect(() => {
@@ -143,7 +143,7 @@ export default function ReportActions({ match, states }) {
     <div className="report-actions" aria-label="Download match report">
       {match.status === 'completed' && (
         <>
-          <DownloadScorecardButton match={match} states={states} />
+          <DownloadScorecardButton match={match} states={states} compact={compact} />
           {canShare && (
             <Button secondary onClick={shareScorecard}>
               <FileText size={17} /> Share Scorecard
@@ -159,7 +159,7 @@ export default function ReportActions({ match, states }) {
           <Button secondary onClick={() => saveReport(true)}>
             <Download size={17} /> Full scorecard PDF
           </Button>
-          <small>Opens a print-ready report. Choose “Save as PDF” in your browser.</small>
+          {!compact && <small>Choose Save as PDF in the print dialog.</small>}
         </>
       )}
       {error && (

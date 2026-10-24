@@ -38,13 +38,22 @@ import { teamStatistics } from '../lib/statistics';
 import { fetchSession, getSyncState, sync } from '../lib/sync';
 import { Button, Field, Empty, Sheet } from './ui';
 import dynamic from 'next/dynamic';
-import { upcomingMatches, matchLabel } from '../lib/matchLifecycle';
+import ScreenSkeleton from './Skeletons';
+import { upcomingMatches, matchLabel, scheduledAction } from '../lib/matchLifecycle';
 import People from './People';
-const Statistics = dynamic(() => import('./Statistics'));
+const Statistics = dynamic(() => import('./Statistics'), {
+  loading: () => <ScreenSkeleton screen="statistics" />,
+});
 import Setup from './Setup';
-const Match = dynamic(() => import('./Match'));
-const Profile = dynamic(() => import('./Profile'));
-const Settings = dynamic(() => import('./Settings'));
+const Match = dynamic(() => import('./Match'), {
+  loading: () => <ScreenSkeleton screen="match" />,
+});
+const Profile = dynamic(() => import('./Profile'), {
+  loading: () => <ScreenSkeleton screen="player" />,
+});
+const Settings = dynamic(() => import('./Settings'), {
+  loading: () => <ScreenSkeleton screen="account" />,
+});
 import { useOffline } from './offline';
 import { DownloadScorecardButton } from './ReportActions';
 import SyncStatus, { SYNC_STATUS_LABELS } from './SyncStatus';
@@ -361,12 +370,12 @@ export default function App({ screen }) {
   const teamStats = useMemo(
     () =>
       new Map(
-        (data?.teams ?? []).map((team) => [
+        (screen === 'dashboard' ? (data?.teams ?? []) : []).map((team) => [
           team.id,
           teamStatistics(team.id, data.matches, data.innings, data.events),
         ]),
       ),
-    [data],
+    [data, screen],
   );
   const recentMatches = [...completedMatches]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -462,11 +471,7 @@ export default function App({ screen }) {
             <span>{match.venue || 'Local match'}</span>
           </div>
           <div className="card-footer">
-            {match.status === 'live'
-              ? 'Continue scoring'
-              : match.status === 'completed'
-                ? 'View result'
-                : 'Open match'}
+            {scheduledAction(match)}
             <ArrowUpRight size={17} />
           </div>
         </Link>
@@ -684,7 +689,7 @@ export default function App({ screen }) {
             </div>
           )}
           {!loaded ? (
-            <p>Opening local records…</p>
+            <ScreenSkeleton screen={screen} />
           ) : !w ? (
             <section className="welcome">
               <span className="pill">WELCOME TO YOUR CREASE</span>

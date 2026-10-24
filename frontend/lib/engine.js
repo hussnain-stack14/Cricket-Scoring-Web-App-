@@ -34,6 +34,11 @@ export function validateSetup(m) {
   check(m.date && !Number.isNaN(Date.parse(m.date)), 'Choose a valid match date.');
 }
 export function replay(match, inning, events, target = null) {
+  // The parent start snapshot keeps the opening lineup coherent during incremental sync.
+  if (inning.number === 1 && match.startId && match.startDetails) {
+    const { striker, nonStriker, bowler } = match.startDetails;
+    inning = { ...inning, striker, nonStriker, bowler };
+  }
   const side = inning.number === 1 ? match.firstBat : 1 - match.firstBat;
   const batting = match.teams[side],
     fielding = match.teams[1 - side];

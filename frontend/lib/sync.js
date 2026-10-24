@@ -10,11 +10,7 @@ let sessionRequest;
 export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
   if (sessionRequest) return sessionRequest;
   sessionRequest = (async () => {
-    const res = await fetchWithTimeout(
-      '/api/auth/me',
-      { credentials: 'include' },
-      timeoutMs,
-    );
+    const res = await fetchWithTimeout('/api/auth/me', { credentials: 'include' }, timeoutMs);
     if (res.status === 401) return null;
     if (!res.ok) throw new Error(`Session check failed: ${res.status}`);
     const data = await res.json();
@@ -85,7 +81,11 @@ export async function pushChanges(workspaceId) {
 
   const pending = await db.pendingChanges.where({ workspaceId }).toArray();
   if (pending.length === 0) return { pushed: 0, rejected: [] };
-  pending.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt));
+  pending.sort(
+    (left, right) =>
+      Number(right.table === 'matches') - Number(left.table === 'matches') ||
+      left.queuedAt.localeCompare(right.queuedAt),
+  );
 
   let pushed = 0;
   const rejected = [];
@@ -204,6 +204,7 @@ export async function pullChanges(workspaceId) {
   }
 
   let merged = 0;
+  let deferredMatchRecords = false;
   await db.transaction(
     'rw',
     ...tables.map((table) => db[table]),
@@ -213,10 +214,19 @@ export async function pullChanges(workspaceId) {
       const currentMeta = (await db.syncMeta.get(workspaceId)) ?? meta;
       const revisions = { ...(currentMeta.revisions ?? {}) };
       const conflicts = [...(currentMeta.conflicts ?? [])];
-      for (const serverRecord of result.records) {
+      for (const serverRecord of [...result.records].sort(
+        (a, b) => Number(b.table === 'matches') - Number(a.table === 'matches'),
+      )) {
         const { table, recordId, data, deletedAt, revision, lastChangeId } = serverRecord;
         if (!tables.includes(table) || typeof recordId !== 'string' || !Number.isInteger(revision))
           continue;
+        if (['innings', 'events'].includes(table) && data?.matchId) {
+          const parent = await db.matches.get(data.matchId);
+          if ((parent?.startId || data.startId) && parent?.startId !== data.startId) {
+            deferredMatchRecords = true;
+            continue;
+          }
+        }
         const key = recordKey(table, recordId);
         if (revision <= (revisions[key] ?? 0)) continue;
 
@@ -254,7 +264,7 @@ export async function pullChanges(workspaceId) {
         ...currentMeta,
         revisions,
         conflicts,
-        lastPull: result.pulledAt,
+        lastPull: deferredMatchRecords ? currentMeta.lastPull : result.pulledAt,
         lastError: null,
       });
     },
@@ -275,6 +285,15 @@ export async function resolveConflict(workspaceId, conflict, resolution) {
         pendingKey(workspaceId, conflict.table, conflict.recordId),
       );
       if (!current || current.changeId !== conflict.changeId) return;
+      if (
+        conflict.table === 'matches' &&
+        current.data?.startId &&
+        conflict.serverRecord.data?.startId &&
+        current.data.startId !== conflict.serverRecord.data.startId
+      )
+        throw new Error(
+          'Two devices started this match independently. Both versions are preserved. Export a backup and review the starts before resolving; automatic replacement is blocked.',
+        );
       const conflicts = (meta.conflicts ?? []).filter(
         (item) =>
           item.table !== conflict.table ||

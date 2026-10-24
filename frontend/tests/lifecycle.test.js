@@ -17,7 +17,7 @@ import {
 import { upcomingMatches } from '../lib/matchLifecycle.js';
 import { pullChanges, pushChanges } from '../lib/sync.js';
 
-test('upcoming dates sort by instant and exclude drafts, past, deleted, completed and cancelled', () => {
+test('upcoming dates sort by instant and retain overdue fixtures and exclude drafts, deleted, completed and cancelled', () => {
   const rows = ['upcoming', 'completed', 'cancelled', 'draft', 'live'].map((status, i) => ({
     id: i,
     status,
@@ -30,7 +30,7 @@ test('upcoming dates sort by instant and exclude drafts, past, deleted, complete
   );
   assert.deepEqual(
     upcomingMatches(rows, Date.parse('2030-01-01')).map((m) => m.id),
-    [8, 0],
+    [9, 8, 0],
   );
 });
 test('drafts retain entered fields, update without duplicates, consume only the selected draft and delete offline', async () => {
@@ -75,8 +75,8 @@ test('drafts retain entered fields, update without duplicates, consume only the 
     (await all(w.id)).drafts.map((d) => d.id),
     [second.id],
   );
-  const live = await changeMatch(w.id, match.id, 0, { type: 'start' });
-  assert.equal(live.status, 'live');
+  await assert.rejects(changeMatch(w.id, match.id, 0, { type: 'start' }), /toss/);
+  assert.equal((await db.matches.get(match.id)).status, 'upcoming');
   await deleteRecord(w.id, 'drafts', second.id);
   assert.equal((await all(w.id)).drafts.length, 0);
   await deleteMatch(w.id, match.id);

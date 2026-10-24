@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { battingFirst, validateMatchStart } from './matchLifecycle.js';
 import { validateSetup, matchStates, replay } from './engine.js';
 export const db = new Dexie('crease-local');
 db.version(1).stores({
@@ -380,6 +381,11 @@ export async function createMatch(
         status: match.scheduledAt ? 'upcoming' : 'live',
         createdAt: new Date().toISOString(),
       };
+      if (m.status === 'upcoming') {
+        m.toss = null;
+        m.decision = null;
+        m.preMatch = { step: 0 };
+      }
       const inn = { ...opening, id: uuid(), workspaceId, matchId: m.id, number: 1 };
       replay(m, inn, []);
       await db.matches.add(m);
@@ -425,7 +431,10 @@ export async function addMatchPlayer(
         match.revision === revision,
         'This match changed in another tab. Refresh before adding players.',
       );
-      must(match.status !== 'completed', 'Reopen this match before adding players.');
+      must(
+        !match.deletedAt && ['live', 'upcoming'].includes(match.status),
+        'This match is read-only.',
+      );
       const teamIndex = match.teams.findIndex((team) => team.id === teamId);
       must(teamIndex !== -1, 'Choose a team in this match.');
 
@@ -502,6 +511,7 @@ export async function addMatchPlayer(
           player: player.id,
           workspaceId,
           matchId,
+          startId: match.startId,
           inningsId: inning.id,
           seq: (events.at(-1)?.seq || 0) + 1,
         };
@@ -528,12 +538,21 @@ export async function changeMatch(workspaceId, id, revision, action) {
     db.innings,
     db.events,
     db.audits,
+    db.players,
+    db.memberships,
     db.syncMeta,
     db.pendingChanges,
     async () => {
       const m = await db.matches.get(id);
       must(m?.workspaceId === workspaceId && !m.deletedAt, 'Match missing.');
       if (action.type === 'finalize' && m.status === 'completed') return m;
+      if (
+        action.type === 'start' &&
+        m.status === 'live' &&
+        action.startId &&
+        action.startId === m.startId
+      )
+        return m;
       if (action.type === 'event') {
         const existing = await db.events.get(action.event.id);
         if (existing?.workspaceId === workspaceId && existing.matchId === id) return m;
@@ -553,15 +572,80 @@ export async function changeMatch(workspaceId, id, revision, action) {
         .toArray();
       evs.sort((a, b) => a.seq - b.seq);
       const states = matchStates(m, inns, evs);
-      if (action.type === 'start' || action.type === 'cancel' || action.type === 'reschedule') {
+      if (['start', 'preMatch', 'cancel', 'reschedule'].includes(action.type)) {
         must(m.status === 'upcoming', 'Only scheduled matches can be changed here.');
         if (action.type === 'reschedule') {
           must(Date.parse(action.scheduledAt) > Date.now(), 'Choose a future date and time.');
           m.scheduledAt = action.scheduledAt;
           m.date = action.scheduledAt.slice(0, 10);
-        } else m.status = action.type === 'start' ? 'live' : 'cancelled';
+        } else if (action.type === 'preMatch') {
+          must(!evs.length, 'A scored match cannot return to setup.');
+          const input = action.setup || {};
+          must(
+            Number.isInteger(input.step) && input.step >= 0 && input.step <= 3,
+            'Invalid setup step.',
+          );
+          m.preMatch = {
+            step: input.step,
+            toss: input.toss,
+            decision: input.decision,
+            striker: input.striker || '',
+            nonStriker: input.nonStriker || '',
+            bowler: input.bowler || '',
+          };
+        } else if (action.type === 'start') {
+          must(inns.length === 1 && !evs.length, 'This match already has play recorded.');
+          const setup = action.setup || m.preMatch;
+          const firstBat = battingFirst(setup);
+          for (const [key, side] of [
+            ['striker', firstBat],
+            ['nonStriker', firstBat],
+            ['bowler', 1 - firstBat],
+          ]) {
+            const player = await db.players.get(setup[key] || '');
+            must(
+              player?.workspaceId === workspaceId && !player.archived && !player.deletedAt,
+              'Choose an active player in this workspace.',
+            );
+            const team = m.teams[side];
+            const member = await db.memberships
+              .where({ workspaceId })
+              .filter((r) => r.teamId === team.id && r.playerId === player.id)
+              .count();
+            must(member, 'Opening player is not in this team.');
+            if (!team.squad.some((p) => p.id === player.id))
+              team.squad.push({ id: player.id, name: player.name });
+          }
+          const meta = await db.syncMeta.get(workspaceId);
+          const start = validateMatchStart(m, setup, {
+            role: meta?.teamId ? meta.role : 'owner',
+            earlyOverride: action.earlyOverride === true,
+          });
+          m.firstBat = start.firstBat;
+          m.toss = setup.toss;
+          m.decision = setup.decision;
+          validateSetup(m);
+          m.startId = action.startId || uuid();
+          const openingInning = { ...inns[0], ...start.opening, startId: m.startId };
+          replay(m, openingInning, []);
+          await db.innings.put(openingInning);
+          await queueSyncChange(workspaceId, 'innings', openingInning.id, openingInning);
+          m.status = 'live';
+          m.startedAt = new Date().toISOString();
+          m.startDetails = { ...setup, earlyOverride: action.earlyOverride === true };
+          m.preMatch = { ...setup, step: 3 };
+        } else m.status = 'cancelled';
+      } else if (action.type === 'metadata') {
+        must(!['completed', 'cancelled'].includes(m.status), 'This match is read-only.');
+        must(
+          typeof action.venue === 'string' && action.venue.length <= 100,
+          'Venue must be at most 100 characters.',
+        );
+        m.venue = action.venue.trim();
       } else if (action.type === 'reopen') {
         must(m.status === 'completed', 'Match is not finalized.');
+        const meta = await db.syncMeta.get(workspaceId);
+        must(!meta?.teamId || meta.role === 'owner', 'Only an owner can reopen a match.');
         m.status = 'live';
       } else {
         must(m.status === 'live', 'Start or reopen this match before scoring.');
@@ -570,7 +654,14 @@ export async function changeMatch(workspaceId, id, revision, action) {
           m.status = 'completed';
         } else if (action.type === 'startChase') {
           must(inns.length === 1 && states[0].done, 'First innings must be complete.');
-          const inn = { ...action.opening, id: uuid(), workspaceId, matchId: id, number: 2 };
+          const inn = {
+            ...action.opening,
+            id: uuid(),
+            workspaceId,
+            matchId: id,
+            startId: m.startId,
+            number: 2,
+          };
           replay(m, inn, [], states[0].runs + 1);
           await db.innings.add(inn);
           await queueSyncChange(workspaceId, 'innings', inn.id, inn);
@@ -612,6 +703,7 @@ export async function changeMatch(workspaceId, id, revision, action) {
             ...action.event,
             workspaceId,
             matchId: id,
+            startId: m.startId,
             inningsId: inn.id,
             seq: (evs.at(-1)?.seq || 0) + 1,
           };
@@ -894,9 +986,10 @@ export async function deleteMatch(workspaceId, id) {
           const tombstone = { ...record, deletedAt };
           await db[table].put(tombstone);
           // The parent tombstone hides the whole match on every device. Do not
-        // independently delete children: a parent revision conflict must never
-        // leave a remote live match with missing deliveries.
-        if (table === 'matches') await queueSyncChange(workspaceId, table, record.id, tombstone, true);
+          // independently delete children: a parent revision conflict must never
+          // leave a remote live match with missing deliveries.
+          if (table === 'matches')
+            await queueSyncChange(workspaceId, table, record.id, tombstone, true);
         }
       }
     },

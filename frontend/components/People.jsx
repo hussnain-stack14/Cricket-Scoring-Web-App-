@@ -175,20 +175,31 @@ export default function People({ screen, w, data, run, error, session }) {
           {deleting ? (
             <>
               <p>
-                Permanently delete {edit.name}? This cannot be undone. Records used by match history
-                cannot be deleted; archive those instead.
+                {deleting === 'archive'
+                  ? `${edit.archived ? 'Restore' : 'Archive'} ${edit.name}? Historical matches and statistics will be preserved.`
+                  : `Permanently delete ${edit.name}? This cannot be undone. Records used by match history cannot be deleted; archive those instead.`}
               </p>
               <div className="actions">
                 <Button
                   danger
                   onClick={async () => {
-                    if (await run(() => deleteRecord(w.id, screen, edit.id))) {
+                    if (
+                      await run(() =>
+                        deleting === 'archive'
+                          ? saveRecord(w.id, screen, { ...edit, archived: !edit.archived })
+                          : deleteRecord(w.id, screen, edit.id),
+                      )
+                    ) {
                       setEdit(null);
                       setDeleting(false);
                     }
                   }}
                 >
-                  Permanently delete
+                  {deleting === 'archive'
+                    ? edit.archived
+                      ? 'Confirm restore'
+                      : 'Confirm archive'
+                    : 'Permanently delete'}
                 </Button>
                 <Button secondary onClick={() => setDeleting(false)}>
                   Cancel
@@ -284,18 +295,7 @@ export default function People({ screen, w, data, run, error, session }) {
               </form>
               {edit.id && canDelete && (
                 <>
-                  <Button
-                    secondary
-                    danger
-                    onClick={async () => {
-                      if (
-                        await run(() =>
-                          saveRecord(w.id, screen, { ...edit, archived: !edit.archived }),
-                        )
-                      )
-                        setEdit(null);
-                    }}
-                  >
+                  <Button secondary danger onClick={() => setDeleting('archive')}>
                     {edit.archived ? 'Restore' : 'Archive'} {isTeam ? 'team' : 'player'}
                   </Button>
                   <Button secondary danger disabled={hasHistory} onClick={() => setDeleting(true)}>

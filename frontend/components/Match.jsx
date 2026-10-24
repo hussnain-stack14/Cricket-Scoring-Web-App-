@@ -1,16 +1,24 @@
 'use client';
 import Link from 'next/link';
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { FileText } from 'lucide-react';
 import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
 import { matchStates, overs, rate, result } from '../lib/engine';
-import { Button, Field, Select, Sheet, playerLabel } from './ui';
-import ReportActions from './ReportActions';
-export default function Match({ w, data, run, error }) {
+import { Button, Field, Select, Sheet, Tabs, playerLabel } from './ui';
+import MatchHeader from './MatchHeader';
+import PreMatch from './PreMatch';
+export default function Match({ w, data, run, error, session }) {
   const base = '/app';
   const id = new URLSearchParams(window.location.search).get('id'),
     m = data.matches.find((x) => x.id === id);
-  const [tab, setTab] = useState('Score'),
+  const initialView = new URLSearchParams(window.location.search).get('view');
+  const [tab, updateTab] = useState(
+      ['Score', 'Scorecard', 'History'].includes(initialView)
+        ? initialView
+        : m?.status === 'completed'
+          ? 'Scorecard'
+          : 'Score',
+    ),
     [sheet, setSheet] = useState(null),
     [selection, setSelection] = useState(''),
     [delivery, setDelivery] = useState({}),
@@ -18,76 +26,47 @@ export default function Match({ w, data, run, error }) {
     [playerTeamId, setPlayerTeamId] = useState(''),
     [sheetError, setSheetError] = useState(''),
     [savingDelivery, setSavingDelivery] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [feedback, setFeedback] = useState(null);
+  const canScore = !session || ['owner', 'scorer'].includes(session.role);
+  const owner = !session || session.role === 'owner';
+  function setTab(value) {
+    updateTab(value);
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', value);
+    window.history.replaceState(null, '', url);
+  }
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), 800);
+    return () => clearTimeout(timer);
+  }, [feedback]);
+  const scoreData = useMemo(() => {
+    if (!m || ['upcoming', 'cancelled'].includes(m.status)) return null;
+    const inns = data.innings.filter((i) => i.matchId === id).sort((a, b) => a.number - b.number);
+    const events = data.events.filter((e) => e.matchId === id).sort((a, b) => a.seq - b.seq);
+    return { inns, events, states: matchStates(m, inns, events) };
+  }, [m, data.innings, data.events, id]);
   const deliveryInFlight = useRef(false);
   if (!m)
     return (
       <p>
-        Match not found on this device. <Link href={`${base}/`}>View matches</Link>
+        Match not found on this device. <Link href="/app/matches/">View matches</Link>
       </p>
     );
-  if (m.status === 'upcoming' || m.status === 'cancelled')
+  if (['upcoming', 'cancelled'].includes(m.status))
+    return <PreMatch match={m} w={w} data={data} run={run} error={error} session={session} />;
+  const { inns, events, states } = scoreData;
+  if (!inns.length)
     return (
-      <section className="card">
-        <span className="match-status">{m.status === 'cancelled' ? 'Cancelled' : 'Scheduled'}</span>
-        <h2>{m.teams.map((t) => t.name).join(' vs ')}</h2>
-        <p>
-          {new Date(m.scheduledAt || m.date).toLocaleString()} ? {m.rules.overs} overs ?{' '}
-          {m.venue || 'Venue to be confirmed'}
+      <div className="match-centre">
+        <MatchHeader match={m} w={w} run={run} error={error} session={session} />
+        <p role="status">
+          The innings record has not arrived yet. Sync this device, then reopen the match.
         </p>
-        {m.status === 'upcoming' && (
-          <>
-            <Field
-              label="Reschedule start"
-              type="datetime-local"
-              onChange={(e) => setSelection(e.target.value)}
-            />
-            <div className="actions">
-              <Button
-                onClick={() => run(() => changeMatch(w.id, m.id, m.revision, { type: 'start' }))}
-              >
-                Start match
-              </Button>
-              <Button
-                secondary
-                disabled={!selection}
-                onClick={() =>
-                  run(() =>
-                    changeMatch(w.id, m.id, m.revision, {
-                      type: 'reschedule',
-                      scheduledAt: new Date(selection).toISOString(),
-                    }),
-                  )
-                }
-              >
-                Save schedule
-              </Button>
-              <Button secondary danger onClick={() => setSheet('cancel')}>
-                Cancel match
-              </Button>
-            </div>
-          </>
-        )}
-        {sheet === 'cancel' && (
-          <Sheet title="Cancel this match?" close={() => setSheet(null)}>
-            <p>{m.teams.map((t) => t.name).join(' vs ')} will be marked cancelled.</p>
-            <Button
-              danger
-              onClick={async () => {
-                if (await run(() => changeMatch(w.id, m.id, m.revision, { type: 'cancel' })))
-                  setSheet(null);
-              }}
-            >
-              Confirm cancellation
-            </Button>
-          </Sheet>
-        )}
-        <Link href="/app/matches/">All matches</Link>
-      </section>
+      </div>
     );
-  const inns = data.innings.filter((i) => i.matchId === id).sort((a, b) => a.number - b.number),
-    events = data.events.filter((e) => e.matchId === id).sort((a, b) => a.seq - b.seq);
-  const states = matchStates(m, inns, events),
-    s = states.at(-1),
+  const s = states.at(-1),
     inn = inns.at(-1),
     battingSide = inn.number === 1 ? m.firstBat : 1 - m.firstBat;
   const target = states.length === 2 ? states[0].runs + 1 : null,
@@ -133,7 +112,7 @@ export default function Match({ w, data, run, error }) {
     return ok;
   }
   async function ball(e) {
-    if (deliveryInFlight.current || frozen || s.done || pendingSelection) return false;
+    if (!canScore || deliveryInFlight.current || frozen || s.done || pendingSelection) return false;
     deliveryInFlight.current = true;
     setSavingDelivery(true);
     try {
@@ -149,7 +128,29 @@ export default function Match({ w, data, run, error }) {
           ...e,
         },
       });
-      if (saved) setSheet(null);
+      if (saved) {
+        setSheet(null);
+        const type = e.wicket
+          ? 'wicket'
+          : e.boundary && e.bat === 6
+            ? 'six'
+            : e.boundary && e.bat === 4
+              ? 'four'
+              : e.extra !== 'wide' && !e.extra?.startsWith('noBall') && (s.balls + 1) % 6 === 0
+                ? 'over'
+                : 'run';
+        setFeedback({
+          type,
+          id: Date.now(),
+          label: {
+            wicket: 'Wicket',
+            six: 'Six!',
+            four: 'Four!',
+            over: 'Over complete',
+            run: 'Runs recorded',
+          }[type],
+        });
+      }
       return !!saved;
     } finally {
       deliveryInFlight.current = false;
@@ -300,8 +301,11 @@ export default function Match({ w, data, run, error }) {
         selection: sheet.selection,
       }),
     );
-    if (saved && typeof saved === 'object') setSheet(null);
-    else
+    if (saved && typeof saved === 'object') {
+      setSheet(null);
+      setSelection('');
+      setPlayerSearch('');
+    } else
       setSheetError(error || 'Could not add this player. Check the team and match player limit.');
   }
   async function selectPlayer(playerId) {
@@ -311,29 +315,26 @@ export default function Match({ w, data, run, error }) {
         selection: pendingSelection,
       }),
     );
-    if (added && typeof added === 'object') setSelection('');
-    else setSheetError(error || 'Could not select this player. Refresh the match and try again.');
+    if (added && typeof added === 'object') {
+      setSelection('');
+      setPlayerSearch('');
+    } else setSheetError(error || 'Could not select this player. Refresh the match and try again.');
   }
   const set = (k, v) => setDelivery((d) => ({ ...d, [k]: v }));
   const latest = [...events].reverse().find((e) => e.type === 'delivery');
   const dismissalKinds = getDismissalKinds();
   return (
-    <>
+    <div className="match-centre">
+      <MatchHeader
+        match={m}
+        states={states}
+        w={w}
+        run={run}
+        error={error}
+        session={session}
+        onReopen={() => setSheet('reopen')}
+      />
       <div className="match-meta">
-        <div className="row">
-          <div>
-            <strong>{m.teams.map((t) => t.name).join(' vs ')}</strong>
-            <p>
-              {m.date} · {m.venue || 'Local match'} · {m.rules.overs} overs
-            </p>
-          </div>
-          {!frozen && <ReportActions match={m} states={states} />}
-          {!frozen && (
-            <Button secondary onClick={() => addPlayer()}>
-              + Add player
-            </Button>
-          )}
-        </div>
         {frozen && (
           <section className="completed-result">
             <p className="completed-result-label">Final result</p>
@@ -357,356 +358,434 @@ export default function Match({ w, data, run, error }) {
             <button className="text-button" onClick={() => setTab('Scorecard')}>
               <FileText size={17} /> View Scorecard
             </button>
-            <ReportActions match={m} states={states} />
           </section>
         )}
       </div>
-      <div className="tabs">
-        {['Score', 'Scorecard', 'History'].map((t) => (
-          <button className={tab === t ? 'active' : ''} key={t} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
-      </div>
-      {tab === 'Score' && (
-        <>
-          <div className="live-score-layout">
-            <div className="live-score-details">
-              <section className="score-panel">
-                <div className="row">
-                  <span className="pill">
-                    INNINGS {inn.number} · {frozen ? 'FINAL' : 'LOCAL MATCH'}
-                  </span>
-                  <span>{s.freeHit ? 'FREE HIT' : `${m.rules.overs} OVERS`}</span>
-                </div>
-                <h2>{m.teams[battingSide].name}</h2>
-                <div className="big-score" key={`${s.runs}-${s.wickets}-${s.balls}`}>
-                  {s.runs}
-                  <span>/{s.wickets}</span>
-                  <small>({overs(s.balls)})</small>
-                </div>
-                <div className="score-metrics">
-                  <div>
-                    <span>RUN RATE</span>
-                    <strong>{rate(s.runs, s.balls, 6)}</strong>
-                  </div>
-                  <div>
-                    <span>PARTNERSHIP</span>
-                    <strong>{s.partnership}</strong>
-                  </div>
-                  <div>
-                    <span>{target ? 'TARGET' : 'BALLS LEFT'}</span>
-                    <strong>{target || ballsLeft}</strong>
-                  </div>
-                </div>
-              </section>
-              {target && (
-                <div className="chase-banner">
-                  {s.done ? (
-                    result(m, states)
-                  ) : (
-                    <>
-                      {m.teams[battingSide].name} need{' '}
-                      <strong>
-                        {Math.max(0, target - s.runs)} from {ballsLeft} balls
-                      </strong>
-                      <small>
-                        Required run rate {rate(Math.max(0, target - s.runs), ballsLeft, 6)}
-                      </small>
-                    </>
-                  )}
-                </div>
-              )}
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Batter</th>
-                      <th>R</th>
-                      <th>B</th>
-                      <th>4s</th>
-                      <th>6s</th>
-                      <th>SR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[s.striker, s.nonStriker].filter(Boolean).map((p, index) => (
-                      <tr key={p}>
-                        <td>
-                          {s.batting[p].name}
-                          {index === 0 && <span className="strike"> ●</span>}
-                        </td>
-                        <td>
-                          <b>{s.batting[p].runs}</b>
-                        </td>
-                        <td>{s.batting[p].balls}</td>
-                        <td>{s.batting[p].fours}</td>
-                        <td>{s.batting[p].sixes}</td>
-                        <td>{rate(s.batting[p].runs, s.batting[p].balls, 100)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Bowler</th>
-                      <th>O</th>
-                      <th>M</th>
-                      <th>R</th>
-                      <th>W</th>
-                      <th>ECO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[s.bowler ? s.bowling[s.bowler] : null].filter(Boolean).map((b) => (
-                      <tr key={b.id}>
-                        <td>{b.name}</td>
-                        <td>{overs(b.balls)}</td>
-                        <td>{b.maidens}</td>
-                        <td>{b.runs}</td>
-                        <td>{b.wickets}</td>
-                        <td>{rate(b.runs, b.balls, 6)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="over-strip">
-                <span>{s.balls > 0 && s.balls % 6 === 0 ? 'Last over' : 'This over'}</span>
-                {s.deliveries
-                  .filter((e) => e.over === (s.deliveries.at(-1)?.over ?? 0))
-                  .map((e) => (
-                    <span
-                      className={`ball-chip ${e.wicket ? 'wicket' : e.bat >= 4 ? 'boundary' : ''}`}
-                      key={e.id}
-                    >
-                      {e.wicket
-                        ? 'W'
-                        : e.extra === 'none'
-                          ? e.bat
-                          : `${e.total}${e.extra === 'wide' ? 'wd' : e.extra.startsWith('noBall') ? 'nb' : e.extra === 'bye' ? 'b' : 'lb'}`}
-                    </span>
-                  ))}
-              </div>
-            </div>
-            <div className="live-score-actions">
-              {frozen ? (
-                <div className="notice">
-                  <h3>{result(m, states)}</h3>
-                  <p>Finalized. Included in player career statistics.</p>
-                  <Button secondary onClick={() => setSheet('reopen')}>
-                    Reopen match
-                  </Button>
-                </div>
-              ) : s.done ? (
-                <div className="notice">
-                  <h3>{states.length === 1 ? 'Innings complete' : result(m, states)}</h3>
-                  {states.length === 1 ? (
-                    <Button
-                      onClick={() => {
-                        setSheetError('');
-                        setSheet('chase');
-                      }}
-                    >
-                      Set up the chase
-                    </Button>
-                  ) : (
-                    <Button onClick={() => setSheet('finalize')}>Finalize match</Button>
-                  )}
-                </div>
-              ) : s.needBatter || s.needBowler ? (
-                <div className="notice">
-                  <h3>
-                    {s.needBatter
-                      ? s.wickets
-                        ? 'Select next batsman'
-                        : s.striker
-                          ? 'Select non-striker'
-                          : 'Who is batting? Select striker'
-                      : s.balls
-                        ? 'Over complete. Who is bowling next?'
-                        : 'Who is bowling?'}
-                  </h3>
-                  <Select
-                    label={
-                      s.needBatter
-                        ? s.striker
-                          ? 'Select non-striker'
-                          : 'Select striker'
-                        : s.balls
-                          ? 'Select next bowler'
-                          : 'Select opening bowler'
-                    }
-                    value={selection}
-                    onChange={(e) => setSelection(e.target.value)}
-                    options={candidates.map(playerLabel)}
-                  />
-                  <Button disabled={!selection} onClick={() => selectPlayer(selection)}>
-                    Confirm player
-                  </Button>
-                  {!frozen && (
-                    <Button secondary onClick={() => addPlayer(selectionTeamId, pendingSelection)}>
-                      + Add new {s.needBatter ? 'batsman' : 'bowler'}
-                    </Button>
-                  )}
-                  {!candidates.length && (
-                    <p className="help">No eligible existing players. Add a player to continue.</p>
-                  )}
-                </div>
-              ) : (
-                <section className="scoring-controls">
+      <Tabs
+        items={['Score', 'Scorecard', 'History']}
+        value={tab}
+        onChange={setTab}
+        id="match-view"
+        label="Match views"
+      />
+      <div
+        role="tabpanel"
+        id="match-view-panel"
+        aria-labelledby={'match-view-' + tab}
+        tabIndex={0}
+        className="match-tab-panel"
+      >
+        {tab === 'Score' && (
+          <>
+            <div className="live-score-layout">
+              <div className="live-score-details">
+                <section className={`score-panel ${feedback ? 'feedback-' + feedback.type : ''}`}>
                   <div className="row">
-                    <h3>Tap to score</h3>
-                    <span className="help">
-                      {savingDelivery
-                        ? 'Saving…'
-                        : `Next ball ${Math.floor(s.balls / 6)}.${(s.balls % 6) + 1}`}
+                    <span className="pill">
+                      INNINGS {inn.number} · {frozen ? 'FINAL' : 'LIVE'}
                     </span>
+                    <span>{s.freeHit ? 'FREE HIT' : `${m.rules.overs} OVERS`}</span>
                   </div>
-                  <div className="run-buttons quick-score-buttons">
-                    {[0, 1, 2, 3, 4, 6, 'W', 'Undo'].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={
-                          value === 'W'
-                            ? 'score-wicket'
-                            : value === 'Undo'
-                              ? 'score-undo'
-                              : value === 4 || value === 6
-                                ? 'score-boundary'
-                                : ''
-                        }
-                        disabled={savingDelivery || (value === 'Undo' && !latest)}
-                        onClick={() => {
-                          if (value === 'W') {
-                            chooseWicket(dismissalKinds[0]);
-                          } else if (value === 'Undo') undoLatest();
-                          else
-                            ball({
-                              bat: value,
-                              running: value === 4 || value === 6 ? 0 : value,
-                              boundary: value === 4 || value === 6,
-                            });
-                        }}
-                      >
-                        {value}
-                      </button>
-                    ))}
+                  <h2>{m.teams[battingSide].name}</h2>
+                  <span className="delivery-feedback" role="status" aria-live="polite">
+                    {feedback?.label || ''}
+                  </span>
+                  <div className="big-score" key={`${s.runs}-${s.wickets}-${s.balls}`}>
+                    {s.runs}
+                    <span>/{s.wickets}</span>
+                    <small>({overs(s.balls)})</small>
                   </div>
-                  <p className="scoring-section-label">Extras</p>
-                  <div className="extras-buttons quick-extra-buttons">
-                    {[
-                      ['Wide', 'wide'],
-                      ['No-ball', 'noBall'],
-                      ['Bye', 'bye'],
-                      ['Leg Bye', 'legBye'],
-                    ].map(([label, value]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        disabled={savingDelivery}
-                        onClick={() => quickExtra(value)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="advanced-delivery-link">
-                    <Button secondary disabled={savingDelivery} onClick={() => detail()}>
-                      Advanced delivery
-                    </Button>
+                  <div className="score-metrics">
+                    <div>
+                      <span>RUN RATE</span>
+                      <strong>{rate(s.runs, s.balls, 6)}</strong>
+                    </div>
+                    <div>
+                      <span>PARTNERSHIP</span>
+                      <strong>{s.partnership}</strong>
+                    </div>
+                    <div>
+                      <span>{target ? 'TARGET' : 'BALLS LEFT'}</span>
+                      <strong>{target || ballsLeft}</strong>
+                    </div>
                   </div>
                 </section>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-      {tab === 'Scorecard' && (
-        <>
-          {states.map((state, index) => (
-            <Scorecard
-              key={index}
-              s={state}
-              team={m.teams[index === 0 ? m.firstBat : 1 - m.firstBat]}
-            />
-          ))}
-          <p className="notice">{result(m, states)}</p>
-        </>
-      )}
-      {tab === 'History' && (
-        <>
-          <p className="help">
-            Correcting an older ball rewinds that delivery and all later play. You review and
-            re-enter those deliveries. Reopen a finalized match first.
-          </p>
-          {states.map((state, index) => (
-            <section key={index}>
-              <h2>Innings {index + 1}</h2>
-              {[...new Set(state.deliveries.map((e) => e.over))].map((over) => (
-                <details className="history-over" key={over}>
-                  <summary>
-                    Over {over + 1} ·{' '}
-                    {state.deliveries.filter((e) => e.over === over).at(-1)?.score}
-                  </summary>
-                  {state.deliveries
-                    .filter((e) => e.over === over)
+                {target && (
+                  <div className="chase-banner">
+                    {s.done ? (
+                      result(m, states)
+                    ) : (
+                      <>
+                        {m.teams[battingSide].name} need{' '}
+                        <strong>
+                          {Math.max(0, target - s.runs)} from {ballsLeft} balls
+                        </strong>
+                        <small>
+                          Required run rate {rate(Math.max(0, target - s.runs), ballsLeft, 6)}
+                        </small>
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className="table-wrap live-player-tables">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Batter</th>
+                        <th>R</th>
+                        <th>B</th>
+                        <th>4s</th>
+                        <th>6s</th>
+                        <th>SR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!s.striker && !s.nonStriker && (
+                        <tr>
+                          <td colSpan={6} className="empty-lineup">
+                            Select the opening batters to begin.
+                          </td>
+                        </tr>
+                      )}
+                      {[s.striker, s.nonStriker].filter(Boolean).map((p, index) => (
+                        <tr key={p} className={p === s.striker ? 'active-player' : ''}>
+                          <td>
+                            {s.batting[p].name}
+                            {p === s.striker && <span className="strike"> ●</span>}
+                          </td>
+                          <td>
+                            <b>{s.batting[p].runs}</b>
+                          </td>
+                          <td>{s.batting[p].balls}</td>
+                          <td>{s.batting[p].fours}</td>
+                          <td>{s.batting[p].sixes}</td>
+                          <td>{rate(s.batting[p].runs, s.batting[p].balls, 100)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Bowler</th>
+                        <th>O</th>
+                        <th>M</th>
+                        <th>R</th>
+                        <th>W</th>
+                        <th>ECO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!s.bowler && (
+                        <tr>
+                          <td colSpan={6} className="empty-lineup">
+                            Select an opening bowler.
+                          </td>
+                        </tr>
+                      )}
+                      {[s.bowler ? s.bowling[s.bowler] : null].filter(Boolean).map((b) => (
+                        <tr key={b.id}>
+                          <td>{b.name}</td>
+                          <td>{overs(b.balls)}</td>
+                          <td>{b.maidens}</td>
+                          <td>{b.runs}</td>
+                          <td>{b.wickets}</td>
+                          <td>{rate(b.runs, b.balls, 6)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="over-strip">
+                  <span>{s.balls > 0 && s.balls % 6 === 0 ? 'Last over' : 'This over'}</span>
+                  {!s.deliveries.length && <small className="help">No balls yet</small>}
+                  {s.deliveries
+                    .filter((e) => e.over === (s.deliveries.at(-1)?.over ?? 0))
                     .map((e) => (
-                      <div className="history-row" key={e.id}>
-                        <span>
-                          {e.label} · {e.total} run{e.total === 1 ? '' : 's'} · {e.extra}
-                          {e.wicket ? ` · ${e.wicket.kind}` : ''}
-                        </span>
-                        <Button
-                          secondary
-                          disabled={frozen}
-                          onClick={() => setSheet({ type: 'rewind', event: e })}
-                        >
-                          Correct
-                        </Button>
-                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Inspect delivery ${e.label}: ${e.total} runs`}
+                        onClick={() => {
+                          setTab('History');
+                          if (canScore && !frozen) setSheet({ type: 'rewind', event: e });
+                        }}
+                        className={`ball-chip ${e.wicket ? 'wicket' : e.boundary && [4, 6].includes(e.bat) ? 'boundary' : ''}`}
+                        key={e.id}
+                      >
+                        {e.wicket
+                          ? 'W'
+                          : e.extra === 'none'
+                            ? e.bat
+                            : `${e.total}${e.extra === 'wide' ? 'wd' : e.extra.startsWith('noBall') ? 'nb' : e.extra === 'bye' ? 'b' : 'lb'}`}
+                      </button>
                     ))}
+                </div>
+              </div>
+              <div className="live-score-actions">
+                {!canScore ? (
+                  <p className="notice">Read-only match. A scorer can record deliveries.</p>
+                ) : frozen ? (
+                  <div className="notice">
+                    <h3>{result(m, states)}</h3>
+                    <p>Finalized. Included in player career statistics.</p>
+                    {owner && (
+                      <Button secondary onClick={() => setSheet('reopen')}>
+                        Reopen match
+                      </Button>
+                    )}
+                  </div>
+                ) : s.done ? (
+                  <div className="notice">
+                    <h3>{states.length === 1 ? 'Innings complete' : result(m, states)}</h3>
+                    {states.length === 1 ? (
+                      <Button
+                        onClick={() => {
+                          setSheetError('');
+                          setSheet('chase');
+                        }}
+                      >
+                        Set up the chase
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setSheet('finalize')}>Finalize match</Button>
+                    )}
+                  </div>
+                ) : s.needBatter || s.needBowler ? (
+                  <div className="notice lineup-panel">
+                    <span className="lineup-kicker">Action required</span>
+                    <h3>
+                      {s.needBatter
+                        ? s.wickets
+                          ? 'Select next batsman'
+                          : s.striker
+                            ? 'Select non-striker'
+                            : 'Who is batting? Select striker'
+                        : s.balls
+                          ? 'Over complete. Who is bowling next?'
+                          : 'Who is bowling?'}
+                    </h3>
+                    {candidates.length > 6 && (
+                      <Field
+                        label="Find player"
+                        type="search"
+                        value={playerSearch}
+                        onChange={(e) => {
+                          setPlayerSearch(e.target.value);
+                          setSelection('');
+                        }}
+                      />
+                    )}
+                    <Select
+                      label={
+                        s.needBatter
+                          ? s.striker
+                            ? 'Select non-striker'
+                            : 'Select striker'
+                          : s.balls
+                            ? 'Select next bowler'
+                            : 'Select opening bowler'
+                      }
+                      value={selection}
+                      onChange={(e) => setSelection(e.target.value)}
+                      options={candidates
+                        .filter((p) => p.name.toLowerCase().includes(playerSearch.toLowerCase()))
+                        .map(playerLabel)}
+                    />
+                    <Button disabled={!selection} onClick={() => selectPlayer(selection)}>
+                      {s.needBatter === 'striker'
+                        ? 'Confirm Striker'
+                        : s.needBatter === 'nonStriker'
+                          ? 'Confirm Non-striker'
+                          : 'Confirm Bowler'}
+                    </Button>
+                    {!frozen && (
+                      <Button
+                        secondary
+                        onClick={() => addPlayer(selectionTeamId, pendingSelection)}
+                      >
+                        + Add new {s.needBatter ? 'batsman' : 'bowler'}
+                      </Button>
+                    )}
+                    <div
+                      className="quick-score-buttons lineup-disabled-controls"
+                      aria-label="Scoring awaits lineup"
+                    >
+                      {[0, 1, 2, 3, 4, 5, 6, 'W', 'Undo'].map((value) => (
+                        <button key={value} disabled>
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                    {!candidates.length && (
+                      <p className="help">
+                        No eligible existing players. Add a player to continue.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <section className="scoring-controls">
+                    <div className="row">
+                      <h3>Tap to score</h3>
+                      <span className="help">
+                        {savingDelivery
+                          ? 'Saving…'
+                          : `Next ball ${Math.floor(s.balls / 6)}.${(s.balls % 6) + 1}`}
+                      </span>
+                    </div>
+                    <div className="run-buttons quick-score-buttons">
+                      {[0, 1, 2, 3, 4, 5, 6, 'W', 'Undo'].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={
+                            value === 'W'
+                              ? 'score-wicket'
+                              : value === 'Undo'
+                                ? 'score-undo'
+                                : value === 4 || value === 6
+                                  ? 'score-boundary'
+                                  : ''
+                          }
+                          disabled={savingDelivery || (value === 'Undo' && !latest)}
+                          onClick={() => {
+                            if (value === 'W') {
+                              chooseWicket(dismissalKinds[0]);
+                            } else if (value === 'Undo') undoLatest();
+                            else
+                              ball({
+                                bat: value,
+                                running: value === 4 || value === 6 ? 0 : value,
+                                boundary: value === 4 || value === 6,
+                              });
+                          }}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="scoring-section-label">Extras</p>
+                    <div className="extras-buttons quick-extra-buttons">
+                      {[
+                        ['Wide', 'wide'],
+                        ['No-ball', 'noBall'],
+                        ['Bye', 'bye'],
+                        ['Leg Bye', 'legBye'],
+                      ].map(([label, value]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={savingDelivery}
+                          onClick={() => quickExtra(value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="advanced-delivery-link">
+                      <Button
+                        secondary
+                        disabled={!latest || savingDelivery}
+                        onClick={() => setSheet({ type: 'rewind', event: latest })}
+                      >
+                        Edit delivery
+                      </Button>
+                      <Button secondary disabled={savingDelivery} onClick={() => detail()}>
+                        Advanced delivery
+                      </Button>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+        {tab === 'Scorecard' && (
+          <>
+            {states.map((state, index) => (
+              <Scorecard
+                key={index}
+                s={state}
+                team={m.teams[index === 0 ? m.firstBat : 1 - m.firstBat]}
+              />
+            ))}
+            <p className="notice">{result(m, states)}</p>
+          </>
+        )}
+        {tab === 'History' && (
+          <>
+            <p className="help">
+              Correcting an older ball rewinds that delivery and all later play. You review and
+              re-enter those deliveries. Reopen a finalized match first.
+            </p>
+            {states.map((state, index) => (
+              <section key={index}>
+                <h2>Innings {index + 1}</h2>
+                {[...new Set(state.deliveries.map((e) => e.over))].map((over) => (
+                  <details className="history-over" key={over}>
+                    <summary>
+                      Over {over + 1} ·{' '}
+                      {state.deliveries.filter((e) => e.over === over).at(-1)?.score}
+                    </summary>
+                    {state.deliveries
+                      .filter((e) => e.over === over)
+                      .map((e) => (
+                        <div className="history-row" key={e.id}>
+                          <span>
+                            {e.label} · {e.total} run{e.total === 1 ? '' : 's'} · {e.extra}
+                            {e.wicket ? ` · ${e.wicket.kind}` : ''}
+                          </span>
+                          <Button
+                            secondary
+                            disabled={frozen || !canScore}
+                            onClick={() => setSheet({ type: 'rewind', event: e })}
+                          >
+                            Correct
+                          </Button>
+                        </div>
+                      ))}
+                  </details>
+                ))}
+              </section>
+            ))}
+            <h3>Correction history</h3>
+            {data.audits
+              .filter((a) => a.matchId === id)
+              .map((a) => (
+                <details key={a.id}>
+                  <summary>
+                    {new Date(a.at).toLocaleString()} ·{' '}
+                    {a.action === 'undo' ? 'Undo' : 'Correction'} ·{' '}
+                    {a.events.filter((e) => e.type === 'delivery').length} deliveries
+                  </summary>
+                  <ul className="correction-history">
+                    {a.events
+                      .filter((event) => event.type === 'delivery')
+                      .map((event, index) => (
+                        <li key={event.id}>
+                          Delivery {index + 1}:{' '}
+                          {(event.bat || 0) +
+                            (event.extraRuns || 0) +
+                            (event.extra === 'wide' || event.extra?.startsWith('noBall')
+                              ? 1
+                              : 0)}{' '}
+                          run
+                          {(event.bat || 0) +
+                            (event.extraRuns || 0) +
+                            (event.extra === 'wide' || event.extra?.startsWith('noBall')
+                              ? 1
+                              : 0) ===
+                          1
+                            ? ''
+                            : 's'}
+                          {event.wicket ? ` · ${event.wicket.kind}` : ''}
+                        </li>
+                      ))}
+                  </ul>
                 </details>
               ))}
-            </section>
-          ))}
-          <h3>Correction history</h3>
-          {data.audits
-            .filter((a) => a.matchId === id)
-            .map((a) => (
-              <details key={a.id}>
-                <summary>
-                  {new Date(a.at).toLocaleString()} · {a.action === 'undo' ? 'Undo' : 'Correction'}{' '}
-                  · {a.events.filter((e) => e.type === 'delivery').length} deliveries
-                </summary>
-                <ul className="correction-history">
-                  {a.events
-                    .filter((event) => event.type === 'delivery')
-                    .map((event, index) => (
-                      <li key={event.id}>
-                        Delivery {index + 1}:{' '}
-                        {(event.bat || 0) +
-                          (event.extraRuns || 0) +
-                          (event.extra === 'wide' || event.extra?.startsWith('noBall')
-                            ? 1
-                            : 0)}{' '}
-                        run
-                        {(event.bat || 0) +
-                          (event.extraRuns || 0) +
-                          (event.extra === 'wide' || event.extra?.startsWith('noBall') ? 1 : 0) ===
-                        1
-                          ? ''
-                          : 's'}
-                        {event.wicket ? ` · ${event.wicket.kind}` : ''}
-                      </li>
-                    ))}
-                </ul>
-              </details>
-            ))}
-        </>
-      )}
+          </>
+        )}
+      </div>
       {sheet && (
         <Sheet
           title={
@@ -1125,7 +1204,7 @@ export default function Match({ w, data, run, error }) {
           )}
         </Sheet>
       )}
-    </>
+    </div>
   );
 }
 function Scorecard({ s, team }) {

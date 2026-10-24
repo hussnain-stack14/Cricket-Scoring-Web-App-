@@ -51,9 +51,10 @@ test('draft resume, schedule, cancellation, deletion and responsive accessible d
     }
   }
   await page.getByRole('link', { name: /Upcoming.*North XI/s }).click();
+  await page.getByText('Reschedule or cancel', { exact: true }).click();
   await page.getByRole('button', { name: 'Cancel match', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm cancellation' }).click();
-  await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
+  await expect(page.locator('.match-centre-header .match-status')).toBeVisible();
   await page.goto('/app/matches/');
   await page.getByRole('button', { name: /Cancelled/ }).click();
   await page.getByRole('button', { name: 'Delete match', exact: true }).click();
@@ -139,7 +140,7 @@ test('cached account dashboard renders before background validation and navigati
 });
 
 test('login lock shows remaining duration and disables retries', async ({ page }) => {
-  await page.clock.install();
+  await page.clock.setFixedTime(new Date('2026-10-24T10:00:00Z'));
   await page.route('**/api/auth/login', (route) =>
     route.fulfill({
       status: 429,

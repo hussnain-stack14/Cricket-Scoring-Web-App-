@@ -187,16 +187,17 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByRole('button', { name: 'Set up the chase' }).click();
   await page.getByRole('button', { name: 'Start second innings' }).click();
   await page.getByRole('combobox', { name: 'Select striker' }).selectOption({ index: 1 });
-  await page.getByRole('button', { name: 'Confirm player' }).click();
+  await page.getByRole('button', { name: 'Confirm Striker' }).click();
   await page.getByRole('combobox', { name: 'Select non-striker' }).selectOption({ index: 1 });
-  await page.getByRole('button', { name: 'Confirm player' }).click();
+  await page.getByRole('button', { name: 'Confirm Non-striker' }).click();
   await page.getByRole('combobox', { name: 'Select opening bowler' }).selectOption({ index: 1 });
-  await page.getByRole('button', { name: 'Confirm player' }).click();
+  await page.getByRole('button', { name: 'Confirm Bowler' }).click();
   await page.waitForTimeout(500);
   await page.getByRole('button', { name: '6', exact: true }).click();
   await page.getByRole('button', { name: 'Finalize match', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm finalization' }).click();
-  await expect(page.getByText('Finalized. Included in player career statistics.')).toBeVisible();
+  await expect(page.locator('.match-centre-header .match-status')).toHaveText('completed');
+  await page.getByLabel('More actions', { exact: true }).click();
   const scorecardDownloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download Scorecard' }).click();
   const scorecardDownload = await scorecardDownloadPromise;
@@ -299,7 +300,12 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   });
   await expect(page.locator('.notice.error')).toContainText('valid Crease backup');
   await page.goto(matchUrl);
-  await expect(page.getByText('Finalized. Included in player career statistics.')).toBeVisible();
+  await expect(page.locator('.match-centre-header .match-status')).toHaveText('completed');
+  await expect(page.getByRole('tab', { name: 'Scorecard', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.getByRole('tab', { name: 'Score', exact: true }).click();
   for (const width of [320, 390, 430, 1200]) {
     await page.setViewportSize({ width, height: 850 });
     expect(
@@ -344,9 +350,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.close();
   const reopened = await context.newPage();
   await reopened.goto(matchUrl);
-  await expect(
-    reopened.getByText('Finalized. Included in player career statistics.'),
-  ).toBeVisible();
+  await expect(reopened.locator('.match-centre-header .match-status')).toHaveText('completed');
   await context.setOffline(false);
   const isolated = await browser.newContext();
   const fresh = await isolated.newPage();

@@ -10,6 +10,7 @@ import {
 } from '../lib/db';
 import { fetchSession, getSyncState, resolveConflict, sync } from '../lib/sync';
 import { fetchWithTimeout } from '../lib/request';
+import ScreenSkeleton from './Skeletons';
 import SignOutAction from './SignOutAction';
 import SyncStatus from './SyncStatus';
 import AccountSecurity from './AccountSecurity';
@@ -343,7 +344,7 @@ export default function AccountSettings() {
     return (
       <div className="auth-shell">
         <main className="auth-main" style={{ textAlign: 'center', paddingTop: '4rem' }}>
-          <p>Loading account…</p>
+          <ScreenSkeleton screen="account" />
         </main>
       </div>
     );
@@ -534,7 +535,7 @@ export default function AccountSettings() {
                 </p>
 
                 {membersLoading ? (
-                  <p>Loading members…</p>
+                  <ScreenSkeleton screen="players" />
                 ) : (
                   <div className="members-list">
                     {members.map((m) => (

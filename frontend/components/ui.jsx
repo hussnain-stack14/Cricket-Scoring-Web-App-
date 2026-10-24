@@ -84,3 +84,38 @@ export function Sheet({ title, children, close }) {
   );
 }
 export const playerLabel = (p) => ({ id: p.id, name: p.name });
+
+// Automatic activation follows the WAI-ARIA tabs keyboard pattern.
+export function Tabs({ items, value, onChange, id = 'tabs', label = 'Views' }) {
+  return (
+    <div className="tabs accessible-tabs" role="tablist" aria-label={label}>
+      {items.map((item, index) => (
+        <button
+          type="button"
+          role="tab"
+          id={id + '-' + item}
+          aria-controls={id + '-panel'}
+          aria-selected={value === item}
+          tabIndex={value === item ? 0 : -1}
+          className={value === item ? 'active' : ''}
+          key={item}
+          onClick={() => onChange(item)}
+          onKeyDown={(e) => {
+            let next;
+            if (e.key === 'ArrowRight') next = (index + 1) % items.length;
+            else if (e.key === 'ArrowLeft') next = (index + items.length - 1) % items.length;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = items.length - 1;
+            if (next !== undefined) {
+              e.preventDefault();
+              onChange(items[next]);
+              e.currentTarget.parentElement.children[next].focus();
+            }
+          }}
+        >
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
