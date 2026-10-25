@@ -38,3 +38,20 @@ A combined 18-test browser run exposed non-reproducible service-worker/browser s
 ## Remaining limitations
 
 Real Atlas credentials and the referenced PDF/match records are required to trace the exact 23 pending changes and determine whether the missing second-innings events exist on Device A, Device B, or the server. A two-browser-context integration test against a configured non-production account remains necessary before claiming real-time multi-device synchronization. Safari/iOS and a full assistive-technology audit were not run.
+
+## Production incident forensic command
+
+The `SyncRecord` schema uses `teamId`, `table`, `recordId`, `data`, `revision`, `lastChangeId`,
+`deletedAt`, `createdAt`, and `updatedAt`. It does not use `recordType`, `record`, or `accountId`.
+Valid tables are `players`, `teams`, `memberships`, `matches`, `innings`, `events`, `audits`, and
+`drafts`.
+
+From a protected environment with the existing `MONGODB_URI` configured, run:
+
+```sh
+npm --prefix frontend run inspect:match-sync -- --team-id <teamId> --date 2026-10-25
+```
+
+This read-only command selects only the named match under that account/date and emits metadata,
+child counts, revisions, and replayed score totals. It never writes, deletes, repairs, prints raw
+delivery payloads, or reveals the MongoDB URI.
