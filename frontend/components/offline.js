@@ -54,6 +54,7 @@ export function useOffline() {
   const [installed, setInstalled] = useState(false);
   const [update, setUpdate] = useState(false);
   const registrationRef = useRef(null);
+  const checkTimerRef = useRef(null);
 
   const verify = useCallback(async (reg) => {
     if (!reg?.active) {
@@ -128,6 +129,9 @@ export function useOffline() {
       if (reg.installing || reg.waiting) updateFound();
       registrationRef.current = reg;
       setUpdate(!!reg.waiting);
+      // A registration alone does not check Vercel for a new worker after launch.
+      // updateViaCache:none ensures sw.js itself is always revalidated.
+      await reg.update();
       return await verify(reg);
     } catch (error) {
       setReady(false);
@@ -164,6 +168,13 @@ export function useOffline() {
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
     window.addEventListener('appinstalled', onAppInstalled);
     navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
+    const check = () => {
+      if (navigator.onLine && document.visibilityState === 'visible') void checkForUpdate();
+    };
+    window.addEventListener('online', check);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    checkTimerRef.current = window.setInterval(check, 30 * 60 * 1000);
     updateInstalledState();
     const instructionTimer = setTimeout(() => {
       setInstallState((current) => (current === 'checking' ? 'instructions' : current));
@@ -175,8 +186,25 @@ export function useOffline() {
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
       window.removeEventListener('appinstalled', onAppInstalled);
       navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
+      window.removeEventListener('online', check);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', check);
+      window.clearInterval(checkTimerRef.current);
     };
   }, [prepare]);
+
+  const checkForUpdate = useCallback(async () => {
+    const reg = registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
+    if (!reg || !navigator.onLine) return false;
+    registrationRef.current = reg;
+    try {
+      await reg.update();
+      setUpdate(Boolean(reg.waiting));
+      return Boolean(reg.waiting);
+    } catch {
+      return false;
+    }
+  }, []);
 
   const install = useCallback(async () => {
     if (installed) return 'installed';
@@ -244,6 +272,11 @@ export function useOffline() {
     reg.waiting.postMessage({ type: 'ACTIVATE' });
   }
 
+  function deferUpdate() {
+    // Keep the waiting worker intact; the next explicit check or app launch can offer it again.
+    setUpdate(false);
+  }
+
   const installationMessage = {
     checking: 'Checking installation support…',
     available: 'Install Crease',
@@ -258,11 +291,13 @@ export function useOffline() {
     ready,
     message,
     retry,
+    checkForUpdate,
     update,
     installed,
     installState,
     installationMessage,
     install,
     applyUpdate,
+    deferUpdate,
   };
 }

@@ -4,6 +4,7 @@ import { AlertCircle, Cloud, CloudOff, RefreshCw, Shield } from 'lucide-react';
 export const SYNC_STATUS_LABELS = {
   synced: 'All changes synced',
   pending: 'Waiting to sync',
+  incomplete: 'Sync incomplete',
   conflict: 'Sync needs attention',
   attention: 'Sync needs attention',
   offline: 'Offline — using saved data',
@@ -14,6 +15,7 @@ export const SYNC_STATUS_LABELS = {
 const STATUS_ICONS = {
   synced: Cloud,
   pending: RefreshCw,
+  incomplete: AlertCircle,
   conflict: AlertCircle,
   attention: AlertCircle,
   offline: CloudOff,

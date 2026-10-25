@@ -1,5 +1,6 @@
 import { db, tables } from './db.js';
 import { fetchWithTimeout } from './request.js';
+import { matchStates } from './engine.js';
 
 const MAX_BATCH = 250;
 const SESSION_TIMEOUT_MS = 4000;
@@ -15,6 +16,15 @@ const syncPriority = (change) => {
   return change.data?.startId && change.data?.startDetails ? -1 : 0;
 };
 const pullPriority = (record) => (record?.table === 'matches' ? 0 : syncPriority(record));
+function hasVerifiedCompletedHistory(match, innings, events) {
+  if (!match.syncSnapshot?.verified) return true; // Legacy records retain count-only compatibility.
+  try {
+    const states = matchStates(match, innings, events);
+    return states.length === 2 && states[0].done && states[1].done;
+  } catch {
+    return false;
+  }
+}
 
 export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
   if (sessionRequest) return sessionRequest;
@@ -267,7 +277,8 @@ export async function pullChanges(workspaceId) {
             .toArray();
           if (
             localEvents.length < data.syncSnapshot.events ||
-            localInnings.length < data.syncSnapshot.innings
+            localInnings.length < data.syncSnapshot.innings ||
+            !hasVerifiedCompletedHistory(data, localInnings, localEvents)
           ) {
             // Keep match identity and currently received score visible, but never present a partial
             // chase as final. The unchanged cursor retries the authoritative completion next pull.
@@ -339,7 +350,12 @@ export async function pullChanges(workspaceId) {
             ]);
             if (
               eventCount >= pendingCompletion.syncSnapshot.events &&
-              inningsCount >= pendingCompletion.syncSnapshot.innings
+              inningsCount >= pendingCompletion.syncSnapshot.innings &&
+              hasVerifiedCompletedHistory(
+                pendingCompletion,
+                await db.innings.where({ workspaceId }).filter((row) => row.matchId === data.matchId).toArray(),
+                await db.events.where({ workspaceId }).filter((row) => row.matchId === data.matchId).toArray(),
+              )
             ) {
               const { completionPending: _pending, ...finalMatch } = pendingCompletion;
               await db.matches.put({ ...finalMatch, status: 'completed' });
@@ -352,11 +368,12 @@ export async function pullChanges(workspaceId) {
         revisions,
         conflicts,
         lastPull: deferredMatchRecords ? currentMeta.lastPull : result.pulledAt,
+        syncStatus: deferredMatchRecords ? 'incomplete' : currentMeta.syncStatus,
         lastError: null,
       });
     },
   );
-  return { merged };
+  return { merged, incomplete: deferredMatchRecords };
 }
 
 export async function resolveConflict(workspaceId, conflict, resolution) {
@@ -484,6 +501,8 @@ async function performSync(workspaceId, { signOutToken, session: knownSession } 
       ? 'unauthenticated'
       : state.conflicts.length || pushResult.rejected?.length
         ? 'conflict'
+        : pullResult.incomplete
+          ? 'incomplete'
         : pushResult.error || pullResult.error
           ? 'attention'
           : state.pending

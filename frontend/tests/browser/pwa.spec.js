@@ -75,6 +75,7 @@ test('production install controls, manifest, icons and offline precache are accu
   expect(resources.icons).toEqual([
     { status: 200, type: 'image/png', width: 192, height: 192 },
     { status: 200, type: 'image/png', width: 512, height: 512 },
+    { status: 200, type: 'image/png', width: 512, height: 512 },
   ]);
   expect(resources.workerStatus).toBe(200);
   expect(resources.workerType).toContain('javascript');

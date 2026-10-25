@@ -7,12 +7,12 @@ const publicRoot = resolve('public');
 const staticRoot = resolve('.next/static');
 await mkdir(resolve(publicRoot, 'icons'), { recursive: true });
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="0" fill="#123d2b"/><path d="M333 167c-71-36-153 5-153 89s82 125 153 89" fill="none" stroke="#7fae42" stroke-width="40" stroke-linecap="round"/><path d="M270 211v91m28-91v91m-57-91v91m-6-98h70" stroke="#7fae42" stroke-width="9" stroke-linecap="round"/></svg>`;
-for (const size of [192, 512]) {
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#123d2b"/><path d="M338 155c-82-46-176 7-176 101s94 147 176 101" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round"/><path d="M292 163c-22 26-34 58-34 93s12 67 34 93" fill="none" stroke="#8fc65a" stroke-width="10" stroke-linecap="round" stroke-dasharray="16 12"/></svg>`;
+for (const [file, size] of [['icon-192.png', 192], ['icon-512.png', 512], ['icon-maskable-512.png', 512], ['apple-touch-icon.png', 180]]) {
   await sharp(Buffer.from(svg))
     .resize(size)
     .png()
-    .toFile(resolve(publicRoot, `icons/icon-${size}.png`));
+    .toFile(resolve(publicRoot, `icons/${file}`));
 }
 
 async function filesUnder(root) {

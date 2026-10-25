@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ChevronRight,
@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   UserRound,
+  Palette,
 } from 'lucide-react';
 import {
   clearWorkspace,
@@ -22,6 +23,7 @@ import {
 import { Button, Field, Sheet } from './ui';
 import SignOutAction from './SignOutAction';
 import SyncStatus from './SyncStatus';
+import { setTheme, THEME_STORAGE_KEY } from './ThemeController';
 export default function Settings({
   w,
   data,
@@ -42,7 +44,13 @@ export default function Settings({
     [erase, setErase] = useState(''),
     [storage, setStorage] = useState(''),
     [localError, setLocalError] = useState(''),
-    [selectedCategory, setSelectedCategory] = useState(null);
+    [selectedCategory, setSelectedCategory] = useState(null),
+    [theme, setThemeChoice] = useState('classic');
+  useEffect(() => setThemeChoice(localStorage.getItem(THEME_STORAGE_KEY) === 'red-ball' ? 'red-ball' : 'classic'), []);
+  function chooseTheme(next) {
+    setThemeChoice(next);
+    setTheme(next);
+  }
   const categories = [
     {
       id: 'account',
@@ -61,6 +69,12 @@ export default function Settings({
       title: 'Cloud sync & offline',
       description: 'Connection, installation, and offline readiness',
       Icon: Cloud,
+    },
+    {
+      id: 'appearance',
+      title: 'Appearance',
+      description: 'Choose your Crease colour theme',
+      Icon: Palette,
     },
     {
       id: 'storage',
@@ -262,6 +276,9 @@ export default function Settings({
           <Button secondary onClick={offline.retry}>
             Retry offline preparation
           </Button>
+          <Button secondary onClick={offline.checkForUpdate}>
+            Check for updates
+          </Button>
           {offline.installed ? (
             <Link className="button" href="/app/">
               Open Crease
@@ -292,6 +309,23 @@ export default function Settings({
               )}
             </div>
           )}
+        </section>
+      )}
+      {selectedCategory === 'appearance' && (
+        <section className="card">
+          <h2>Appearance</h2>
+          <p>Choose a professional colour system. Your preference stays on this device and works offline.</p>
+          <div className="theme-options" role="group" aria-label="Colour theme">
+            <button type="button" className="theme-option" aria-pressed={theme === 'classic'} onClick={() => chooseTheme('classic')}>
+              <span className="theme-option-swatch"><i style={{ background: '#1f5a3d' }} /><i style={{ background: '#f7f8f3' }} /></span>
+              <strong>Classic Green</strong><br /><small>Crease&apos;s original field-ready look.</small>
+            </button>
+            <button type="button" className="theme-option" aria-pressed={theme === 'red-ball'} onClick={() => chooseTheme('red-ball')}>
+              <span className="theme-option-swatch red"><i /><i /></span>
+              <strong>Red Ball</strong><br /><small>Premium red and white cricket styling.</small>
+            </button>
+          </div>
+          <p className="help">App version: {process.env.NEXT_PUBLIC_APP_VERSION || 'Current deployment'}</p>
         </section>
       )}
       {selectedCategory === 'storage' && (

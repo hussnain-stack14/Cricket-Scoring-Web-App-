@@ -5,6 +5,8 @@ import { connectDB } from '../../../../lib/server/db';
 import { SyncRecord } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
+import { completedHistoryError } from '../../../../backend/completedHistory.js';
+import { reportOperationalEvent } from '../../../../backend/monitoring.js';
 
 const ALLOWED_TABLES = new Set([
   'players',
@@ -153,27 +155,33 @@ export async function POST(req) {
         rejected.push(conflict(change, existing, policyError));
         continue;
       }
-      if (!deleted && table === 'matches' && data.status === 'completed' && data.syncSnapshot) {
-        const [eventCount, inningsCount] = await Promise.all([
-          SyncRecord.countDocuments({
+      if (!deleted && table === 'matches' && data.status === 'completed') {
+        const [eventRecords, inningsRecords] = await Promise.all([
+          SyncRecord.find({
             teamId: session.teamId,
             table: 'events',
             deletedAt: null,
             'data.matchId': recordId,
-          }),
-          SyncRecord.countDocuments({
+          }, { data: 1, _id: 0 }).lean(),
+          SyncRecord.find({
             teamId: session.teamId,
             table: 'innings',
             deletedAt: null,
             'data.matchId': recordId,
-          }),
+          }, { data: 1, _id: 0 }).lean(),
         ]);
-        if (eventCount < data.syncSnapshot.events || inningsCount < data.syncSnapshot.innings) {
+        const historyError = completedHistoryError(
+          data,
+          inningsRecords.map((record) => record.data),
+          eventRecords.map((record) => record.data),
+          data.syncSnapshot,
+        );
+        if (historyError) {
           rejected.push(
             conflict(
               change,
               existing,
-              'The completed scorecard is still waiting for its innings or deliveries. It will retry safely.',
+              `${historyError} It will retry safely.`,
             ),
           );
           continue;
@@ -240,11 +248,9 @@ export async function POST(req) {
           );
         }
       } else {
-        console.error('Sync push record failed:', {
-          table,
-          recordId,
-          name: error?.name || 'Error',
-          code: error?.code,
+        reportOperationalEvent('sync_push_record_error', {
+          status: 'error',
+          code: error?.code || error?.name || 'unknown',
         });
         rejected.push({
           table,
@@ -256,5 +262,11 @@ export async function POST(req) {
     }
   }
 
+  if (rejected.length)
+    reportOperationalEvent('sync_push_rejected', {
+      status: 'rejected',
+      count: rejected.length,
+      tables: [...new Set(rejected.map((item) => item.table).filter(Boolean))],
+    });
   return NextResponse.json({ applied, rejected, pushedAt: new Date().toISOString() });
 }

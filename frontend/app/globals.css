@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 :root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --control-height: 44px;
+  --radius-control: 10px;
   --green: #1f5a3d;
   --green-deep: #123d2b;
   --accent: #7fae42;
@@ -12,6 +21,27 @@
   --surface: #fff;
   --radius-card: 14px;
   --shadow-card: 0 2px 8px #152b2008;
+  --primary: var(--green);
+  --primary-hover: var(--green-deep);
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-text: var(--ink);
+  --color-text-muted: var(--muted);
+  --color-border: var(--line);
+  --color-accent: var(--accent);
+}
+[data-theme='red-ball'] {
+  --green: #b91c1c;
+  --green-deep: #7f1d1d;
+  --accent: #dc2626;
+  --bg: #f8fafc;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --lime: #fee2e2;
+  --line: #fecaca;
+  --red: #b91c1c;
+  --surface: #ffffff;
+  --shadow-card: 0 2px 12px #7f1d1d12;
 }
 * {
   box-sizing: border-box;
@@ -24,6 +54,9 @@ body {
   font-size: 14px;
   line-height: 1.5;
 }
+/* Scores and statistics remain aligned regardless of digit length. */
+.scorecard, .big-score, .dashboard-stat-card > strong, .team-stat-metric strong,
+.stats-table td, .ranking-table td, .score-metrics strong { font-variant-numeric: tabular-nums; }
 button,
 input,
 select {
@@ -91,9 +124,18 @@ button:disabled {
   cursor: not-allowed;
 }
 :focus-visible {
-  outline: 3px solid #84b842;
+  outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
+.theme-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.theme-option { min-height: 112px; text-align: left; border: 2px solid var(--line); border-radius: 14px; padding: 14px; background: var(--surface); color: var(--ink); }
+.theme-option[aria-pressed='true'] { border-color: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 14%, transparent); }
+.theme-option-swatch { display: flex; gap: 5px; margin-bottom: 12px; }
+.theme-option-swatch i { width: 21px; height: 21px; border-radius: 50%; border: 1px solid #0001; }
+.theme-option.red i:first-child { background: #b91c1c; }.theme-option.red i:last-child { background: #fef2f2; }
+.update-notice { position: fixed; z-index: 30; right: max(16px, env(safe-area-inset-right)); bottom: calc(82px + env(safe-area-inset-bottom)); width: min(390px, calc(100vw - 32px)); padding: 15px; border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 14px; background: var(--surface); box-shadow: 0 12px 35px #0002; }
+.update-notice p { margin: 4px 0 12px; }
+@media (min-width: 760px) { .update-notice { bottom: 24px; } }
 .app {
   max-width: 1200px;
   margin: auto;
@@ -172,9 +214,9 @@ main {
   background: var(--green);
   color: white;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 12px 17px;
-  min-height: 46px;
+  min-height: var(--control-height);
   font-size: 13px;
   font-weight: 700;
   text-align: center;
@@ -329,10 +371,10 @@ main {
 }
 .bottom-nav a.selected {
   color: var(--green);
-  background: #eef5e6;
+  background: color-mix(in srgb, var(--green) 10%, var(--surface));
 }
 .card {
-  padding: 24px;
+  padding: var(--space-5);
   background: white;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -346,7 +388,7 @@ main {
 }
 .field {
   display: block;
-  margin: 16px 0;
+  margin: var(--space-4) 0;
 }
 .field > span {
   display: block;
@@ -4507,7 +4549,7 @@ pre {
   .app-content {
     width: 100%;
     min-width: 0;
-    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+    padding: var(--space-3) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
   }
   .bottom-nav {
     position: fixed;
@@ -4674,6 +4716,8 @@ pre {
 
 /* Compact, readable layouts at narrow ground-side scoring widths. */
 .app-workspace, .dashboard-panel, .match-card-item, .person-row .grow { min-width: 0; }
+.page-heading > div { min-width: 0; }
+.page-heading h1, .page-heading p { overflow-wrap: anywhere; }
 .dashboard-view > .dashboard-panel { margin-bottom: 20px; }
 .match-card-item > .button { margin: 0 16px 12px; }
 .match-team-line strong, .person-row .grow, .dashboard-panel h3 { overflow-wrap: anywhere; }
@@ -4682,7 +4726,7 @@ pre {
 .status-cancelled { color: var(--muted); }
 .tabs { overflow-x: auto; max-width: 100%; }
 .button, .icon-button, .bottom-nav a { min-height: 44px; }
-:focus-visible { outline: 3px solid #25815e; outline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 430px) {
   .dashboard-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-welcome h2 { font-size: 1.5rem; }
@@ -5188,7 +5232,7 @@ pre {
 }
 @keyframes wicket-glow {
   30% {
-    box-shadow: 0 0 0 3px #df886c70;
+    box-shadow: none;
   }
 }
 @media (max-width: 767px) {
@@ -5378,3 +5422,21 @@ pre {
  .ranking-mobile details>a { display:block; margin-top:16px; color:#1c633d; font-size:12px; }
 }
 @media(prefers-reduced-motion:reduce) { .leaderboards [role=tabpanel] { animation:none!important; } .ranking-mobile details { transition:none; } }
+
+/* Theme-safe mobile refinements. These override legacy green surface literals without duplicating screens. */
+@media (max-width: 360px) {
+  .mobile-page-heading { gap: var(--space-2); }
+  .mobile-page-heading h1 { font-size: 22px; }
+  .mobile-page-heading > .button { min-width: 0; padding: 9px 10px; font-size: 12px; }
+  .mobile-page-heading > .button svg { width: 16px; }
+  .card, .dashboard-panel { padding: var(--space-3); }
+}
+[data-theme='red-ball'] .brand-dot,
+[data-theme='red-ball'] .settings-menu-icon,
+[data-theme='red-ball'] .dashboard-stat-icon,
+[data-theme='red-ball'] .empty-icon { color: var(--green); }
+[data-theme='red-ball'] .settings-menu-icon,
+[data-theme='red-ball'] .dashboard-stat-icon,
+[data-theme='red-ball'] .empty-icon,
+[data-theme='red-ball'] .pill { background: #fef2f2; }
+[data-theme='red-ball'] .local-badge > span { background: var(--green); }

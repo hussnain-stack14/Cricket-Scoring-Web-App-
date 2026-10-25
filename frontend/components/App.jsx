@@ -1007,6 +1007,20 @@ export default function App({ screen }) {
                     onSync={syncNow}
                   />
                 )}
+              {offline.update && (
+                <aside className="update-notice" role="status" aria-live="polite">
+                  <strong>Crease update available</strong>
+                  <p>A new version is ready. Your match data is safe.</p>
+                  {screen === 'match' || liveMatches.length > 0 ? (
+                    <small>Finish live scoring before applying this update.</small>
+                  ) : (
+                    <div className="actions">
+                      <button className="button compact" onClick={offline.applyUpdate}>Update now</button>
+                      <button className="button compact secondary" onClick={offline.deferUpdate}>Later</button>
+                    </div>
+                  )}
+                </aside>
+              )}
               </>
             )
           )}

@@ -32,7 +32,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       if (!(await verify()).ready) throw new Error('Incomplete precache');
-      await self.clients.claim(); /* Retain older immutable assets for open tabs. Never touch IndexedDB. */
+      await Promise.all((await caches.keys()).filter((key) => key.startsWith('crease-') && key !== CACHE).map((key) => caches.delete(key)));
+      await self.clients.claim(); // Never touches IndexedDB; the new worker owns only its versioned Cache Storage.
     })(),
   );
 });
@@ -72,10 +73,7 @@ self.addEventListener('fetch', (event) => {
         return (await cache.match(path)) || (await fetch(event.request));
       }
       const cached = await cache.match(url.pathname);
-      if (cached) return cached;
-      const previous = await caches.match(url.pathname);
-      if (previous) return previous;
-      return fetch(event.request);
+      return cached || fetch(event.request);
     })(),
   );
 });

@@ -45,7 +45,8 @@ async function stampMatchSnapshot(workspaceId, match) {
       .filter((row) => row.matchId === match.id)
       .count(),
   ]);
-  match.syncSnapshot = { innings, events };
+  // The final match record is a commit marker. The score itself is always replayed from events.
+  match.syncSnapshot = { innings, events, verified: true };
 }
 export async function queueSyncChange(workspaceId, table, recordId, data, deleted = false) {
   const meta = await db.syncMeta.get(workspaceId);
