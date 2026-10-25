@@ -302,6 +302,34 @@ export default function App({ screen }) {
       document.removeEventListener('visibilitychange', triggerSync);
     };
   }, [loaded, session?.offlineCached, session?.teamId, w?.id]);
+  useEffect(() => {
+    const closeOthers = (current) => {
+      document.querySelectorAll('.header-popover[open]').forEach((menu) => {
+        if (menu !== current) menu.open = false;
+      });
+    };
+    const onToggle = (event) => {
+      if (event.target.open) closeOthers(event.target);
+    };
+    const onPointerDown = (event) => {
+      if (!event.target.closest('.header-popover')) closeOthers(null);
+    };
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      const openMenu = document.querySelector('.header-popover[open]');
+      if (!openMenu) return;
+      openMenu.open = false;
+      openMenu.querySelector('summary')?.focus();
+    };
+    document.addEventListener('toggle', onToggle, true);
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('toggle', onToggle, true);
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
   async function run(fn) {
     if (busy.current) return false;
     busy.current = true;

@@ -34,6 +34,19 @@ export const defaults = { overs: 5, size: 6, maxBowler: 2, freeHit: true };
 const must = (condition, message) => {
   if (!condition) throw new Error(message);
 };
+async function stampMatchSnapshot(workspaceId, match) {
+  const [innings, events] = await Promise.all([
+    db.innings
+      .where({ workspaceId })
+      .filter((row) => row.matchId === match.id)
+      .count(),
+    db.events
+      .where({ workspaceId })
+      .filter((row) => row.matchId === match.id)
+      .count(),
+  ]);
+  match.syncSnapshot = { innings, events };
+}
 export async function queueSyncChange(workspaceId, table, recordId, data, deleted = false) {
   const meta = await db.syncMeta.get(workspaceId);
   if (!meta?.teamId) return;
@@ -725,6 +738,7 @@ export async function changeMatch(workspaceId, id, revision, action) {
           m.status = 'live';
         } else throw new Error('Unknown match action.');
       }
+      if (m.status === 'completed') await stampMatchSnapshot(workspaceId, m);
       m.revision++;
       await db.matches.put(m);
       await queueSyncChange(workspaceId, 'matches', m.id, m);

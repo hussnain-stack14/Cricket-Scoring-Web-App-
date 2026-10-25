@@ -66,6 +66,7 @@ export function teamStatistics(teamId, matches, innings, events) {
     wickets: 0,
     highest: null,
     lowest: null,
+    incompleteCompleted: 0,
   };
 
   for (const match of matches) {
@@ -75,7 +76,10 @@ export function teamStatistics(teamId, matches, innings, events) {
     const matchInnings = innings.filter((inning) => inning.matchId === match.id);
     const matchEvents = events.filter((event) => event.matchId === match.id);
     const states = matchStates(match, matchInnings, matchEvents);
-    if (states.length !== 2 || !states[0].done || !states[1].done) continue;
+    if (states.length !== 2 || !states[0].done || !states[1].done) {
+      summary.incompleteCompleted++;
+      continue;
+    }
 
     summary.matches++;
     const firstRuns = states[0].runs;

@@ -71,12 +71,13 @@ export function printReport({ title, subtitle = '', sections }) {
           .brand { color: #1f5a3d; font-size: 14px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
           h1 { font-size: 25px; margin: 10px 0 4px; }
           .subtitle { color: #64746a; margin: 0; }
-          section { margin: 22px 0; break-inside: avoid; }
-          h2 { color: #123d2b; font-size: 16px; margin: 0 0 9px; }
+          section { margin: 18px 0; break-inside: auto; }
+          h2 { color: #123d2b; font-size: 16px; margin: 0 0 9px; break-after: avoid; }
           .table-wrap { overflow: visible; }
           table { border-collapse: collapse; font-size: 10px; width: 100%; }
           th, td { border: 1px solid #e3e9e0; padding: 6px 7px; text-align: left; }
           th { background: #f0f4ed; color: #123d2b; }
+          thead { display: table-header-group; }
           tr { break-inside: avoid; }
           footer { border-top: 1px solid #e3e9e0; color: #64746a; margin-top: 30px; padding-top: 9px; }
           @media print {

@@ -40,14 +40,14 @@ test('login UI distinguishes successful login, bad credentials, lockout, and ser
 
   for (const scenario of scenarios) {
     const page = await browser.newPage();
-    await page.route('**/api/auth/login/**', (route) =>
+    await page.route('**/api/auth/login', (route) =>
       route.fulfill({
         status: scenario.status,
         contentType: 'application/json',
         body: JSON.stringify(scenario.body),
       }),
     );
-    await page.route('**/api/auth/me/**', (route) =>
+    await page.route('**/api/auth/me', (route) =>
       route.fulfill({
         status: 401,
         contentType: 'application/json',
@@ -56,13 +56,13 @@ test('login UI distinguishes successful login, bad credentials, lockout, and ser
     );
     await page.goto('/account/login/');
     await page.getByLabel('Team ID').fill('CRS-123456');
-    await page.getByLabel('Password').fill(scenario.password);
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill(scenario.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     if (scenario.expected === 'redirect') {
       await expect(page).toHaveURL(/\/app\/?$/);
     } else {
-      await expect(page.getByRole('alert')).toContainText(scenario.expected);
+      await expect(page.locator('.auth-error[role="alert"]')).toContainText(scenario.expected);
     }
     await page.close();
   }

@@ -382,6 +382,12 @@ export default function TeamStatistics({ team, data, onBack }) {
           {exportError}
         </p>
       )}
+      {stats.incompleteCompleted > 0 && (
+        <p className="notice error" role="status">
+          {stats.incompleteCompleted} completed match{stats.incompleteCompleted === 1 ? '' : 'es'}{' '}
+          is still missing scorecard data on this device. It is excluded until sync finishes.
+        </p>
+      )}
 
       {tab === 'Overview' && (
         <>

@@ -7,6 +7,14 @@ const recordKey = (table, recordId) => `${table}:${recordId}`;
 const pendingKey = (workspaceId, table, recordId) => `${workspaceId}:${table}:${recordId}`;
 let sessionRequest;
 const syncJobs = new Map();
+const syncPriority = (change) => {
+  if (change.table !== 'matches')
+    return ['innings', 'events', 'audits'].includes(change.table) ? 1 : 0;
+  // A completed parent is the commit marker: upload it only after its deliveries.
+  if (change.data?.status === 'completed') return 2;
+  return change.data?.startId && change.data?.startDetails ? -1 : 0;
+};
+const pullPriority = (record) => (record?.table === 'matches' ? 0 : syncPriority(record));
 
 export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
   if (sessionRequest) return sessionRequest;
@@ -89,8 +97,7 @@ export async function pushChanges(workspaceId) {
   if (pending.length === 0) return { pushed: 0, rejected: [] };
   pending.sort(
     (left, right) =>
-      Number(right.table === 'matches') - Number(left.table === 'matches') ||
-      left.queuedAt.localeCompare(right.queuedAt),
+      syncPriority(left) - syncPriority(right) || left.queuedAt.localeCompare(right.queuedAt),
   );
 
   let pushed = 0;
@@ -244,11 +251,40 @@ export async function pullChanges(workspaceId) {
       const revisions = { ...(currentMeta.revisions ?? {}) };
       const conflicts = [...(currentMeta.conflicts ?? [])];
       for (const serverRecord of [...result.records].sort(
-        (a, b) => Number(b.table === 'matches') - Number(a.table === 'matches'),
+        (a, b) => pullPriority(a) - pullPriority(b),
       )) {
         const { table, recordId, data, deletedAt, revision, lastChangeId } = serverRecord;
         if (!tables.includes(table) || typeof recordId !== 'string' || !Number.isInteger(revision))
           continue;
+        if (table === 'matches' && data?.status === 'completed' && data.syncSnapshot) {
+          const localEvents = await db.events
+            .where({ workspaceId })
+            .filter((event) => event.matchId === recordId && !event.deletedAt)
+            .toArray();
+          const localInnings = await db.innings
+            .where({ workspaceId })
+            .filter((inning) => inning.matchId === recordId && !inning.deletedAt)
+            .toArray();
+          if (
+            localEvents.length < data.syncSnapshot.events ||
+            localInnings.length < data.syncSnapshot.innings
+          ) {
+            // Keep match identity and currently received score visible, but never present a partial
+            // chase as final. The unchanged cursor retries the authoritative completion next pull.
+            const existingMatch = await db.matches.get(recordId);
+            if (!existingMatch || existingMatch.revision <= revision) {
+              await db.matches.put({
+                ...data,
+                id: recordId,
+                workspaceId,
+                status: 'live',
+                completionPending: true,
+              });
+            }
+            deferredMatchRecords = true;
+            continue;
+          }
+        }
         if (['innings', 'events'].includes(table) && data?.matchId) {
           const parent = await db.matches.get(data.matchId);
           if ((parent?.startId || data.startId) && parent?.startId !== data.startId) {
@@ -288,6 +324,28 @@ export async function pullChanges(workspaceId) {
         else continue;
         revisions[key] = revision;
         merged++;
+        if (['innings', 'events'].includes(table) && data?.matchId) {
+          const pendingCompletion = await db.matches.get(data.matchId);
+          if (pendingCompletion?.completionPending && pendingCompletion.syncSnapshot) {
+            const [eventCount, inningsCount] = await Promise.all([
+              db.events
+                .where({ workspaceId })
+                .filter((row) => row.matchId === data.matchId)
+                .count(),
+              db.innings
+                .where({ workspaceId })
+                .filter((row) => row.matchId === data.matchId)
+                .count(),
+            ]);
+            if (
+              eventCount >= pendingCompletion.syncSnapshot.events &&
+              inningsCount >= pendingCompletion.syncSnapshot.innings
+            ) {
+              const { completionPending: _pending, ...finalMatch } = pendingCompletion;
+              await db.matches.put({ ...finalMatch, status: 'completed' });
+            }
+          }
+        }
       }
       await db.syncMeta.put({
         ...currentMeta,

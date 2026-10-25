@@ -18,6 +18,11 @@ const ALLOWED_TABLES = new Set([
 ]);
 const MAX_BATCH = 250;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const syncPriority = (change) => {
+  if (change?.table !== 'matches')
+    return ['innings', 'events', 'audits'].includes(change?.table) ? 1 : 0;
+  return change?.data?.status === 'completed' ? 2 : 0;
+};
 
 function publicRecord(record) {
   return record
@@ -87,9 +92,7 @@ export async function POST(req) {
   const applied = [];
   const rejected = [];
 
-  for (const change of [...body.changes].sort(
-    (a, b) => Number(b?.table === 'matches') - Number(a?.table === 'matches'),
-  )) {
+  for (const change of [...body.changes].sort((a, b) => syncPriority(a) - syncPriority(b))) {
     const { table, recordId, data, baseRevision, changeId, deleted } = change ?? {};
     if (
       !ALLOWED_TABLES.has(table) ||
@@ -149,6 +152,32 @@ export async function POST(req) {
       if (policyError) {
         rejected.push(conflict(change, existing, policyError));
         continue;
+      }
+      if (!deleted && table === 'matches' && data.status === 'completed' && data.syncSnapshot) {
+        const [eventCount, inningsCount] = await Promise.all([
+          SyncRecord.countDocuments({
+            teamId: session.teamId,
+            table: 'events',
+            deletedAt: null,
+            'data.matchId': recordId,
+          }),
+          SyncRecord.countDocuments({
+            teamId: session.teamId,
+            table: 'innings',
+            deletedAt: null,
+            'data.matchId': recordId,
+          }),
+        ]);
+        if (eventCount < data.syncSnapshot.events || inningsCount < data.syncSnapshot.innings) {
+          rejected.push(
+            conflict(
+              change,
+              existing,
+              'The completed scorecard is still waiting for its innings or deliveries. It will retry safely.',
+            ),
+          );
+          continue;
+        }
       }
       if (deleted && ['players', 'teams'].includes(table)) {
         const reference = table === 'players' ? 'data.teams.squad.id' : 'data.teams.id';

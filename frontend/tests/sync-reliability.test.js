@@ -11,7 +11,14 @@ import {
   saveTeam,
   createMatch,
 } from '../lib/db.js';
-import { sync, pushChanges, beginSignOut, cancelSignOut, getPendingCount } from '../lib/sync.js';
+import {
+  sync,
+  pushChanges,
+  pullChanges,
+  beginSignOut,
+  cancelSignOut,
+  getPendingCount,
+} from '../lib/sync.js';
 import { inspectSync } from '../lib/syncDiagnostics.js';
 import { isConsumedDraft, syncPolicyError } from '../backend/syncPolicy.js';
 async function setup() {
@@ -185,6 +192,60 @@ test('an acknowledgment for another table cannot remove an operation', async () 
       });
     await pushChanges(w.id);
     assert.equal(await getPendingCount(w.id), 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+test('a completed parent waits for its full child snapshot and then becomes final on the next pull', async () => {
+  const w = await setup();
+  await db.pendingChanges.clear();
+  const original = globalThis.fetch;
+  const completed = {
+    id: 'server-match',
+    workspaceId: w.id,
+    status: 'completed',
+    revision: 4,
+    startId: 'start',
+    teams: [],
+    rules: {},
+    syncSnapshot: { innings: 2, events: 2 },
+  };
+  const records = [
+    { table: 'matches', recordId: 'server-match', data: completed, revision: 4 },
+    {
+      table: 'innings',
+      recordId: 'inn-1',
+      data: { id: 'inn-1', workspaceId: w.id, matchId: 'server-match', startId: 'start' },
+      revision: 1,
+    },
+    {
+      table: 'events',
+      recordId: 'event-1',
+      data: { id: 'event-1', workspaceId: w.id, matchId: 'server-match', startId: 'start' },
+      revision: 1,
+    },
+  ];
+  try {
+    globalThis.fetch = async () => Response.json({ records, pulledAt: new Date().toISOString() });
+    await pullChanges(w.id);
+    assert.equal((await db.matches.get('server-match')).status, 'live');
+    assert.equal(await db.events.where({ workspaceId: w.id }).count(), 1);
+    records.push(
+      {
+        table: 'innings',
+        recordId: 'inn-2',
+        data: { id: 'inn-2', workspaceId: w.id, matchId: 'server-match', startId: 'start' },
+        revision: 1,
+      },
+      {
+        table: 'events',
+        recordId: 'event-2',
+        data: { id: 'event-2', workspaceId: w.id, matchId: 'server-match', startId: 'start' },
+        revision: 1,
+      },
+    );
+    await pullChanges(w.id);
+    assert.equal((await db.matches.get('server-match')).status, 'completed');
   } finally {
     globalThis.fetch = original;
   }
