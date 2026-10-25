@@ -373,10 +373,17 @@ export async function createMatch(
           );
         }
       }
+      const sourceDraft = draftId
+        ? await db.drafts
+            .where({ workspaceId })
+            .filter((draft) => draft.id === draftId)
+            .first()
+        : null;
       const m = {
         ...match,
         id: uuid(),
         workspaceId,
+        ...(sourceDraft ? { sourceDraftId: sourceDraft.id } : {}),
         revision: 0,
         status: match.scheduledAt ? 'upcoming' : 'live',
         createdAt: new Date().toISOString(),
@@ -392,21 +399,15 @@ export async function createMatch(
       await db.innings.add(inn);
       await queueSyncChange(workspaceId, 'matches', m.id, m);
       await queueSyncChange(workspaceId, 'innings', inn.id, inn);
-      const drafts = draftId
-        ? await db.drafts
-            .where({ workspaceId })
-            .filter((d) => d.id === draftId)
-            .toArray()
-        : [];
-      for (const draft of drafts) {
+      if (sourceDraft) {
         await queueSyncChange(
           workspaceId,
           'drafts',
-          draft.id,
-          { ...draft, consumedByMatchId: m.id },
+          sourceDraft.id,
+          { ...sourceDraft, consumedByMatchId: m.id },
           true,
         );
-        await db.drafts.delete(draft.id);
+        await db.drafts.delete(sourceDraft.id);
       }
       return m;
     },

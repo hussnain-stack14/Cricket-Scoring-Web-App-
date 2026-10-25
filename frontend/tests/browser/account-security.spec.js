@@ -1,5 +1,113 @@
 import { test, expect } from '@playwright/test';
 
+test('session endpoint reports an absent session as unauthorized, not a server failure', async ({
+  request,
+}) => {
+  const response = await request.get('/api/auth/me/');
+  expect(response.status()).toBe(401);
+  expect(await response.json()).toEqual({ authenticated: false });
+});
+
+test('login UI distinguishes successful login, bad credentials, lockout, and service failure', async ({
+  browser,
+}) => {
+  const scenarios = [
+    {
+      password: 'ValidPass123',
+      status: 200,
+      body: { teamId: 'CRS-123456', teamName: 'Demo Team', memberId: 'owner', role: 'owner' },
+      expected: 'redirect',
+    },
+    {
+      password: 'WrongPass123',
+      status: 401,
+      body: { error: 'Team ID or password is incorrect.' },
+      expected: 'Team ID or password is incorrect.',
+    },
+    {
+      password: 'LockedPass123',
+      status: 429,
+      body: { error: 'Sign in temporarily unavailable.', retryAfter: 600 },
+      expected: 'Sign in temporarily unavailable.',
+    },
+    {
+      password: 'UnavailablePass123',
+      status: 503,
+      body: { error: 'MongoDB is not configured.' },
+      expected: 'MongoDB is not configured.',
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const page = await browser.newPage();
+    await page.route('**/api/auth/login/**', (route) =>
+      route.fulfill({
+        status: scenario.status,
+        contentType: 'application/json',
+        body: JSON.stringify(scenario.body),
+      }),
+    );
+    await page.route('**/api/auth/me/**', (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: false }),
+      }),
+    );
+    await page.goto('/account/login/');
+    await page.getByLabel('Team ID').fill('CRS-123456');
+    await page.getByLabel('Password').fill(scenario.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    if (scenario.expected === 'redirect') {
+      await expect(page).toHaveURL(/\/app\/?$/);
+    } else {
+      await expect(page.getByRole('alert')).toContainText(scenario.expected);
+    }
+    await page.close();
+  }
+});
+
+test('sync diagnostics export is read-only and does not start synchronization', async ({
+  page,
+}) => {
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        authenticated: true,
+        teamId: 'CRS-123456',
+        workspaceKey: 'CRS-123456',
+        teamName: 'Demo Team',
+        memberId: 'owner-member',
+        role: 'owner',
+      }),
+    }),
+  );
+  await page.route('**/api/team/members', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ members: [] }),
+    }),
+  );
+  let syncRequests = 0;
+  await page.route('**/api/sync/**', async (route) => {
+    syncRequests++;
+    await route.fulfill({ status: 500, body: 'Unexpected sync request' });
+  });
+
+  await page.goto('/account/settings/');
+  await expect(page.getByRole('heading', { name: 'Demo Team' })).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export read-only sync diagnostics' }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toBe('crease-sync-diagnostics.json');
+  expect(syncRequests).toBe(0);
+});
+
 test('account owners can update login credentials in responsive security dialogs', async ({
   page,
 }) => {

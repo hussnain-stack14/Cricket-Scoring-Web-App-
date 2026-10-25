@@ -6,6 +6,25 @@ import {
   normalizeLoginTeamId,
   passwordValidationError,
 } from '../lib/accountCredentials.js';
+import { verifyLoginCredentials } from '../backend/loginCredentials.js';
+
+test('login credential verification accepts a matching account and rejects wrong or unknown accounts', async () => {
+  const compareCalls = [];
+  const compare = async (password, hash) => {
+    compareCalls.push({ password, hash });
+    return password === 'valid-password' && hash === 'account-hash';
+  };
+  assert.equal(
+    await verifyLoginCredentials({ passwordHash: 'account-hash' }, 'valid-password', compare),
+    true,
+  );
+  assert.equal(
+    await verifyLoginCredentials({ passwordHash: 'account-hash' }, 'wrong-password', compare),
+    false,
+  );
+  assert.equal(await verifyLoginCredentials(null, 'wrong-password', compare), false);
+  assert.notEqual(compareCalls[2].hash, 'account-hash');
+});
 
 test('Team ID normalization and validation accept safe IDs and reject reserved or malformed IDs', () => {
   assert.equal(normalizeLoginTeamId(' crs-youngs01 '), 'CRS-YOUNGS01');

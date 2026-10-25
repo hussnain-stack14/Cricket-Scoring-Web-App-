@@ -14,6 +14,7 @@ import ScreenSkeleton from './Skeletons';
 import SignOutAction from './SignOutAction';
 import SyncStatus from './SyncStatus';
 import AccountSecurity from './AccountSecurity';
+import { inspectSync } from '../lib/syncDiagnostics';
 
 const ROLE_LABELS = { owner: 'Owner', scorer: 'Scorer', viewer: 'Viewer' };
 const ROLE_DESCRIPTIONS = {
@@ -187,6 +188,22 @@ export default function AccountSettings() {
   useEffect(() => {
     if (session) loadMembers();
   }, [session, loadMembers]);
+
+  async function downloadSyncDiagnostics() {
+    try {
+      if (!workspaceId) throw new Error('The account workspace is not available.');
+      const report = await inspectSync(workspaceId);
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'crease-sync-diagnostics.json';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not export sync diagnostics.');
+    }
+  }
 
   async function handleSync() {
     setSyncing(true);
@@ -396,6 +413,14 @@ export default function AccountSettings() {
                 syncing={syncing}
                 onSync={handleSync}
               />
+              <button
+                className="text-button"
+                type="button"
+                onClick={downloadSyncDiagnostics}
+                disabled={!workspaceId}
+              >
+                Export read-only sync diagnostics
+              </button>
               <div>
                 {syncMeta?.lastPush && (
                   <small>Last sync: {new Date(syncMeta.lastPush).toLocaleString()}</small>

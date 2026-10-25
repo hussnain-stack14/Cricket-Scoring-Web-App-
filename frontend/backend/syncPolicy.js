@@ -1,4 +1,19 @@
 import { validateMatchStart } from '../lib/matchLifecycle.js';
+
+export function isConsumedDraft(change, match, existing) {
+  const { table, recordId, data, deleted } = change ?? {};
+  return (
+    table === 'drafts' &&
+    deleted === true &&
+    typeof data?.consumedByMatchId === 'string' &&
+    !!match &&
+    match.data?.sourceDraftId === recordId &&
+    match.data?.teams?.[0]?.id === data.teamA &&
+    match.data?.teams?.[1]?.id === data.teamB &&
+    (!existing || (existing.data?.teamA === data.teamA && existing.data?.teamB === data.teamB))
+  );
+}
+
 export function syncPolicyError(
   { table, deleted, data },
   existing,

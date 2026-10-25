@@ -1,13 +1,11 @@
 import { loginAttempt, lockedResponse } from '../../../../backend/loginAttempts.js';
+import { authenticationServiceFailure } from '../../../../backend/authErrors.js';
+import { verifyLoginCredentials } from '../../../../backend/loginCredentials.js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
-import {
-  connectDB,
-  getSafeErrorDetails,
-  isDatabaseConnectionError,
-} from '../../../../lib/server/db';
+import { connectDB, getSafeErrorDetails } from '../../../../lib/server/db';
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { loginLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
@@ -50,10 +48,7 @@ export async function POST(req) {
       ],
     });
 
-    // Constant-time comparison to resist timing attacks
-    const dummyHash = '$2b$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW';
-    const hash = account?.passwordHash ?? dummyHash;
-    const match = await bcrypt.compare(password, hash);
+    const match = await verifyLoginCredentials(account, password, bcrypt.compare);
 
     const attempt = await loginAttempt(normalizedTeamId, !!account && match);
     if (attempt.blocked) return lockedResponse(attempt.retryAfter);
@@ -103,21 +98,7 @@ export async function POST(req) {
     return res;
   } catch (err) {
     console.error('Login error:', getSafeErrorDetails(err));
-    if (isDatabaseConnectionError(err)) {
-      return NextResponse.json(
-        { error: 'Database service is currently unavailable. Please verify connection settings.' },
-        { status: 503 },
-      );
-    }
-    if (err.message?.includes('SESSION_SECRET')) {
-      return NextResponse.json(
-        { error: 'Authentication service is not configured. Please contact support.' },
-        { status: 503 },
-      );
-    }
-    return NextResponse.json(
-      { error: 'Sign in is temporarily unavailable. Please try again.' },
-      { status: 500 },
-    );
+    const failure = authenticationServiceFailure(err);
+    return NextResponse.json({ error: failure.error }, { status: failure.status });
   }
 }

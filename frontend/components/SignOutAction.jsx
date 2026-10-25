@@ -29,6 +29,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
   const [error, setError] = useState('');
   const [signOutToken, setSignOutToken] = useState(null);
   const [sessionInvalidated, setSessionInvalidated] = useState(false);
+  const [attemptedSync, setAttemptedSync] = useState(false);
 
   useEffect(() => {
     if (!open || !signOutToken) return undefined;
@@ -52,19 +53,32 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     setBlocked(false);
     setError('');
     setReauthenticate(false);
+    setAttemptedSync(false);
     let token;
     try {
+      token = await beginSignOut(workspaceId);
+      setSignOutToken(token);
       const initialState = await getSyncState(workspaceId);
       setPending(initialState.pending);
+      if (!initialState.pending && !initialState.conflicts.length) {
+        setReady(true);
+        return;
+      }
       if (!navigator.onLine) {
+        await cancelSignOut(workspaceId, token);
+        setSignOutToken(null);
+        token = null;
         setBlocked(true);
-        setError(UNSYNCED_MESSAGE);
+        setError(
+          initialState.conflicts.length
+            ? 'Some records differ from the cloud. Review conflicts in account settings before signing out.'
+            : UNSYNCED_MESSAGE,
+        );
         return;
       }
 
-      token = await beginSignOut(workspaceId);
-      setSignOutToken(token);
       const result = await sync(workspaceId, { signOutToken: token });
+      setAttemptedSync(true);
       const finalState = await getSyncState(workspaceId);
       setPending(finalState.pending);
       if (
@@ -86,6 +100,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       }
       setReady(true);
     } catch (syncError) {
+      setAttemptedSync(true);
       let lockError;
       if (token) {
         try {
@@ -278,7 +293,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
                 {blocked && (
                   <>
                     <button className="button" type="button" onClick={checkAndSync} disabled={busy}>
-                      Sync & Sign Out
+                      {attemptedSync ? 'Retry Sync' : 'Sync & Sign Out'}
                     </button>
                     <button
                       className="button secondary"

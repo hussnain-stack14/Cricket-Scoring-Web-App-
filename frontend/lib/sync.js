@@ -13,7 +13,12 @@ export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
   sessionRequest = (async () => {
     const res = await fetchWithTimeout('/api/auth/me', { credentials: 'include' }, timeoutMs);
     if (res.status === 401) return null;
-    if (!res.ok) throw new Error(`Session check failed: ${res.status}`);
+    if (!res.ok) {
+      const result = await res.json().catch(() => ({}));
+      throw Object.assign(new Error(result.error || `Session check failed: ${res.status}`), {
+        status: res.status,
+      });
+    }
     const data = await res.json();
     return data.authenticated ? data : null;
   })();
@@ -156,10 +161,17 @@ export async function pushChanges(workspaceId) {
       }
       for (const item of result.rejected) {
         const change = batch.find(
-          (entry) => entry.table === item.table && entry.recordId === item.recordId,
+          (entry) =>
+            entry.table === item.table &&
+            entry.recordId === item.recordId &&
+            (!item.changeId || entry.changeId === item.changeId),
         );
         if (!change) continue;
-        rejected.push({ ...item, table: change.table, changeId: change.changeId });
+        const reason =
+          typeof item.reason === 'string' && item.reason.trim()
+            ? item.reason.trim()
+            : 'The server rejected this change without providing a reason.';
+        rejected.push({ ...item, reason, table: change.table, changeId: change.changeId });
         if (item.serverRecord) {
           const conflict = {
             table: change.table,

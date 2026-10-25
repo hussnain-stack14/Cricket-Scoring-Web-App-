@@ -1,4 +1,4 @@
-import { syncPolicyError } from '../../../../backend/syncPolicy.js';
+import { isConsumedDraft, syncPolicyError } from '../../../../backend/syncPolicy.js';
 import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { connectDB } from '../../../../lib/server/db';
@@ -143,12 +143,7 @@ export async function POST(req) {
           recordId: data.consumedByMatchId,
           deletedAt: null,
         });
-        consumedDraft =
-          !!match &&
-          match.data?.teams?.[0]?.id === data.teamA &&
-          match.data?.teams?.[1]?.id === data.teamB &&
-          (!existing ||
-            (existing.data?.teamA === data.teamA && existing.data?.teamB === data.teamB));
+        consumedDraft = isConsumedDraft(change, match, existing);
       }
       const policyError = syncPolicyError(change, existing, session.role, { consumedDraft });
       if (policyError) {

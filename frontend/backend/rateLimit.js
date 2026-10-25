@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { connectDB } from './db.js';
+import { connectDB, getSafeErrorDetails } from './db.js';
 import { RateLimit } from './models.js';
+import { authenticationServiceFailure } from './authErrors.js';
 export const loginLimiter = { name: 'login-ip', points: 40, duration: 600 };
 export const registerLimiter = { name: 'register-ip', points: 5, duration: 3600 };
 export const accountSecurityIpLimiter = { name: 'security-ip', points: 8, duration: 900 };
@@ -32,11 +33,10 @@ export async function checkRateLimit(limiter, key) {
       { error: 'Too many attempts. Please wait before trying again.', retryAfter },
       { status: 429, headers: { 'Retry-After': String(retryAfter) } },
     );
-  } catch {
-    return Response.json(
-      { error: 'Authentication is temporarily unavailable. Please try again.' },
-      { status: 503 },
-    );
+  } catch (error) {
+    console.error('Authentication rate limit check failed:', getSafeErrorDetails(error));
+    const failure = authenticationServiceFailure(error);
+    return Response.json({ error: failure.error }, { status: failure.status });
   }
 }
 export function getClientIp(req) {
