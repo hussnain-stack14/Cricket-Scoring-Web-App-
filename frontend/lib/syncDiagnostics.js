@@ -1,5 +1,7 @@
 ﻿import { db, tables } from './db.js';
 
+import { matchStates, overs } from './engine.js';
+
 function sanitizeReason(reason) {
   if (typeof reason !== 'string') return null;
   return (
@@ -10,6 +12,16 @@ function sanitizeReason(reason) {
       .trim()
       .slice(0, 180) || null
   );
+}
+
+function summarizeMatch(match, innings, events) {
+  const summary = { matchId: match.id, status: match.status, revision: match.revision ?? 0, updatedAt: match.updatedAt || null, completedAt: match.completedAt || null, syncSnapshot: match.syncSnapshot || null, inningsRecords: innings.length, eventRecords: events.length, scores: [] };
+  try {
+    summary.scores = matchStates(match, innings, events).map((state, index) => ({ innings: index + 1, runs: state.runs, wickets: state.wickets, overs: overs(state.balls), completed: Boolean(state.done) }));
+  } catch (error) {
+    summary.replayError = sanitizeReason(error instanceof Error ? error.message : String(error));
+  }
+  return summary;
 }
 
 // Read-only: no payloads, credentials, or cross-account records in the report.
@@ -62,6 +74,10 @@ export async function inspectSync(workspaceId) {
       ownershipMismatch: !!record && record.workspaceId !== workspaceId,
     };
   });
+  const matchRecords = recordsByTable[tables.indexOf('matches')].filter((match) => !match.deletedAt);
+  const inningsRecords = recordsByTable[tables.indexOf('innings')];
+  const eventRecords = recordsByTable[tables.indexOf('events')];
+  const matches = matchRecords.map((match) => summarizeMatch(match, inningsRecords.filter((record) => record.matchId === match.id && !record.deletedAt), eventRecords.filter((record) => record.matchId === match.id && !record.deletedAt)));
   return {
     generatedAt: new Date().toISOString(),
     workspaceId,
@@ -69,7 +85,9 @@ export async function inspectSync(workspaceId) {
     activeWorkspaceMatches: active?.workspaceId === workspaceId,
     activeAccountMatches: active?.teamId === meta?.teamId,
     pending: pending.length,
+    cursor: { lastPull: meta?.lastPull || null, lastPush: meta?.lastPush || null, lastSuccessfulSync: meta?.lastSuccessfulSync || null },
     counts,
+    matches,
     operations,
     lastError: sanitizeReason(meta?.lastError),
     rejections: (meta?.rejections || []).map((item) => ({

@@ -295,10 +295,12 @@ export default function App({ screen }) {
     triggerSync();
     const interval = window.setInterval(triggerSync, 45000);
     window.addEventListener('online', triggerSync);
+    window.addEventListener('focus', triggerSync);
     document.addEventListener('visibilitychange', triggerSync);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('online', triggerSync);
+      window.removeEventListener('focus', triggerSync);
       document.removeEventListener('visibilitychange', triggerSync);
     };
   }, [loaded, session?.offlineCached, session?.teamId, w?.id]);

@@ -193,6 +193,22 @@ export default function AccountSettings() {
     try {
       if (!workspaceId) throw new Error('The account workspace is not available.');
       const report = await inspectSync(workspaceId);
+      // The endpoint is read-only and session-scoped. Keeping failures in the report lets a
+      // support comparison distinguish an unavailable cloud record from a local-only record.
+      report.cloudMatches = await Promise.all(
+        report.matches.map(async ({ matchId }) => {
+          try {
+            const response = await fetchWithTimeout(
+              `/api/sync/diagnostics?matchId=${encodeURIComponent(matchId)}`,
+              { credentials: 'include', headers: { 'X-Crease-Workspace': session?.teamId || '' } },
+            );
+            const body = await response.json();
+            return response.ok ? body : { matchId, error: body.error || `HTTP ${response.status}` };
+          } catch {
+            return { matchId, error: 'Cloud diagnostic could not be reached; local evidence is retained.' };
+          }
+        }),
+      );
       const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -411,6 +427,7 @@ export default function AccountSettings() {
                 status={statusKey}
                 pending={pendingSync}
                 syncing={syncing}
+                lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
                 onSync={handleSync}
               />
               <button
@@ -422,8 +439,8 @@ export default function AccountSettings() {
                 Export read-only sync diagnostics
               </button>
               <div>
-                {syncMeta?.lastPush && (
-                  <small>Last sync: {new Date(syncMeta.lastPush).toLocaleString()}</small>
+                {syncMeta?.lastSuccessfulSync && (
+                  <small>Last successful cloud sync: {new Date(syncMeta.lastSuccessfulSync).toLocaleString()}</small>
                 )}
               </div>
               {syncMeta?.lastError && (
