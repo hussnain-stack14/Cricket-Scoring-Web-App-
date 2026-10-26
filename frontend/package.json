@@ -9,6 +9,7 @@
     "start": "next start",
     "test": "node --test tests/*.test.js",
     "inspect:match-sync": "node scripts/inspect-match-sync.mjs",
+    "compare:match-backups": "node scripts/compare-match-backups.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
