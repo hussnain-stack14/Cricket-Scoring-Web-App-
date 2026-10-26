@@ -27,6 +27,7 @@ export function playerTotals(data, { teamId = '', format = '', since = '', tourn
     (m) =>
       !m.deletedAt &&
       m.status === 'completed' &&
+      m.statisticsExcluded !== true &&
       (!format || String(m.rules.overs) === String(format)) &&
       (!since || Date.parse(m.scheduledAt || m.date) >= Date.parse(since)) &&
       (!tournament || (m.tournamentId || m.tournament) === tournament),

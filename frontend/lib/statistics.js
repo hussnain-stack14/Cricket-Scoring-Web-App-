@@ -70,7 +70,7 @@ export function teamStatistics(teamId, matches, innings, events) {
   };
 
   for (const match of matches) {
-    if (match.status !== 'completed') continue;
+    if (match.status !== 'completed' || match.statisticsExcluded === true) continue;
     const teamIndex = match.teams.findIndex((team) => team.id === teamId);
     if (teamIndex === -1) continue;
     const matchInnings = innings.filter((inning) => inning.matchId === match.id);

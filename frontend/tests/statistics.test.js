@@ -123,6 +123,33 @@ test('undefined averages stay null, qualification thresholds prevent tiny-sample
   assert.equal(bowler.qualified, false);
 });
 
+test('a historical duplicate marked statisticsExcluded does not double-count performance', () => {
+  const teams = [side('A', ['a1', 'a2']), side('B', ['b1', 'b2'])];
+  const original = completedMatch(
+    'original',
+    teams,
+    0,
+    Array.from({ length: 6 }, () => ({ bat: 1, running: 1 })),
+    [{ wicket: { kind: 'bowled', player: 'b1' } }],
+  );
+  const duplicate = completedMatch(
+    'duplicate',
+    teams,
+    0,
+    Array.from({ length: 6 }, () => ({ bat: 1, running: 1 })),
+    [{ wicket: { kind: 'bowled', player: 'b1' } }],
+  );
+  duplicate.match.statisticsExcluded = true;
+  const stats = teamStatistics(
+    'A',
+    [original.match, duplicate.match],
+    [...original.innings, ...duplicate.innings],
+    [...original.events, ...duplicate.events],
+  );
+  assert.equal(stats.matches, 1);
+  assert.equal(stats.runs, 6);
+});
+
 test('sort preserves undefined values at the end and comparisons require meaningful data', () => {
   assert.deepEqual(
     sortStatistics(

@@ -103,6 +103,10 @@ test('leaderboards use unique completed match snapshots, retain archived identit
     0,
   );
   assert.equal(playerTotals({ ...data, matches: [{ ...one.match, status: 'live' }] }).length, 0);
+  assert.equal(
+    playerTotals({ ...data, matches: [{ ...one.match, statisticsExcluded: true }] }).length,
+    0,
+  );
 });
 test('top 20 caps output, preserves deterministic competition ties, and sorts lower-is-better rates correctly', () => {
   const rows = Array.from({ length: 25 }, (_, i) => ({
