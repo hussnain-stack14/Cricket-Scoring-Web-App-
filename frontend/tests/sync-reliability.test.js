@@ -196,6 +196,97 @@ test('an acknowledgment for another table cannot remove an operation', async () 
     globalThis.fetch = original;
   }
 });
+test('large queues upload in acknowledged batches without dropping operations', async () => {
+  const w = await setup(),
+    original = globalThis.fetch;
+  for (let index = 1; index < 301; index++)
+    await saveRecord(w.id, 'players', { name: `Queued player ${index}` });
+  const batchSizes = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      if (url === '/api/auth/me') return Response.json(session);
+      if (url.includes('/push')) {
+        const changes = JSON.parse(options.body).changes;
+        batchSizes.push(changes.length);
+        return Response.json({
+          applied: changes.map((change) => ({
+            table: change.table,
+            recordId: change.recordId,
+            changeId: change.changeId,
+            revision: change.baseRevision + 1,
+          })),
+          rejected: [],
+          pushedAt: new Date().toISOString(),
+        });
+      }
+      return Response.json({ records: [], pulledAt: new Date().toISOString() });
+    };
+    const result = await sync(w.id);
+    assert.equal(result.ok, true);
+    assert.deepEqual(batchSizes, [250, 51]);
+    assert.equal(await getPendingCount(w.id), 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+test('pull pagination applies one stable snapshot and advances only after the final page', async () => {
+  const w = await setup(),
+    original = globalThis.fetch;
+  await db.pendingChanges.clear();
+  const pulledAt = '2026-10-26T12:00:00.000Z';
+  let requests = 0;
+  try {
+    globalThis.fetch = async (url) => {
+      requests++;
+      const parsed = new URL(url, 'https://crease.test');
+      if (requests === 1) {
+        assert.equal(parsed.searchParams.has('until'), false);
+        return Response.json({
+          records: [
+            {
+              table: 'players',
+              recordId: 'remote-one',
+              data: { id: 'remote-one', name: 'Remote one' },
+              revision: 1,
+            },
+          ],
+          pulledAt,
+          until: pulledAt,
+          hasMore: true,
+          nextCursor: {
+            updatedAt: '2026-10-26T11:59:00.000Z',
+            table: 'players',
+            recordId: 'remote-one',
+          },
+        });
+      }
+      assert.equal(parsed.searchParams.get('until'), pulledAt);
+      assert.equal(parsed.searchParams.get('afterRecordId'), 'remote-one');
+      return Response.json({
+        records: [
+          {
+            table: 'players',
+            recordId: 'remote-two',
+            data: { id: 'remote-two', name: 'Remote two' },
+            revision: 1,
+          },
+        ],
+        pulledAt,
+        until: pulledAt,
+        hasMore: false,
+        nextCursor: null,
+      });
+    };
+    const result = await pullChanges(w.id);
+    assert.equal(result.merged, 2);
+    assert.equal(requests, 2);
+    assert.equal((await db.syncMeta.get(w.id)).lastPull, pulledAt);
+    assert.equal((await db.players.get('remote-one')).workspaceId, w.id);
+    assert.equal((await db.players.get('remote-two')).workspaceId, w.id);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 test('a completed parent waits for its full child snapshot and then becomes final on the next pull', async () => {
   const w = await setup();
   await db.pendingChanges.clear();

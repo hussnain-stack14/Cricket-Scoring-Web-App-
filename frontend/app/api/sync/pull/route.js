@@ -15,6 +15,7 @@ const ALLOWED_TABLES = [
   'audits',
   'drafts',
 ];
+const PAGE_SIZE = 250;
 
 /**
  * GET /api/sync/pull?since=<ISO8601>
@@ -50,27 +51,63 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const since = searchParams.get('since');
   const cursor = since ? new Date(since) : new Date(0);
+  const untilParam = searchParams.get('until');
+  const until = untilParam ? new Date(untilParam) : new Date();
+  const afterUpdatedAtParam = searchParams.get('afterUpdatedAt');
+  const afterUpdatedAt = afterUpdatedAtParam ? new Date(afterUpdatedAtParam) : null;
+  const afterTable = searchParams.get('afterTable');
+  const afterRecordId = searchParams.get('afterRecordId');
 
-  if (isNaN(cursor.getTime())) {
-    return NextResponse.json({ error: 'Invalid since parameter.' }, { status: 400 });
+  if (
+    isNaN(cursor.getTime()) ||
+    isNaN(until.getTime()) ||
+    (afterUpdatedAt &&
+      (isNaN(afterUpdatedAt.getTime()) || !ALLOWED_TABLES.includes(afterTable) || !afterRecordId))
+  ) {
+    return NextResponse.json({ error: 'Invalid synchronization cursor.' }, { status: 400 });
   }
 
   await connectDB();
 
-  const pulledAt = new Date();
+  const pulledAt = until;
   const sinceDate = new Date(Math.max(0, cursor.getTime() - 1000));
+  const pageBoundary = afterUpdatedAt
+    ? {
+        $or: [
+          { updatedAt: { $gt: afterUpdatedAt } },
+          { updatedAt: afterUpdatedAt, table: { $gt: afterTable } },
+          { updatedAt: afterUpdatedAt, table: afterTable, recordId: { $gt: afterRecordId } },
+        ],
+      }
+    : {};
   const records = await SyncRecord.find(
     {
       teamId: session.teamId, // ALWAYS filter by session — never by query param
       updatedAt: { $gte: sinceDate, $lte: pulledAt },
+      ...pageBoundary,
     },
     { __v: 0, _id: 0 }, // never expose MongoDB _id
   )
     .sort({ updatedAt: 1, table: 1, recordId: 1 })
+    .limit(PAGE_SIZE + 1)
     .lean();
 
+  const hasMore = records.length > PAGE_SIZE;
+  const page = hasMore ? records.slice(0, PAGE_SIZE) : records;
+  const last = page.at(-1);
+
   return NextResponse.json({
-    records,
+    records: page,
     pulledAt: pulledAt.toISOString(),
+    until: pulledAt.toISOString(),
+    hasMore,
+    nextCursor:
+      hasMore && last
+        ? {
+            updatedAt: new Date(last.updatedAt).toISOString(),
+            table: last.table,
+            recordId: last.recordId,
+          }
+        : null,
   });
 }

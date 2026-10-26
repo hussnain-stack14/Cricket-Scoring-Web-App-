@@ -428,6 +428,7 @@ export default function AccountSettings() {
                 pending={pendingSync}
                 syncing={syncing}
                 lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
+                error={syncMeta?.lastError}
                 onSync={handleSync}
               />
               <button

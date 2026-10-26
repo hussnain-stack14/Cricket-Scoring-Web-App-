@@ -34,6 +34,8 @@ export default function Settings({
   workspaceId,
   syncStatus,
   pendingSync,
+  lastSuccessfulSync,
+  syncError,
   syncing,
   onSync,
 }) {
@@ -46,7 +48,13 @@ export default function Settings({
     [localError, setLocalError] = useState(''),
     [selectedCategory, setSelectedCategory] = useState(null),
     [theme, setThemeChoice] = useState('classic');
-  useEffect(() => setThemeChoice(localStorage.getItem(THEME_STORAGE_KEY) === 'red-ball' ? 'red-ball' : 'classic'), []);
+  useEffect(
+    () =>
+      setThemeChoice(
+        localStorage.getItem(THEME_STORAGE_KEY) === 'red-ball' ? 'red-ball' : 'classic',
+      ),
+    [],
+  );
   function chooseTheme(next) {
     setThemeChoice(next);
     setTheme(next);
@@ -199,6 +207,8 @@ export default function Settings({
                 <SyncStatus
                   status={syncStatus}
                   pending={pendingSync}
+                  lastSuccessfulSync={lastSuccessfulSync}
+                  error={syncError}
                   syncing={syncing}
                   onSync={onSync}
                 />
@@ -314,18 +324,43 @@ export default function Settings({
       {selectedCategory === 'appearance' && (
         <section className="card">
           <h2>Appearance</h2>
-          <p>Choose a professional colour system. Your preference stays on this device and works offline.</p>
+          <p>
+            Choose a professional colour system. Your preference stays on this device and works
+            offline.
+          </p>
           <div className="theme-options" role="group" aria-label="Colour theme">
-            <button type="button" className="theme-option" aria-pressed={theme === 'classic'} onClick={() => chooseTheme('classic')}>
-              <span className="theme-option-swatch"><i style={{ background: '#1f5a3d' }} /><i style={{ background: '#f7f8f3' }} /></span>
-              <strong>Classic Green</strong><br /><small>Crease&apos;s original field-ready look.</small>
+            <button
+              type="button"
+              className="theme-option"
+              aria-pressed={theme === 'classic'}
+              onClick={() => chooseTheme('classic')}
+            >
+              <span className="theme-option-swatch">
+                <i style={{ background: '#1f5a3d' }} />
+                <i style={{ background: '#f7f8f3' }} />
+              </span>
+              <strong>Classic Green</strong>
+              <br />
+              <small>Crease&apos;s original field-ready look.</small>
             </button>
-            <button type="button" className="theme-option" aria-pressed={theme === 'red-ball'} onClick={() => chooseTheme('red-ball')}>
-              <span className="theme-option-swatch red"><i /><i /></span>
-              <strong>Red Ball</strong><br /><small>Premium red and white cricket styling.</small>
+            <button
+              type="button"
+              className="theme-option"
+              aria-pressed={theme === 'red-ball'}
+              onClick={() => chooseTheme('red-ball')}
+            >
+              <span className="theme-option-swatch red">
+                <i />
+                <i />
+              </span>
+              <strong>Red Ball</strong>
+              <br />
+              <small>Premium red and white cricket styling.</small>
             </button>
           </div>
-          <p className="help">App version: {process.env.NEXT_PUBLIC_APP_VERSION || 'Current deployment'}</p>
+          <p className="help">
+            App version: {process.env.NEXT_PUBLIC_APP_VERSION || 'Current deployment'}
+          </p>
         </section>
       )}
       {selectedCategory === 'storage' && (

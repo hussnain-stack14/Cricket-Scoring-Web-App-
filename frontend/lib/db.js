@@ -898,24 +898,36 @@ export async function importBackup(workspaceId, backup) {
     async () => {
       must(await db.workspaces.get(workspaceId), 'Current workspace missing.');
       const previousMatches = await db.matches.where({ workspaceId }).toArray();
+      const restored = Object.fromEntries(
+        tables.map((table) => [
+          table,
+          b[table].map((record) => {
+            const value = { ...record, workspaceId };
+            if (table === 'matches') {
+              value.revision =
+                Math.max(
+                  record.revision,
+                  previousMatches.find((match) => match.id === record.id)?.revision || 0,
+                ) + 1;
+              if (value.status === 'completed') {
+                // Upgrade legacy backups after validateBackup has replayed their exact history.
+                value.syncSnapshot = {
+                  innings: b.innings.filter((inning) => inning.matchId === record.id).length,
+                  events: b.events.filter((event) => event.matchId === record.id).length,
+                  verified: true,
+                };
+              }
+            }
+            return value;
+          }),
+        ]),
+      );
       for (const t of tables) {
         const previous = await db[t].where({ workspaceId }).toArray();
         for (const record of previous)
           await queueSyncChange(workspaceId, t, record.id, record, true);
         await db[t].where({ workspaceId }).delete();
-        const imported = b[t].map((record) => ({
-          ...record,
-          workspaceId,
-          ...(t === 'matches'
-            ? {
-                revision:
-                  Math.max(
-                    record.revision,
-                    previousMatches.find((match) => match.id === record.id)?.revision || 0,
-                  ) + 1,
-              }
-            : {}),
-        }));
+        const imported = restored[t];
         await db[t].bulkAdd(imported);
         for (const record of imported) await queueSyncChange(workspaceId, t, record.id, record);
       }

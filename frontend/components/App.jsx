@@ -624,6 +624,8 @@ export default function App({ screen }) {
                 <SyncStatus
                   status={currentSyncStatus}
                   pending={pendingSync}
+                  lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
+                  error={syncMeta?.lastError}
                   onSync={session ? syncNow : undefined}
                   syncing={syncing}
                 />
@@ -657,6 +659,8 @@ export default function App({ screen }) {
                 <SyncStatus
                   status={currentSyncStatus}
                   pending={pendingSync}
+                  lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
+                  error={syncMeta?.lastError}
                   onSync={session ? syncNow : undefined}
                   syncing={syncing}
                 />
@@ -1003,24 +1007,30 @@ export default function App({ screen }) {
                     workspaceId={w.id}
                     syncStatus={!isOnline ? 'offline' : syncMeta?.syncStatus || 'pending'}
                     pendingSync={pendingSync}
+                    lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
+                    syncError={syncMeta?.lastError}
                     syncing={syncing}
                     onSync={syncNow}
                   />
                 )}
-              {offline.update && (
-                <aside className="update-notice" role="status" aria-live="polite">
-                  <strong>Crease update available</strong>
-                  <p>A new version is ready. Your match data is safe.</p>
-                  {screen === 'match' || liveMatches.length > 0 ? (
-                    <small>Finish live scoring before applying this update.</small>
-                  ) : (
-                    <div className="actions">
-                      <button className="button compact" onClick={offline.applyUpdate}>Update now</button>
-                      <button className="button compact secondary" onClick={offline.deferUpdate}>Later</button>
-                    </div>
-                  )}
-                </aside>
-              )}
+                {offline.update && (
+                  <aside className="update-notice" role="status" aria-live="polite">
+                    <strong>Crease update available</strong>
+                    <p>A new version is ready. Your match data is safe.</p>
+                    {screen === 'match' || liveMatches.length > 0 ? (
+                      <small>Finish live scoring before applying this update.</small>
+                    ) : (
+                      <div className="actions">
+                        <button className="button compact" onClick={offline.applyUpdate}>
+                          Update now
+                        </button>
+                        <button className="button compact secondary" onClick={offline.deferUpdate}>
+                          Later
+                        </button>
+                      </div>
+                    )}
+                  </aside>
+                )}
               </>
             )
           )}

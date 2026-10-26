@@ -80,10 +80,26 @@ test('workspace isolation, transaction rollback, revisions, undo, backup and fin
   );
   assert.equal((await all(w.id)).matches.filter((x) => x.status === 'completed').length, 1);
   const backup = await exportBackup(w);
+  delete backup.matches[0].syncSnapshot;
   validateBackup(backup);
+  await db.syncMeta.put({
+    workspaceId: w.id,
+    teamId: 'restore-account',
+    role: 'owner',
+    revisions: {},
+    conflicts: [],
+  });
   await importBackup(w.id, backup);
   assert.equal((await all(w.id)).events.length, 7);
   m = (await all(w.id)).matches[0];
+  assert.deepEqual(m.syncSnapshot, { innings: 2, events: 7, verified: true });
+  const restoredPending = await db.pendingChanges.where({ workspaceId: w.id }).toArray();
+  assert.equal(restoredPending.length, tablesCount(backup));
+  assert.deepEqual(restoredPending.find((change) => change.table === 'matches').data.syncSnapshot, {
+    innings: 2,
+    events: 7,
+    verified: true,
+  });
   const bad = structuredClone(backup);
   bad.events[0].inningsId = uuid();
   await assert.rejects(importBackup(w.id, bad));
@@ -109,6 +125,19 @@ test('workspace isolation, transaction rollback, revisions, undo, backup and fin
   assert.equal((await all(w.id)).matches.length, 1);
   await db.delete();
 });
+
+function tablesCount(backup) {
+  return [
+    'players',
+    'teams',
+    'memberships',
+    'matches',
+    'innings',
+    'events',
+    'audits',
+    'drafts',
+  ].reduce((total, table) => total + backup[table].length, 0);
+}
 
 test('version 1 migration preserves existing records', async () => {
   const old = new Dexie('crease-local');

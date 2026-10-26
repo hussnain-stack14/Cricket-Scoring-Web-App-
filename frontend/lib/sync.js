@@ -227,20 +227,51 @@ export async function pullChanges(workspaceId) {
 
   let result;
   try {
-    const res = await fetchWithTimeout(`/api/sync/pull?since=${encodeURIComponent(since)}`, {
-      credentials: 'include',
-      headers: { 'X-Crease-Workspace': meta.teamId },
-    });
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw Object.assign(
-        new Error(error.error || `Sync service unavailable (${res.status}). Retry shortly.`),
-        { status: res.status },
-      );
+    const records = [];
+    let next = null;
+    let until = null;
+    let pulledAt = null;
+    for (let page = 0; page < 1000; page++) {
+      const params = new URLSearchParams({ since });
+      if (until) params.set('until', until);
+      if (next) {
+        params.set('afterUpdatedAt', next.updatedAt);
+        params.set('afterTable', next.table);
+        params.set('afterRecordId', next.recordId);
+      }
+      const res = await fetchWithTimeout(`/api/sync/pull?${params}`, {
+        credentials: 'include',
+        headers: { 'X-Crease-Workspace': meta.teamId },
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw Object.assign(
+          new Error(error.error || `Sync service unavailable (${res.status}). Retry shortly.`),
+          { status: res.status },
+        );
+      }
+      const pageResult = await res.json();
+      if (!Array.isArray(pageResult.records) || typeof pageResult.pulledAt !== 'string')
+        throw new Error('The sync server returned an invalid pull response.');
+      if (pulledAt && pageResult.pulledAt !== pulledAt)
+        throw new Error('The sync server changed the pull snapshot during pagination.');
+      pulledAt = pageResult.pulledAt;
+      until = pageResult.until || pulledAt;
+      records.push(...pageResult.records);
+      if (!pageResult.hasMore) {
+        result = { records, pulledAt };
+        break;
+      }
+      if (
+        !pageResult.nextCursor ||
+        typeof pageResult.nextCursor.updatedAt !== 'string' ||
+        typeof pageResult.nextCursor.table !== 'string' ||
+        typeof pageResult.nextCursor.recordId !== 'string'
+      )
+        throw new Error('The sync server returned an invalid pagination cursor.');
+      next = pageResult.nextCursor;
     }
-    result = await res.json();
-    if (!Array.isArray(result.records) || typeof result.pulledAt !== 'string')
-      throw new Error('The sync server returned an invalid pull response.');
+    if (!result) throw new Error('Synchronization exceeded the safe pagination limit.');
   } catch (error) {
     await updateSyncMeta(workspaceId, {
       syncStatus: 'pending',
@@ -353,8 +384,14 @@ export async function pullChanges(workspaceId) {
               inningsCount >= pendingCompletion.syncSnapshot.innings &&
               hasVerifiedCompletedHistory(
                 pendingCompletion,
-                await db.innings.where({ workspaceId }).filter((row) => row.matchId === data.matchId).toArray(),
-                await db.events.where({ workspaceId }).filter((row) => row.matchId === data.matchId).toArray(),
+                await db.innings
+                  .where({ workspaceId })
+                  .filter((row) => row.matchId === data.matchId)
+                  .toArray(),
+                await db.events
+                  .where({ workspaceId })
+                  .filter((row) => row.matchId === data.matchId)
+                  .toArray(),
               )
             ) {
               const { completionPending: _pending, ...finalMatch } = pendingCompletion;
@@ -503,11 +540,11 @@ async function performSync(workspaceId, { signOutToken, session: knownSession } 
         ? 'conflict'
         : pullResult.incomplete
           ? 'incomplete'
-        : pushResult.error || pullResult.error
-          ? 'attention'
-          : state.pending
-            ? 'pending'
-            : 'synced';
+          : pushResult.error || pullResult.error
+            ? 'attention'
+            : state.pending
+              ? 'pending'
+              : 'synced';
     await updateSyncMeta(workspaceId, {
       syncStatus: status,
       lastError: pushResult.error || pullResult.error || pushResult.rejected?.[0]?.reason || null,
