@@ -50,7 +50,10 @@ export default function SyncStatus({
       {!compact && <small>{key === 'offline' ? 'Offline copy in use' : 'Offline Ready'}</small>}
       {!compact && STATUS_DETAILS[key] && <small>{STATUS_DETAILS[key]}</small>}
       {!compact && lastSuccessfulSync && (
-        <small>Cloud Synced {new Date(lastSuccessfulSync).toLocaleString()}</small>
+        <small>
+          {key === 'synced' && pending === 0 ? 'Cloud Synced' : 'Last cloud sync'}{' '}
+          {new Date(lastSuccessfulSync).toLocaleString()}
+        </small>
       )}
       {!compact && error && <small role="alert">{error}</small>}
       {onSync && (

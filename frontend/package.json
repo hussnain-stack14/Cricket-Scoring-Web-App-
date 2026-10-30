@@ -16,7 +16,8 @@
     "plan:match-recovery": "node scripts/plan-match-recovery.mjs",
     "plan:match-duplicate": "node scripts/plan-match-duplicate.mjs",
     "test:e2e": "playwright test",
-    "test:preview-sync": "node scripts/preview-sync-integration.mjs"
+    "test:preview-sync": "node scripts/preview-sync-integration.mjs",
+    "test:preview-batch-sync": "node scripts/preview-batch-sync-integration.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

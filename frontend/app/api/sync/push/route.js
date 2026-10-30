@@ -21,9 +21,20 @@ const ALLOWED_TABLES = new Set([
 const MAX_BATCH = 250;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const syncPriority = (change) => {
+  if (change?.deleted) {
+    return ['events', 'audits', 'innings'].includes(change?.table)
+      ? 0
+      : change?.table === 'matches'
+        ? 1
+        : 2;
+  }
+  if (change?.table === 'players') return 0;
+  if (change?.table === 'teams') return 1;
+  if (change?.table === 'memberships') return 2;
   if (change?.table !== 'matches')
-    return ['innings', 'events', 'audits'].includes(change?.table) ? 1 : 0;
-  return change?.data?.status === 'completed' ? 2 : 0;
+    return ['innings', 'events', 'audits'].includes(change?.table) ? 4 : 3;
+  if (change?.data?.startId && change?.data?.startDetails) return -1;
+  return change?.data?.status === 'completed' ? 5 : 3;
 };
 
 function publicRecord(record) {

@@ -259,7 +259,8 @@ test('an acknowledgment for another table cannot remove an operation', async () 
 test('large queues upload in acknowledged batches without dropping operations', async () => {
   const w = await setup(),
     original = globalThis.fetch;
-  for (let index = 1; index < 301; index++)
+  // Matches the reported import scale: one seeded record plus 385 imported records.
+  for (let index = 1; index < 386; index++)
     await saveRecord(w.id, 'players', { name: `Queued player ${index}` });
   const batchSizes = [];
   try {
@@ -283,7 +284,7 @@ test('large queues upload in acknowledged batches without dropping operations', 
     };
     const result = await sync(w.id);
     assert.equal(result.ok, true);
-    assert.deepEqual(batchSizes, [250, 51]);
+    assert.deepEqual(batchSizes, [50, 50, 50, 50, 50, 50, 50, 36]);
     assert.equal(await getPendingCount(w.id), 0);
   } finally {
     globalThis.fetch = original;

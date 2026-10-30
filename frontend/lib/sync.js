@@ -2,18 +2,33 @@ import { db, tables } from './db.js';
 import { fetchWithTimeout } from './request.js';
 import { matchStates } from './engine.js';
 
-const MAX_BATCH = 250;
+// The server permits up to 250 changes, but processing a backup batch requires individual
+// Atlas revision checks. Smaller acknowledged batches keep an import below browser/Vercel
+// request limits and make interrupted uploads resumable.
+const MAX_BATCH = 50;
+const PUSH_TIMEOUT_MS = 45_000;
 const SESSION_TIMEOUT_MS = 4000;
 const recordKey = (table, recordId) => `${table}:${recordId}`;
 const pendingKey = (workspaceId, table, recordId) => `${workspaceId}:${table}:${recordId}`;
 let sessionRequest;
 const syncJobs = new Map();
 const syncPriority = (change) => {
+  if (change.deleted) {
+    return ['events', 'audits', 'innings'].includes(change.table)
+      ? 0
+      : change.table === 'matches'
+        ? 1
+        : 2;
+  }
+  if (change.table === 'players') return 0;
+  if (change.table === 'teams') return 1;
+  if (change.table === 'memberships') return 2;
   if (change.table !== 'matches')
-    return ['innings', 'events', 'audits'].includes(change.table) ? 1 : 0;
+    return ['innings', 'events', 'audits'].includes(change.table) ? 4 : 3;
+  if (change.data?.startId && change.data?.startDetails) return -1;
   // A completed parent is the commit marker: upload it only after its deliveries.
-  if (change.data?.status === 'completed') return 2;
-  return change.data?.startId && change.data?.startDetails ? -1 : 0;
+  if (change.data?.status === 'completed') return 5;
+  return 3;
 };
 const pullPriority = (record) => (record?.table === 'matches' ? 0 : syncPriority(record));
 function hasVerifiedCompletedHistory(match, innings, events) {
@@ -115,21 +130,25 @@ export async function pushChanges(workspaceId) {
   for (const batch of batches(pending, MAX_BATCH)) {
     let result;
     try {
-      const res = await fetchWithTimeout('/api/sync/push', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-Crease-Workspace': meta.teamId },
-        body: JSON.stringify({
-          changes: batch.map((change) => ({
-            table: change.table,
-            recordId: change.recordId,
-            data: change.data,
-            baseRevision: change.baseRevision,
-            changeId: change.changeId,
-            deleted: change.deleted,
-          })),
-        }),
-      });
+      const res = await fetchWithTimeout(
+        '/api/sync/push',
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-Crease-Workspace': meta.teamId },
+          body: JSON.stringify({
+            changes: batch.map((change) => ({
+              table: change.table,
+              recordId: change.recordId,
+              data: change.data,
+              baseRevision: change.baseRevision,
+              changeId: change.changeId,
+              deleted: change.deleted,
+            })),
+          }),
+        },
+        PUSH_TIMEOUT_MS,
+      );
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         throw Object.assign(

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { matchStates, overs, result as matchResult } from '../lib/engine.js';
+import { teamStatistics } from '../lib/statistics.js';
 
 const args = process.argv.slice(2);
 const option = (name) => args[args.indexOf(name) + 1];
@@ -365,12 +366,37 @@ try {
     result: matchResult(matchRecord.data, state),
   };
   const uniqueEventIds = new Set(events.map((record) => record.recordId));
+  const sourceEvents = historyChanges
+    .filter((change) => change.table === 'events')
+    .map((change) => change.data);
+  const sourceInnings = [inningsOne, inningsTwo];
+  const sourceStatistics = [
+    teamStatistics(teamA.id, [completed], sourceInnings, sourceEvents),
+    teamStatistics(teamB.id, [completed], sourceInnings, sourceEvents),
+  ];
+  const downloadedStatistics = [
+    teamStatistics(
+      teamA.id,
+      [matchRecord.data],
+      innings.map((record) => record.data),
+      events.map((record) => record.data),
+    ),
+    teamStatistics(
+      teamB.id,
+      [matchRecord.data],
+      innings.map((record) => record.data),
+      events.map((record) => record.data),
+    ),
+  ];
+  const statisticsIdentical =
+    JSON.stringify(sourceStatistics) === JSON.stringify(downloadedStatistics);
   if (
     events.length !== 6 ||
     uniqueEventIds.size !== 6 ||
     scorecard.innings[0]?.runs !== 7 ||
     scorecard.innings[0]?.wickets !== 1 ||
-    scorecard.innings[1]?.runs !== 8
+    scorecard.innings[1]?.runs !== 8 ||
+    !statisticsIdentical
   )
     throw new Error('Browser B did not receive the exact verified match history.');
 
@@ -384,6 +410,7 @@ try {
           recordCounts: counts(records),
           matchEvents: events.length,
           uniqueEventIds: uniqueEventIds.size,
+          statisticsIdentical,
         },
         browserC: { freshLoginAndWorkspacePullReady: true },
         scorecard,
