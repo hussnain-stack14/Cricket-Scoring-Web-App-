@@ -6,6 +6,9 @@ import {
   Users,
   UserRound,
   Ellipsis,
+  EllipsisVertical,
+  Settings as SettingsIcon,
+  CircleHelp,
   Home,
   Plus,
   ArrowUpRight,
@@ -80,7 +83,8 @@ export default function App({ screen }) {
     [loaded, setLoaded] = useState(false),
     [name, setName] = useState(''),
     [filter, setFilter] = useState('live'),
-    [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    [sidebarCollapsed, setSidebarCollapsed] = useState(false),
+    [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {
@@ -93,6 +97,7 @@ export default function App({ screen }) {
   const [syncing, setSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const busy = useRef(false);
+  const moreMenuRef = useRef(null);
   const syncBusy = useRef(false);
   const syncRef = useRef(null);
   const validatedSession = useRef(null);
@@ -102,6 +107,21 @@ export default function App({ screen }) {
   workspaceRef.current = w;
   const offline = useOffline();
   const base = '/app';
+  useEffect(() => {
+    if (!moreMenuOpen) return undefined;
+    const closeOnOutsidePress = (event) => {
+      if (!moreMenuRef.current?.contains(event.target)) setMoreMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setMoreMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [moreMenuOpen]);
   useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine);
     updateOnlineState();
@@ -656,6 +676,31 @@ export default function App({ screen }) {
                 <TeamAccountMenu session={session} workspaceId={w?.id} />
               </div>
             </details>
+            <div className="header-more-menu" ref={moreMenuRef}>
+              <button
+                className="header-more-trigger"
+                type="button"
+                aria-label="Open settings and more options"
+                aria-haspopup="menu"
+                aria-expanded={moreMenuOpen}
+                onClick={() => setMoreMenuOpen((open) => !open)}
+              >
+                <EllipsisVertical size={21} aria-hidden="true" />
+              </button>
+              {moreMenuOpen && (
+                <div className="header-more-panel" role="menu" aria-label="Settings and more">
+                  <Link href={`${base}/more/`} role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    <SettingsIcon size={17} aria-hidden="true" /> Settings
+                  </Link>
+                  <Link href={`${base}/more/#backup`} role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    <Ellipsis size={17} aria-hidden="true" /> Backup & more
+                  </Link>
+                  <Link href={`${base}/more/#about`} role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                    <CircleHelp size={17} aria-hidden="true" /> Help & about
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <header className="desktop-topbar">
