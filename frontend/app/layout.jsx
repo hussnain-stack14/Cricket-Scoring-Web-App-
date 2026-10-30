@@ -4,8 +4,8 @@ export const metadata = {
   description: 'Offline cricket scoring, teams and player statistics on your device.',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/icons/icon-192.png',
-    apple: '/icons/apple-touch-icon.png',
+    icon: '/icons/main-logo.png',
+    apple: '/icons/main-logo.png',
   },
   appleWebApp: { capable: true, title: 'Crease', statusBarStyle: 'default' },
 };
