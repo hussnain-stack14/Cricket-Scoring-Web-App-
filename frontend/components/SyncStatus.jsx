@@ -12,6 +12,14 @@ export const SYNC_STATUS_LABELS = {
   unauthenticated: 'Sign in to sync',
 };
 
+const STATUS_DETAILS = {
+  incomplete:
+    'A completed match is waiting for its innings or deliveries. It will retry automatically.',
+  conflict: 'Both histories are preserved. Review the conflict before choosing a version.',
+  attention: 'Your local changes remain saved. Retry when the connection is available.',
+  offline: 'This device is ready for offline scoring.',
+};
+
 const STATUS_ICONS = {
   synced: Cloud,
   pending: RefreshCw,
@@ -40,6 +48,7 @@ export default function SyncStatus({
       <span>{SYNC_STATUS_LABELS[key]}</span>
       {pending > 0 && <small>{pending} pending</small>}
       {!compact && <small>{key === 'offline' ? 'Offline copy in use' : 'Offline Ready'}</small>}
+      {!compact && STATUS_DETAILS[key] && <small>{STATUS_DETAILS[key]}</small>}
       {!compact && lastSuccessfulSync && (
         <small>Cloud Synced {new Date(lastSuccessfulSync).toLocaleString()}</small>
       )}

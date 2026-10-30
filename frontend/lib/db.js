@@ -748,11 +748,14 @@ export async function changeMatch(workspaceId, id, revision, action) {
   );
 }
 export async function exportBackup(w) {
+  const meta = await db.syncMeta.get(w.id);
   return {
     app: 'crease',
     version: 2,
     exportedAt: new Date().toISOString(),
     workspace: w,
+    // This is an ownership hint, never a credential. Legacy backups omit it and remain importable.
+    ...(meta?.teamId ? { accountTeamId: meta.teamId } : {}),
     ...(await all(w.id)),
   };
 }
@@ -769,6 +772,11 @@ export function validateBackup(b) {
     'Unsupported or invalid backup.',
   );
   const rules = b.workspace.rules;
+  must(
+    b.accountTeamId === undefined ||
+      (typeof b.accountTeamId === 'string' && /^[A-Za-z0-9_-]{4,100}$/.test(b.accountTeamId)),
+    'Invalid backup account identity.',
+  );
   must(
     rules &&
       Number.isInteger(rules.overs) &&
@@ -889,6 +897,9 @@ export function validateBackup(b) {
 }
 export async function importBackup(workspaceId, backup) {
   const b = validateBackup(backup);
+  const meta = await db.syncMeta.get(workspaceId);
+  if (b.accountTeamId && meta?.teamId && b.accountTeamId !== meta.teamId)
+    throw new Error('This backup belongs to a different team account and cannot be imported here.');
   await db.transaction(
     'rw',
     db.workspaces,

@@ -235,7 +235,7 @@ export default function App({ screen }) {
     setPendingSync(state.pending);
   }
   async function syncNow() {
-    if (!session || !w || syncBusy.current) return;
+    if (!session || !w || syncBusy.current) return { ok: false, status: 'pending' };
     syncBusy.current = true;
     setSyncing(true);
     try {
@@ -249,7 +249,7 @@ export default function App({ screen }) {
           setData(null);
           setW(null);
           window.location.assign('/account/login/');
-          return;
+          return { ok: false, status: 'unauthenticated' };
         }
         validatedSession.current = checkedSession;
         setSession(checkedSession);
@@ -274,13 +274,19 @@ export default function App({ screen }) {
           setW(null);
           window.location.assign('/account/login/');
         }
-        return;
+        return result;
       }
       if (result.session) setSession(result.session);
       await refreshSyncState(w.id);
       await refresh();
+      return result;
     } catch (e) {
       setError('Sync needs attention. Your local changes are still saved.');
+      return {
+        ok: false,
+        status: 'attention',
+        error: 'Sync needs attention. Your local changes are still saved.',
+      };
     } finally {
       syncBusy.current = false;
       setSyncing(false);
@@ -332,7 +338,7 @@ export default function App({ screen }) {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, []);
-  async function run(fn) {
+  async function run(fn, { awaitSync = false } = {}) {
     if (busy.current) return false;
     busy.current = true;
     setError('');
@@ -341,7 +347,18 @@ export default function App({ screen }) {
       const value = await fn();
       await refresh();
       setStatus(session ? 'Waiting to sync' : 'Saved on this device');
-      if (session && w) void syncRef.current?.();
+      if (session && w) {
+        if (awaitSync) {
+          const syncResult = await syncRef.current?.();
+          if (
+            ['attention', 'conflict', 'unauthenticated', 'incomplete'].includes(syncResult?.status)
+          ) {
+            setError(syncResult.error || 'Import is saved locally but cloud sync needs attention.');
+            setStatus('Sync needs attention');
+            return false;
+          }
+        } else void syncRef.current?.();
+      }
       return value === undefined ? true : value;
     } catch (e) {
       console.error('Crease operation failed', e);

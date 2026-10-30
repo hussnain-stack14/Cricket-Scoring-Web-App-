@@ -77,6 +77,7 @@ export default function AccountSettings() {
     }
     setSession(s);
     setSessionLoading(false);
+    return s;
   }, []);
 
   const loadSyncMeta = useCallback(
@@ -200,12 +201,18 @@ export default function AccountSettings() {
           try {
             const response = await fetchWithTimeout(
               `/api/sync/diagnostics?matchId=${encodeURIComponent(matchId)}`,
-              { credentials: 'include', headers: { 'X-Crease-Workspace': session?.teamId || '' } },
+              {
+                credentials: 'include',
+                headers: { 'X-Crease-Workspace': session?.workspaceKey || session?.teamId || '' },
+              },
             );
             const body = await response.json();
             return response.ok ? body : { matchId, error: body.error || `HTTP ${response.status}` };
           } catch {
-            return { matchId, error: 'Cloud diagnostic could not be reached; local evidence is retained.' };
+            return {
+              matchId,
+              error: 'Cloud diagnostic could not be reached; local evidence is retained.',
+            };
           }
         }),
       );
@@ -441,7 +448,10 @@ export default function AccountSettings() {
               </button>
               <div>
                 {syncMeta?.lastSuccessfulSync && (
-                  <small>Last successful cloud sync: {new Date(syncMeta.lastSuccessfulSync).toLocaleString()}</small>
+                  <small>
+                    Last successful cloud sync:{' '}
+                    {new Date(syncMeta.lastSuccessfulSync).toLocaleString()}
+                  </small>
                 )}
               </div>
               {syncMeta?.lastError && (

@@ -1,6 +1,10 @@
 import { loginAttempt, lockedResponse } from '../../../../backend/loginAttempts.js';
 import { authenticationServiceFailure } from '../../../../backend/authErrors.js';
-import { verifyLoginCredentials } from '../../../../backend/loginCredentials.js';
+import {
+  loginLockKeys,
+  resolveLoginAccount,
+  verifyLoginCredentials,
+} from '../../../../backend/loginCredentials.js';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -9,7 +13,10 @@ import { connectDB, getSafeErrorDetails } from '../../../../lib/server/db';
 import { TeamAccount, TeamMember } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { loginLimiter, checkRateLimit, getClientIp } from '../../../../lib/server/rateLimit';
-import { isValidLoginTeamId, normalizeLoginTeamId } from '../../../../lib/accountCredentials';
+import {
+  isValidLoginIdentifier,
+  normalizeLoginIdentifier,
+} from '../../../../lib/accountCredentials';
 
 /** POST /api/auth/login */
 export async function POST(req) {
@@ -27,7 +34,8 @@ export async function POST(req) {
   const { teamId, password } = body ?? {};
 
   // Basic format validation — do not reveal whether the team exists
-  if (typeof teamId !== 'string' || !isValidLoginTeamId(normalizeLoginTeamId(teamId))) {
+  const loginIdentifier = typeof teamId === 'string' ? normalizeLoginIdentifier(teamId) : '';
+  if (!isValidLoginIdentifier(loginIdentifier)) {
     return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
   }
   if (typeof password !== 'string' || password.length < 1) {
@@ -38,20 +46,23 @@ export async function POST(req) {
     const authOptions = getSessionOptions();
     await connectDB();
 
-    const normalizedTeamId = normalizeLoginTeamId(teamId);
+    const normalizedTeamId = loginIdentifier;
     const before = await loginAttempt(normalizedTeamId);
     if (before.blocked) return lockedResponse(before.retryAfter);
-    const account = await TeamAccount.findOne({
-      $or: [
-        { loginTeamId: normalizedTeamId },
-        { loginTeamId: { $exists: false }, teamId: normalizedTeamId },
-      ],
-    });
+    const account = await resolveLoginAccount(TeamAccount, normalizedTeamId);
+    const lockKeys = loginLockKeys(normalizedTeamId, account);
+    if (lockKeys.length > 1) {
+      const canonicalBefore = await loginAttempt(lockKeys[1]);
+      if (canonicalBefore.blocked) return lockedResponse(canonicalBefore.retryAfter);
+    }
 
     const match = await verifyLoginCredentials(account, password, bcrypt.compare);
 
-    const attempt = await loginAttempt(normalizedTeamId, !!account && match);
-    if (attempt.blocked) return lockedResponse(attempt.retryAfter);
+    const attempts = await Promise.all(
+      lockKeys.map((key) => loginAttempt(key, !!account && match)),
+    );
+    const blockedAttempt = attempts.find((attempt) => attempt.blocked);
+    if (blockedAttempt) return lockedResponse(blockedAttempt.retryAfter);
     if (!account || !match) {
       return NextResponse.json({ error: 'Team ID or password is incorrect.' }, { status: 401 });
     }
@@ -79,6 +90,7 @@ export async function POST(req) {
 
     const res = NextResponse.json({
       teamId: account.loginTeamId,
+      workspaceKey: account.teamId,
       teamName: account.name,
       memberId: ownerMember.memberId,
       role: 'owner',

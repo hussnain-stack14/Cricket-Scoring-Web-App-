@@ -157,18 +157,24 @@ export async function POST(req) {
       }
       if (!deleted && table === 'matches' && data.status === 'completed') {
         const [eventRecords, inningsRecords] = await Promise.all([
-          SyncRecord.find({
-            teamId: session.teamId,
-            table: 'events',
-            deletedAt: null,
-            'data.matchId': recordId,
-          }, { data: 1, _id: 0 }).lean(),
-          SyncRecord.find({
-            teamId: session.teamId,
-            table: 'innings',
-            deletedAt: null,
-            'data.matchId': recordId,
-          }, { data: 1, _id: 0 }).lean(),
+          SyncRecord.find(
+            {
+              teamId: session.teamId,
+              table: 'events',
+              deletedAt: null,
+              'data.matchId': recordId,
+            },
+            { data: 1, _id: 0 },
+          ).lean(),
+          SyncRecord.find(
+            {
+              teamId: session.teamId,
+              table: 'innings',
+              deletedAt: null,
+              'data.matchId': recordId,
+            },
+            { data: 1, _id: 0 },
+          ).lean(),
         ]);
         const historyError = completedHistoryError(
           data,
@@ -177,13 +183,11 @@ export async function POST(req) {
           data.syncSnapshot,
         );
         if (historyError) {
-          rejected.push(
-            conflict(
-              change,
-              existing,
-              `${historyError} It will retry safely.`,
-            ),
-          );
+          reportOperationalEvent('sync_completion_rejected', {
+            status: 'rejected',
+            reason: 'incomplete_or_unreplayable_history',
+          });
+          rejected.push(conflict(change, existing, `${historyError} It will retry safely.`));
           continue;
         }
       }

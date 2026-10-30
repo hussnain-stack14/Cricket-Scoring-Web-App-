@@ -487,8 +487,22 @@ export default function Settings({
           </p>
           <p>
             This replaces all records in this workspace in one transaction. Export your current
-            records first. Other tabs should be closed.
+            records first. Imported records stay marked as pending until cloud acknowledgments
+            arrive. Other tabs should be closed.
           </p>
+          {session && !backup.accountTeamId && (
+            <p className="help">
+              This legacy backup has no account identity. It will be imported only into the
+              currently signed-in workspace and then verified by cloud sync.
+            </p>
+          )}
+          {session &&
+            backup.accountTeamId &&
+            backup.accountTeamId !== (session.workspaceKey || session.teamId) && (
+              <p role="alert">
+                This backup belongs to a different team account and cannot be imported here.
+              </p>
+            )}
           <Button secondary onClick={download}>
             Export current records first
           </Button>
@@ -496,7 +510,12 @@ export default function Settings({
           <Button
             danger
             onClick={async () => {
-              if (await run(() => importBackup(w.id, backup))) setBackup(null);
+              if (
+                await run(() => importBackup(w.id, backup), {
+                  awaitSync: !!session,
+                })
+              )
+                setBackup(null);
               else
                 setLocalError(
                   'Import failed. Existing records were preserved. Close this sheet to see the error.',

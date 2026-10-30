@@ -8,6 +8,8 @@ import {
   clearAccountWorkspace,
   all,
   exportBackup,
+  importBackup,
+  createWorkspace,
   saveTeam,
   createMatch,
 } from '../lib/db.js';
@@ -64,6 +66,64 @@ test('retry after a lost response preserves changes, uses stable operation IDs a
     assert.equal(ids.length, 2);
     assert.equal(ids[0], ids[1]);
     assert.equal(await getPendingCount(w.id), 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('backup import maps records to the signed-in workspace, waits for acknowledgments, and rejects foreign account metadata', async () => {
+  await db.delete();
+  await db.open();
+  const source = await createWorkspace('Backup source');
+  const sourcePlayer = await saveRecord(source.id, 'players', { name: 'Imported player' });
+  const backup = await exportBackup(source);
+  backup.accountTeamId = 'original-account';
+  // Model a backup exported from another browser profile: its source workspace is not present
+  // in this profile when restore begins.
+  await db.players.delete(sourcePlayer.id);
+  await db.workspaces.delete(source.id);
+  const destination = await activateAccountWorkspace('original-account', 'Destination', {
+    role: 'owner',
+  });
+  const original = globalThis.fetch;
+  const pushes = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      if (url === '/api/auth/me') return Response.json(session);
+      if (url.includes('/push')) {
+        const changes = JSON.parse(options.body).changes;
+        pushes.push(changes);
+        return Response.json({
+          applied: changes.map((change) => ({
+            table: change.table,
+            recordId: change.recordId,
+            changeId: change.changeId,
+            revision: change.baseRevision + 1,
+          })),
+          rejected: [],
+        });
+      }
+      return Response.json({ records: [], pulledAt: new Date().toISOString() });
+    };
+
+    await importBackup(destination.id, backup);
+    const queued = await db.pendingChanges.where({ workspaceId: destination.id }).toArray();
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].data.workspaceId, destination.id);
+    assert.equal(queued[0].recordId, sourcePlayer.id);
+    assert.equal((await sync(destination.id)).status, 'synced');
+    assert.equal(await getPendingCount(destination.id), 0);
+    assert.equal(pushes[0].length, 1);
+
+    await importBackup(destination.id, backup);
+    assert.equal((await all(destination.id)).players.length, 1);
+    assert.equal((await sync(destination.id)).status, 'synced');
+    assert.equal((await all(destination.id)).players.length, 1);
+    assert.equal(pushes[1].filter((change) => change.recordId === sourcePlayer.id).length, 1);
+
+    const foreign = { ...backup, accountTeamId: 'different-account' };
+    await assert.rejects(importBackup(destination.id, foreign), /different team account/);
+    assert.equal((await all(destination.id)).players.length, 1);
   } finally {
     globalThis.fetch = original;
   }
