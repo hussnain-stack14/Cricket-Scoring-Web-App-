@@ -128,6 +128,12 @@ export async function pushChanges(workspaceId) {
   let pushed = 0;
   const rejected = [];
   for (const batch of batches(pending, MAX_BATCH)) {
+    await updateSyncMeta(workspaceId, {
+      syncStatus: 'syncing',
+      lastUploadAttempt: new Date().toISOString(),
+      lastUploadBatchSize: batch.length,
+      lastHttpStatus: null,
+    });
     let result;
     try {
       const res = await fetchWithTimeout(
@@ -163,6 +169,7 @@ export async function pushChanges(workspaceId) {
       await updateSyncMeta(workspaceId, {
         syncStatus: 'pending',
         lastError: error instanceof Error ? error.message : 'Push failed.',
+        lastHttpStatus: error.status || null,
       });
       return { pushed, rejected, error: error.message, httpStatus: error.status };
     }
@@ -228,6 +235,7 @@ export async function pushChanges(workspaceId) {
         revisions,
         conflicts,
         lastPush: result.pushedAt,
+        lastHttpStatus: 200,
         syncStatus: rejected.length ? 'conflict' : 'pending',
         lastError: rejected[0]?.reason || null,
         rejections: rejected.map(({ table, recordId, reason }) => ({ table, recordId, reason })),

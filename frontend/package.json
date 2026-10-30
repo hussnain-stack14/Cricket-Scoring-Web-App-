@@ -13,6 +13,7 @@
     "verify:atlas-fresh-pull": "node scripts/verify-atlas-fresh-pull.mjs",
     "verify:preview-isolation": "node scripts/verify-preview-isolation.mjs",
     "compare:match-backups": "node scripts/compare-match-backups.mjs",
+    "compare:sync-diagnostics": "node scripts/compare-sync-diagnostics.mjs",
     "plan:match-recovery": "node scripts/plan-match-recovery.mjs",
     "plan:match-duplicate": "node scripts/plan-match-duplicate.mjs",
     "test:e2e": "playwright test",
