@@ -1064,10 +1064,10 @@ export default function App({ screen }) {
             ['Teams', `${base}/teams/`, Users, screen === 'teams'],
             ['Players', `${base}/players/`, UserRound, screen === 'players' || screen === 'player'],
             [
-              'More',
-              `${base}/more/`,
-              Ellipsis,
-              screen === 'more' || screen === 'statistics' || screen === 'reports',
+              'Stats',
+              `${base}/statistics/`,
+              ChartNoAxesCombined,
+              screen === 'statistics',
             ],
           ].map(([label, href, Icon, active]) => (
             <Link key={label} href={href} className={active ? 'selected' : ''}>

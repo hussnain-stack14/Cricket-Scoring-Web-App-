@@ -1,5 +1,4 @@
 import './globals.css';
-import ThemeController from '../components/ThemeController';
 export const metadata = {
   title: 'Crease · Your game, recorded',
   description: 'Offline cricket scoring, teams and player statistics on your device.',
@@ -14,16 +13,13 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#1F5A3D',
+  themeColor: '#B91C1C',
 };
 export default function Layout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('crease-theme')==='red-ball')document.documentElement.dataset.theme='red-ball'}catch(e){}" }} />
-      </head>
+      <head />
       <body>
-        <ThemeController />
         {children}
       </body>
     </html>

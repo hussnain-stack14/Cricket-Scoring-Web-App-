@@ -9,18 +9,18 @@
   --space-8: 32px;
   --control-height: 44px;
   --radius-control: 10px;
-  --green: #1f5a3d;
-  --green-deep: #123d2b;
-  --accent: #7fae42;
-  --bg: #f7f8f3;
-  --ink: #172b22;
-  --muted: #64746a;
-  --lime: #d9efb1;
-  --line: #e3e9e0;
-  --red: #c53b3b;
+  --green: #dc2626;
+  --green-deep: #b91c1c;
+  --accent: #dc2626;
+  --bg: #f9fafb;
+  --ink: #111827;
+  --muted: #6b7280;
+  --lime: #fee2e2;
+  --line: #e5e7eb;
+  --red: #b91c1c;
   --surface: #fff;
   --radius-card: 14px;
-  --shadow-card: 0 2px 8px #152b2008;
+  --shadow-card: 0 2px 10px #1118270d;
   --primary: var(--green);
   --primary-hover: var(--green-deep);
   --color-background: var(--bg);
@@ -30,19 +30,6 @@
   --color-border: var(--line);
   --color-accent: var(--accent);
 }
-[data-theme='red-ball'] {
-  --green: #b91c1c;
-  --green-deep: #7f1d1d;
-  --accent: #dc2626;
-  --bg: #f8fafc;
-  --ink: #1f2937;
-  --muted: #6b7280;
-  --lime: #fee2e2;
-  --line: #fecaca;
-  --red: #b91c1c;
-  --surface: #ffffff;
-  --shadow-card: 0 2px 12px #7f1d1d12;
-}
 * {
   box-sizing: border-box;
 }
@@ -50,7 +37,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -162,7 +149,7 @@ button:disabled {
   gap: 9px;
 }
 .brand-dot {
-  color: #6b9b3a;
+  color: var(--green);
   margin-left: -9px;
 }
 .brand-mark {
@@ -187,7 +174,7 @@ button:disabled {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #679344;
+  background: var(--green);
 }
 main {
   padding: 30px 28px calc(110px + env(safe-area-inset-bottom));

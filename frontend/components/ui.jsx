@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useId, useRef } from 'react';
-import { X, ArrowRight, Leaf } from 'lucide-react';
+import { X, ArrowRight, CircleDot } from 'lucide-react';
 export function Button({ children, secondary, danger, compact, ...props }) {
   return (
     <button
@@ -50,7 +50,7 @@ export function Empty({ title, children, href, action }) {
   return (
     <div className="empty">
       <div className="empty-icon">
-        <Leaf size={24} aria-hidden="true" />
+        <CircleDot size={24} aria-hidden="true" />
       </div>
       <h2>{title}</h2>
       <p>{children}</p>

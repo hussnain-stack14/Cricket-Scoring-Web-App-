@@ -3,15 +3,15 @@
 import { useEffect } from 'react';
 
 export const THEME_STORAGE_KEY = 'crease-theme';
-export const THEMES = ['classic', 'red-ball'];
+export const THEMES = ['red-ball'];
 
 export function setTheme(theme) {
-  const next = THEMES.includes(theme) ? theme : 'classic';
+  const next = 'red-ball';
   document.documentElement.dataset.theme = next;
   localStorage.setItem(THEME_STORAGE_KEY, next);
   document.querySelector('meta[name="theme-color"]')?.setAttribute(
     'content',
-    next === 'red-ball' ? '#B91C1C' : '#1F5A3D',
+    '#B91C1C',
   );
 }
 
