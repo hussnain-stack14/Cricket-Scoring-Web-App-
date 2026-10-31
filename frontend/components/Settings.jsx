@@ -357,6 +357,20 @@ export default function Settings({
               <br />
               <small>Premium red and white cricket styling.</small>
             </button>
+            <button
+              type="button"
+              className="theme-option blue"
+              aria-pressed={theme === 'blue'}
+              onClick={() => chooseTheme('blue')}
+            >
+              <span className="theme-option-swatch">
+                <i style={{ background: '#2563eb' }} />
+                <i style={{ background: '#dbeafe' }} />
+              </span>
+              <strong>Premium Blue</strong>
+              <br />
+              <small>Clean blue and white sports styling.</small>
+            </button>
           </div>
           <p className="help">
             App version: {process.env.NEXT_PUBLIC_APP_VERSION || 'Current deployment'}

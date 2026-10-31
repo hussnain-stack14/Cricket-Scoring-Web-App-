@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   ArrowRight,
   Cloud,
+  Download,
 } from 'lucide-react';
 import {
   deleteMatch,
@@ -107,6 +108,8 @@ export default function App({ screen }) {
   workspaceRef.current = w;
   const offline = useOffline();
   const base = '/app';
+  const installationRelevant =
+    !offline.installed && ['available', 'instructions'].includes(offline.installState);
   useEffect(() => {
     if (!moreMenuOpen) return undefined;
     const closeOnOutsidePress = (event) => {
@@ -649,6 +652,17 @@ export default function App({ screen }) {
             </span>
           </Link>
           <div className="mobile-header-actions">
+            {installationRelevant && (
+              <button
+                className="header-more-trigger install-trigger"
+                type="button"
+                aria-label="Install Crease"
+                title="Install Crease"
+                onClick={() => void offline.install()}
+              >
+                <Download size={19} aria-hidden="true" />
+              </button>
+            )}
             <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
               <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
                 <span className="header-status-dot" />
@@ -709,6 +723,17 @@ export default function App({ screen }) {
             <h1>{titles[screen] || 'Crease'}</h1>
           </div>
           <div className="desktop-topbar-actions">
+            {installationRelevant && (
+              <button
+                className="header-more-trigger install-trigger"
+                type="button"
+                aria-label="Install Crease"
+                title="Install Crease"
+                onClick={() => void offline.install()}
+              >
+                <Download size={18} aria-hidden="true" />
+              </button>
+            )}
             <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
               <summary title={currentSyncLabel}>
                 <span className="header-status-dot" />
@@ -830,9 +855,13 @@ export default function App({ screen }) {
                   <section className="dashboard-view">
                     <div className="dashboard-welcome">
                       <div>
-                        <p className="dashboard-kicker">Welcome back, {w.name}</p>
+                        <p className="dashboard-kicker">Welcome back, {w.name} 👋</p>
                         <h2>Your cricket, at a glance.</h2>
+                        <p className="dashboard-summary">
+                          Track matches, manage teams, and keep your scorebooks in one place.
+                        </p>
                       </div>
+                      <div className="dashboard-hero-batter" aria-hidden="true" />
                     </div>
                     <div className="dashboard-stat-grid">
                       {[
@@ -845,30 +874,46 @@ export default function App({ screen }) {
                           <span className="dashboard-stat-icon">
                             <Icon size={19} />
                           </span>
-                          <strong>{value}</strong>
-                          <span>{label}</span>
+                          <span className="dashboard-stat-content">
+                            <strong>{value}</strong>
+                            <span>{label}</span>
+                          </span>
+                          <ArrowRight className="dashboard-stat-arrow" size={17} aria-hidden="true" />
+                          <span className="dashboard-stat-trend" aria-hidden="true" />
                         </div>
                       ))}
                     </div>
-                    {liveMatches.length > 0 && (
+                    <div className="dashboard-overview-grid">
                       <section className="dashboard-panel">
-                        <h2>Live matches</h2>
-                        <div className="match-grid">{liveMatches.map(renderMatchCard)}</div>
-                      </section>
-                    )}
-                    <section className="dashboard-panel">
-                      <h2>Upcoming matches</h2>
-                      {upcoming.length ? (
-                        <div className="match-grid">
-                          {upcoming.slice(0, 4).map(renderMatchCard)}
+                        <div className="dashboard-panel-heading">
+                          <h2>Live matches</h2>
+                          <Link href={`${base}/matches/`}>See all <ArrowRight size={15} /></Link>
                         </div>
-                      ) : (
-                        <p className="dashboard-empty-note">
-                          No scheduled matches.{' '}
-                          <Link href="/app/setup/?new=1">Schedule a match</Link>
-                        </p>
-                      )}
-                    </section>
+                        {liveMatches.length ? (
+                          <div className="match-grid">{liveMatches.slice(0, 2).map(renderMatchCard)}</div>
+                        ) : (
+                          <p className="dashboard-empty-note">No matches are being scored right now.</p>
+                        )}
+                      </section>
+                      <section className="dashboard-panel">
+                        <div className="dashboard-panel-heading">
+                          <h2>Upcoming matches</h2>
+                          <Link href={`${base}/matches/`}>View all <ArrowRight size={15} /></Link>
+                        </div>
+                        {upcoming.length ? (
+                          <div className="match-grid">
+                            {upcoming.slice(0, 4).map(renderMatchCard)}
+                          </div>
+                        ) : (
+                          <div className="dashboard-upcoming-empty">
+                            <CalendarDays size={30} aria-hidden="true" />
+                            <strong>No upcoming matches</strong>
+                            <span>Schedule a match to get started.</span>
+                            <Link className="button compact" href="/app/setup/?new=1">Schedule a match</Link>
+                          </div>
+                        )}
+                      </section>
+                    </div>
                     {drafts.length > 0 && (
                       <section className="dashboard-panel">
                         <h2>Draft matches</h2>

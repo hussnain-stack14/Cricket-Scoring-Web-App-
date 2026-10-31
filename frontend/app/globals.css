@@ -9,13 +9,13 @@
   --space-8: 32px;
   --control-height: 44px;
   --radius-control: 10px;
-  --green: #dc2626;
-  --green-deep: #b91c1c;
-  --accent: #dc2626;
+  --green: #166534;
+  --green-deep: #14532d;
+  --accent: #166534;
   --bg: #f9fafb;
   --ink: #111827;
   --muted: #6b7280;
-  --lime: #fee2e2;
+  --lime: #dcfce7;
   --line: #e5e7eb;
   --red: #b91c1c;
   --surface: #fff;
@@ -29,6 +29,42 @@
   --color-text-muted: var(--muted);
   --color-border: var(--line);
   --color-accent: var(--accent);
+  --color-primary: #166534;
+  --color-primary-hover: #14532d;
+  --color-primary-dark: #14532d;
+  --color-primary-soft: #dcfce7;
+  --color-primary-border: #bbf7d0;
+  --color-primary-text: #166534;
+  --color-primary-glow: #16653424;
+  --color-primary-gradient: linear-gradient(135deg, #166534, #14532d);
+}
+[data-theme='red-ball'] {
+  --green: #dc2626;
+  --green-deep: #b91c1c;
+  --accent: #dc2626;
+  --lime: #fee2e2;
+  --color-primary: #dc2626;
+  --color-primary-hover: #b91c1c;
+  --color-primary-dark: #b91c1c;
+  --color-primary-soft: #fee2e2;
+  --color-primary-border: #fecaca;
+  --color-primary-text: #b91c1c;
+  --color-primary-glow: #dc262624;
+  --color-primary-gradient: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+[data-theme='blue'] {
+  --green: #2563eb;
+  --green-deep: #1d4ed8;
+  --accent: #2563eb;
+  --lime: #dbeafe;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-soft: #dbeafe;
+  --color-primary-border: #bfdbfe;
+  --color-primary-text: #1d4ed8;
+  --color-primary-glow: #2563eb24;
+  --color-primary-gradient: linear-gradient(135deg, #2563eb, #1d4ed8);
 }
 * {
   box-sizing: border-box;
@@ -4770,6 +4806,86 @@ pre {
 
 /* Compact, readable layouts at narrow ground-side scoring widths. */
 .app-workspace, .dashboard-panel, .match-card-item, .person-row .grow { min-width: 0; }
+
+/* Premium dashboard composition. The hero is deliberately CSS-based until an approved local
+   stadium photograph is supplied, keeping the installed PWA fully offline-capable. */
+@media (min-width: 900px) {
+  .app-content { padding: 28px clamp(26px, 3.2vw, 48px) 46px; }
+  .dashboard-view { position: relative; isolation: isolate; }
+  .dashboard-welcome {
+    position: relative;
+    min-height: 202px;
+    margin: -28px -48px 18px;
+    padding: 66px clamp(26px, 3.2vw, 48px) 26px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 74% 19%, color-mix(in srgb, var(--lime) 75%, transparent), transparent 24%),
+      radial-gradient(ellipse at 80% 82%, color-mix(in srgb, var(--green) 28%, transparent), transparent 31%),
+      linear-gradient(108deg, #fff 0%, #ffffffed 48%, color-mix(in srgb, var(--lime) 34%, #fff) 100%);
+  }
+  .dashboard-welcome::after {
+    position: absolute; inset: 0; z-index: -1; content: '';
+    opacity: .68;
+    background: repeating-radial-gradient(ellipse at 80% 93%, transparent 0 19px, color-mix(in srgb, var(--green) 13%, transparent) 20px 22px, transparent 23px 44px);
+    mask-image: linear-gradient(90deg, transparent 35%, #000 65%);
+  }
+  .dashboard-welcome h2 { max-width: 620px; font-size: clamp(2.2rem, 3vw, 3.2rem); line-height: 1.04; letter-spacing: -1.8px; }
+  .dashboard-kicker { font-size: 14px; }
+  .dashboard-summary { max-width: 580px; margin: 9px 0 0; font-size: 15px; }
+  .dashboard-hero-batter { position: absolute; right: 12%; bottom: -1px; width: 145px; height: 146px; opacity: .5; transform: skew(-7deg); border-radius: 50% 50% 10% 10%; background: linear-gradient(145deg, transparent 0 37%, color-mix(in srgb, var(--green-deep) 72%, #172b22) 38% 51%, transparent 52%), linear-gradient(90deg, transparent 0 52%, #edf5e9 53% 72%, transparent 73%); filter: drop-shadow(0 12px 8px #11230e33); }
+  .dashboard-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-top: -10px; position: relative; }
+  .dashboard-stat-card { position: relative; grid-template-columns: 54px minmax(0, 1fr) 20px; min-height: 108px; padding: 18px; overflow: hidden; border-radius: 16px; background: #fffffff2; box-shadow: 0 8px 20px #1422140d; backdrop-filter: blur(10px); transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+  .dashboard-stat-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); box-shadow: 0 14px 28px #14221419; }
+  .dashboard-stat-icon { width: 52px; height: 52px; border-radius: 15px; background: var(--lime); }
+  .dashboard-stat-content { display: grid; gap: 2px; }
+  .dashboard-stat-content strong { font-size: 26px; }
+  .dashboard-stat-content > span { color: var(--muted); font-size: 12px; }
+  .dashboard-stat-arrow { color: var(--green); }
+  .dashboard-stat-trend { position: absolute; right: -13px; bottom: -15px; width: 104px; height: 54px; border-top: 2px solid color-mix(in srgb, var(--green) 46%, transparent); border-radius: 55% 0 0; transform: rotate(-11deg); opacity: .55; }
+  .dashboard-overview-grid, .dashboard-main-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 15px; margin-bottom: 15px; }
+  .dashboard-panel { margin: 0; min-height: 0; padding: 20px; border-radius: 16px; background: #fffffff0; box-shadow: 0 8px 24px #1422140d; backdrop-filter: blur(10px); }
+  .dashboard-overview-grid .dashboard-panel { min-height: 248px; }
+  .dashboard-panel-heading h2 { font-size: 18px; }
+  .dashboard-upcoming-empty { display: grid; min-height: 165px; place-items: center; align-content: center; gap: 6px; text-align: center; color: var(--muted); }
+  .dashboard-upcoming-empty svg { padding: 8px; box-sizing: content-box; border-radius: 15px; color: var(--green); background: var(--lime); }
+  .dashboard-upcoming-empty strong { color: var(--ink); }
+  .dashboard-upcoming-empty .button { margin-top: 6px; }
+  .quick-actions-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .quick-actions-panel .dashboard-panel-heading { grid-column: 1 / -1; margin-bottom: 0; }
+  .quick-action-link { min-height: 72px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; transition: transform 180ms ease, border-color 180ms ease; }
+  .quick-action-link:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--green) 32%, var(--line)); }
+}
+@media (max-width: 899px) {
+  .dashboard-welcome { padding: 5px 0 12px; }
+  .dashboard-summary { margin: 7px 0 0; font-size: 12px; }
+  .dashboard-hero-batter { display: none; }
+  .dashboard-overview-grid { display: grid; gap: 14px; }
+  .dashboard-upcoming-empty { display: grid; min-height: 160px; place-items: center; align-content: center; gap: 7px; text-align: center; }
+  .dashboard-upcoming-empty svg { color: var(--green); }
+}
+@media (prefers-reduced-motion: reduce) { .dashboard-stat-card, .quick-action-link { transition: none; } }
+
+/* Theme-neutralize legacy decorative greens so every selected theme is monochromatic. */
+.button { background: var(--color-primary-gradient); }
+.button.secondary { color: var(--color-primary-text); }
+.pill,
+.notice:not(.error),
+.empty-icon,
+.dashboard-stat-icon,
+.sidebar-link.selected,
+.theme-option[aria-pressed='true'],
+.continue-scoring,
+.quick-action-link:hover,
+.header-more-trigger:hover,
+.header-more-panel a:hover,
+.header-more-panel a:focus-visible { background-color: var(--color-primary-soft); color: var(--color-primary-text); }
+.sidebar-link.selected,
+.theme-option[aria-pressed='true'] { border-color: var(--color-primary-border); }
+.live-pulse,
+.local-badge > span { background: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-glow); }
+.dashboard-stat-trend { border-color: var(--color-primary); }
+.sidebar-brand-name > span,
+.brand-dot { color: var(--color-primary); }
 .page-heading > div { min-width: 0; }
 .page-heading h1, .page-heading p { overflow-wrap: anywhere; }
 .dashboard-view > .dashboard-panel { margin-bottom: 20px; }
