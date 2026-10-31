@@ -1,12 +1,13 @@
 import './globals.css';
 import ThemeController from '../components/ThemeController';
+import PwaInstallCapture from '../components/PwaInstallCapture';
 export const metadata = {
   title: 'Crease · Your game, recorded',
   description: 'Offline cricket scoring, teams and player statistics on your device.',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/icons/main-logo.png',
-    apple: '/icons/main-logo.png',
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
   },
   appleWebApp: { capable: true, title: 'Crease', statusBarStyle: 'default' },
 };
@@ -29,6 +30,7 @@ export default function Layout({ children }) {
       </head>
       <body>
         <ThemeController />
+        <PwaInstallCapture />
         {children}
       </body>
     </html>

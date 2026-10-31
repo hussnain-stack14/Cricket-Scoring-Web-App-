@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PWA_INSTALL_EVENT } from './PwaInstallCapture';
 
 function isStandalone() {
   return (
@@ -49,7 +50,9 @@ function waitForActivation(registration) {
 export function useOffline() {
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState('Checking offline preparation…');
-  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installPrompt, setInstallPrompt] = useState(() =>
+    typeof window === 'undefined' ? null : window.__creaseDeferredInstallPrompt || null,
+  );
   const [installState, setInstallState] = useState('checking');
   const [installed, setInstalled] = useState(false);
   const [update, setUpdate] = useState(false);
@@ -147,15 +150,17 @@ export function useOffline() {
         setInstallState('installed');
       }
     };
-    const onInstallPrompt = (event) => {
-      event.preventDefault();
-      setInstallPrompt(event);
-      setInstallState('available');
-    };
-    const onAppInstalled = () => {
-      setInstalled(true);
-      setInstallPrompt(null);
-      setInstallState('installed');
+    const onInstallState = (event) => {
+      const state = event.detail?.state;
+      if (state === 'available') {
+        setInstallPrompt(window.__creaseDeferredInstallPrompt || null);
+        setInstallState('available');
+      }
+      if (state === 'installed') {
+        setInstalled(true);
+        setInstallPrompt(null);
+        setInstallState('installed');
+      }
     };
     const onWorkerMessage = (event) => {
       if (event.data?.type === 'PRECACHE_FAILED') {
@@ -165,8 +170,7 @@ export function useOffline() {
     };
     const media = window.matchMedia('(display-mode: standalone)');
     media.addEventListener?.('change', updateInstalledState);
-    window.addEventListener('beforeinstallprompt', onInstallPrompt);
-    window.addEventListener('appinstalled', onAppInstalled);
+    window.addEventListener(PWA_INSTALL_EVENT, onInstallState);
     navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
     const check = () => {
       if (navigator.onLine && document.visibilityState === 'visible') void checkForUpdate();
@@ -183,8 +187,7 @@ export function useOffline() {
     return () => {
       clearTimeout(instructionTimer);
       media.removeEventListener?.('change', updateInstalledState);
-      window.removeEventListener('beforeinstallprompt', onInstallPrompt);
-      window.removeEventListener('appinstalled', onAppInstalled);
+      window.removeEventListener(PWA_INSTALL_EVENT, onInstallState);
       navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
       window.removeEventListener('online', check);
       window.removeEventListener('focus', check);
@@ -208,16 +211,17 @@ export function useOffline() {
 
   const install = useCallback(async () => {
     if (installed) return 'installed';
-    if (!installPrompt) {
+    const prompt = installPrompt || window.__creaseDeferredInstallPrompt;
+    if (!prompt) {
       setInstallState('instructions');
       return 'instructions';
     }
-    const prompt = installPrompt;
     setInstallState('prompting');
     try {
       await prompt.prompt();
       const choice = await prompt.userChoice;
       setInstallPrompt(null);
+      window.__creaseDeferredInstallPrompt = null;
       if (choice?.outcome === 'accepted') {
         setInstallState((current) => (current === 'installed' ? current : 'accepted'));
         return 'accepted';
@@ -226,6 +230,7 @@ export function useOffline() {
       return 'dismissed';
     } catch (error) {
       setInstallPrompt(null);
+      window.__creaseDeferredInstallPrompt = null;
       setInstallState('instructions');
       setMessage('Could not open the install prompt. Use your browser menu to install Crease.');
       return 'error';

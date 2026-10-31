@@ -85,7 +85,9 @@ export default function App({ screen }) {
     [name, setName] = useState(''),
     [filter, setFilter] = useState('live'),
     [sidebarCollapsed, setSidebarCollapsed] = useState(false),
-    [moreMenuOpen, setMoreMenuOpen] = useState(false);
+    [moreMenuOpen, setMoreMenuOpen] = useState(false),
+    [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(true);
   const [deleting, setDeleting] = useState(null);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {
@@ -108,8 +110,32 @@ export default function App({ screen }) {
   workspaceRef.current = w;
   const offline = useOffline();
   const base = '/app';
-  const installationRelevant =
-    !offline.installed && ['available', 'instructions'].includes(offline.installState);
+  const installationRelevant = !offline.installed;
+  async function requestInstall() {
+    const outcome = await offline.install();
+    if (['instructions', 'dismissed', 'error'].includes(outcome)) setInstallHelpOpen(true);
+  }
+  const installHelpText =
+    typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      ? 'Open Crease in Safari, tap Share, then choose Add to Home Screen.'
+      : /Android/i.test(typeof navigator === 'undefined' ? '' : navigator.userAgent)
+        ? 'Open your browser menu and choose Install app or Add to Home screen.'
+        : 'Use the install icon in your browser address bar, or choose Install Crease from the browser menu.';
+  useEffect(() => {
+    try {
+      setInstallBannerDismissed(sessionStorage.getItem('crease-install-banner-dismissed') === '1');
+    } catch {
+      setInstallBannerDismissed(false);
+    }
+  }, []);
+  function dismissInstallBanner() {
+    setInstallBannerDismissed(true);
+    try {
+      sessionStorage.setItem('crease-install-banner-dismissed', '1');
+    } catch {
+      // The banner is optional; blocked storage must not affect scoring or installation.
+    }
+  }
   useEffect(() => {
     if (!moreMenuOpen) return undefined;
     const closeOnOutsidePress = (event) => {
@@ -658,7 +684,7 @@ export default function App({ screen }) {
                 type="button"
                 aria-label="Install Crease"
                 title="Install Crease"
-                onClick={() => void offline.install()}
+                onClick={() => void requestInstall()}
               >
                 <Download size={19} aria-hidden="true" />
               </button>
@@ -729,7 +755,7 @@ export default function App({ screen }) {
                 type="button"
                 aria-label="Install Crease"
                 title="Install Crease"
-                onClick={() => void offline.install()}
+                onClick={() => void requestInstall()}
               >
                 <Download size={18} aria-hidden="true" />
               </button>
@@ -1120,6 +1146,30 @@ export default function App({ screen }) {
                     onSync={syncNow}
                   />
                 )}
+                {screen === 'dashboard' &&
+                  !liveMatches.length &&
+                  !offline.installed &&
+                  !installBannerDismissed && (
+                    <aside className="install-banner" aria-label="Install Crease">
+                      <div>
+                        <strong>Install Crease</strong>
+                        <p>Add Crease to your home screen for faster scoring.</p>
+                      </div>
+                      <div className="install-banner-actions">
+                        <button className="button compact" type="button" onClick={() => void requestInstall()}>
+                          Install
+                        </button>
+                        <button
+                          className="install-banner-close"
+                          type="button"
+                          aria-label="Dismiss install suggestion"
+                          onClick={dismissInstallBanner}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </aside>
+                  )}
                 {offline.update && (
                   <aside className="update-notice" role="status" aria-live="polite">
                     <strong>Crease update available</strong>
@@ -1142,6 +1192,14 @@ export default function App({ screen }) {
             )
           )}
         </main>
+        {installHelpOpen && (
+          <Sheet title="Install Crease" close={() => setInstallHelpOpen(false)}>
+            <p>Add Crease to your device for faster, offline-friendly scoring.</p>
+            <p>{installHelpText}</p>
+            <p className="help">{offline.installationMessage}</p>
+            <Button onClick={() => setInstallHelpOpen(false)}>Done</Button>
+          </Sheet>
+        )}
         <nav className="bottom-nav" aria-label="Main navigation">
           {[
             ['Dashboard', `${base}/`, Home, screen === 'dashboard'],

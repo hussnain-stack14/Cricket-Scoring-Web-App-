@@ -110,6 +110,24 @@ test('production install controls, manifest, icons and offline precache are accu
   expect(consoleErrors).toEqual([]);
 });
 
+test('dashboard install suggestion is dismissible for the browser session and never blocks scoring', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await page.getByLabel('Your scorer name').fill('Install banner scorer');
+  await page.getByRole('button', { name: 'Get started' }).click();
+
+  const banner = page.locator('.install-banner');
+  await expect(banner).toBeVisible();
+  await banner.getByRole('button', { name: 'Dismiss install suggestion' }).click();
+  await expect(banner).toBeHidden();
+
+  await page.reload();
+  await expect(banner).toBeHidden();
+  await page.getByRole('link', { name: 'Matches', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
+});
+
 test('credential change APIs reject cross-origin and unauthenticated requests', async ({
   page,
   request,
