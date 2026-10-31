@@ -124,6 +124,13 @@ test('dashboard install suggestion is dismissible for the browser session and ne
 
   await page.reload();
   await expect(banner).toBeHidden();
+  await page.getByRole('link', { name: 'View total matches' }).click();
+  await expect(page).toHaveURL(/\/app\/matches\/$/);
+
+  await page.goto('/app/');
+  await page.getByRole('link', { name: 'View teams' }).click();
+  await expect(page).toHaveURL(/\/app\/teams\/$/);
+
   await page.getByRole('link', { name: 'Matches', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
 });

@@ -891,12 +891,17 @@ export default function App({ screen }) {
                     </div>
                     <div className="dashboard-stat-grid">
                       {[
-                        ['Total matches', matches.length, CalendarDays],
-                        ['Live matches', liveMatches.length, Play],
-                        ['Completed', completedMatches.length, CheckCircle2],
-                        ['Teams', data.teams.filter((team) => !team.archived).length, Users],
-                      ].map(([label, value, Icon]) => (
-                        <div className="dashboard-stat-card" key={label}>
+                        ['Total matches', matches.length, CalendarDays, `${base}/matches/`],
+                        ['Live matches', liveMatches.length, Play, `${base}/matches/`],
+                        ['Completed', completedMatches.length, CheckCircle2, `${base}/reports/`],
+                        ['Teams', data.teams.filter((team) => !team.archived).length, Users, `${base}/teams/`],
+                      ].map(([label, value, Icon, href]) => (
+                        <Link
+                          className="dashboard-stat-card"
+                          href={href}
+                          key={label}
+                          aria-label={`View ${label.toLowerCase()}`}
+                        >
                           <span className="dashboard-stat-icon">
                             <Icon size={19} />
                           </span>
@@ -906,7 +911,7 @@ export default function App({ screen }) {
                           </span>
                           <ArrowRight className="dashboard-stat-arrow" size={17} aria-hidden="true" />
                           <span className="dashboard-stat-trend" aria-hidden="true" />
-                        </div>
+                        </Link>
                       ))}
                     </div>
                     <div className="dashboard-overview-grid">
