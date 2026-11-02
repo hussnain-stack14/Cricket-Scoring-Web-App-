@@ -198,3 +198,75 @@ test('qualified and provisional rankings keep undefined averages out while prese
     [],
   );
 });
+
+test('ratings are bounded, use both disciplines, and keep legacy points separate', () => {
+  const teams = [side('A', ['a1', 'a2']), side('B', ['b1', 'b2'])];
+  const histories = Array.from({ length: 4 }, (_, index) =>
+    completedMatch(
+      `rating-${index}`,
+      teams,
+      0,
+      [
+        { bat: 4, boundary: true },
+        ...Array.from({ length: 4 }, () => ({ bat: 0 })),
+        { wicket: { kind: 'bowled', player: 'a1' } },
+      ],
+      [
+        ...Array.from({ length: 5 }, () => ({ bat: 0 })),
+        { wicket: { kind: 'bowled', player: 'b1' } },
+      ],
+    ),
+  );
+  const data = {
+    players: [{ id: 'a1', name: 'All-rounder' }, { id: 'b1', name: 'Opponent' }],
+    matches: histories.map((history) => history.match),
+    innings: histories.flatMap((history) => history.innings),
+    events: histories.flatMap((history) => history.events),
+  };
+  const allRounder = playerTotals(data).find((player) => player.id === 'a1');
+  assert.equal(allRounder.runs, 16);
+  assert.equal(allRounder.wickets, 4);
+  assert.equal(allRounder.legalBalls, 24);
+  assert.equal(allRounder.points, 96);
+  assert.ok(allRounder.battingRating > 0 && allRounder.battingRating <= 1000);
+  assert.ok(allRounder.bowlingRating > 0 && allRounder.bowlingRating <= 1000);
+  assert.ok(Math.abs(allRounder.allRounderRating - (allRounder.battingRating * allRounder.bowlingRating) / 1000) < 1e-9);
+  assert.deepEqual(
+    rankPlayers([allRounder], 'All-Rounders', 'allRounderRating').map((player) => player.id),
+    ['a1'],
+  );
+});
+
+test('filters and duplicate records do not create duplicate leaderboard contributions', () => {
+  const teams = [side('A', ['a1', 'a2']), side('B', ['b1', 'b2'])];
+  const first = completedMatch(
+    'first',
+    teams,
+    0,
+    Array.from({ length: 6 }, () => ({ bat: 1, running: 1 })),
+    Array.from({ length: 6 }, () => ({ bat: 0 })),
+  );
+  const second = completedMatch(
+    'second',
+    teams,
+    0,
+    Array.from({ length: 6 }, () => ({ bat: 2, running: 0 })),
+    Array.from({ length: 6 }, () => ({ bat: 0 })),
+  );
+  first.match.date = '2026-01-01';
+  second.match.date = '2026-02-01';
+  second.match.tournamentId = 'cup';
+  const data = {
+    players: [{ id: 'a1', name: 'A one' }, { id: 'b1', name: 'B one' }],
+    matches: [first.match, second.match, first.match],
+    innings: [...first.innings, ...second.innings, ...first.innings],
+    events: [...first.events, ...second.events, ...first.events],
+  };
+  const all = playerTotals(data).find((player) => player.id === 'a1');
+  const cup = playerTotals(data, { tournament: 'cup' }).find((player) => player.id === 'a1');
+  const recent = playerTotals(data, { since: '2026-01-15' }).find((player) => player.id === 'a1');
+  assert.equal(all.runs, 15);
+  assert.equal(cup.runs, 12);
+  assert.equal(recent.runs, 12);
+  assert.equal(playerTotals(data, { teamId: 'A' }).find((player) => player.id === 'a1').runs, 15);
+});

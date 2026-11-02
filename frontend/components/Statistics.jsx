@@ -79,9 +79,11 @@ export default function Statistics({ data }) {
             ['matches', 'Matches'],
             ['runs', 'Runs'],
             ['average', 'Bat avg'],
-            ['strikeRate', 'Bat SR'],
             ['wickets', 'Wickets'],
             ['economy', 'Economy'],
+            ['battingRating', 'Bat rating'],
+            ['bowlingRating', 'Bowl rating'],
+            ['allRounderRating', 'All-round rating'],
           ];
   const label = rankingMetrics[category]?.find((m) => m[0] === metric)?.[1];
   const team = data.teams.find((t) => t.id === (teamId || teams[0]?.id));
@@ -178,6 +180,14 @@ export default function Statistics({ data }) {
                 remain available as a separate metric.
               </p>
             )}
+            <details className="ranking-qualification ranking-explainer">
+              <summary>How rankings work</summary>
+              <p className="help">
+                Traditional tables use completed-match event history only. Rate and rating tables
+                require 3 appearances and 24 relevant balls; players below that threshold remain
+                visible as provisional. Shared values share a competition rank.
+              </p>
+            </details>
             {['average', 'strikeRate', 'bowlingAverage', 'economy', 'bowlingStrikeRate', 'battingRating', 'bowlingRating', 'allRounderRating'].includes(metric) && (
               <details className="ranking-qualification">
                 <summary>Qualification</summary>

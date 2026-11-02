@@ -26,7 +26,7 @@ test('profile popover toggles, closes outside and closes with Escape at mobile a
     await page.keyboard.press('Escape');
     await expect(page.locator('.account-popover[open]')).toHaveCount(0);
     await menu.click();
-    await page.locator('main').click({ position: { x: 5, y: 5 } });
+    await page.getByRole('heading', { name: 'Your cricket, at a glance.' }).click();
     await expect(page.locator('.account-popover[open]')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -46,5 +46,18 @@ test('statistics shows compact offline-ready Top 20 controls without desktop ove
   await page.setViewportSize({ width: 320, height: 820 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('tab', { name: 'All-Rounders' }).click();
-  await expect(page.locator('.leaderboards .help')).toContainText('Crease points');
+  await expect(page.getByText(/All-rounder rating = batting rating/i)).toBeVisible();
+  await page.screenshot({ path: 'test-results/rankings-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const desktopLayout = await page.evaluate(() => ({
+    scrollX: window.scrollX,
+    contentLeft: document.querySelector('.app-content')?.getBoundingClientRect().left,
+    workspaceLeft: document.querySelector('.app-workspace')?.getBoundingClientRect().left,
+    workspaceWidth: document.querySelector('.app-workspace')?.getBoundingClientRect().width,
+    workspaceMargin: getComputedStyle(document.querySelector('.app-workspace')).marginLeft,
+  }));
+  console.log(desktopLayout);
+  expect(desktopLayout.scrollX).toBe(0);
+  expect(desktopLayout.contentLeft).toBeGreaterThanOrEqual(252);
+  await page.screenshot({ path: 'test-results/rankings-desktop.png', fullPage: true });
 });
