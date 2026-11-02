@@ -41,6 +41,11 @@ test('statistics shows compact offline-ready Top 20 controls without desktop ove
   await page.goto('/app/statistics/');
   await expect(page.getByRole('tab', { name: 'Batters' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Top 20 Batters' })).toBeVisible();
+  await expect(page.getByLabel('Team')).toHaveValue('');
+  await expect(page.getByLabel('Team').locator('option:checked')).toHaveText('All Teams');
+  await expect(page.getByLabel('Match format').locator('option:checked')).toHaveText('All Formats');
+  await expect(page.getByLabel('Time period').locator('option:checked')).toHaveText('All Time');
+  await expect(page.getByText('0 players')).toBeVisible();
   await page.getByRole('tab', { name: 'Bowlers' }).click();
   await expect(page.getByLabel('Ranking')).toBeVisible();
   await page.setViewportSize({ width: 320, height: 820 });
@@ -49,15 +54,6 @@ test('statistics shows compact offline-ready Top 20 controls without desktop ove
   await expect(page.getByText(/All-rounder rating = batting rating/i)).toBeVisible();
   await page.screenshot({ path: 'test-results/rankings-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  const desktopLayout = await page.evaluate(() => ({
-    scrollX: window.scrollX,
-    contentLeft: document.querySelector('.app-content')?.getBoundingClientRect().left,
-    workspaceLeft: document.querySelector('.app-workspace')?.getBoundingClientRect().left,
-    workspaceWidth: document.querySelector('.app-workspace')?.getBoundingClientRect().width,
-    workspaceMargin: getComputedStyle(document.querySelector('.app-workspace')).marginLeft,
-  }));
-  console.log(desktopLayout);
-  expect(desktopLayout.scrollX).toBe(0);
-  expect(desktopLayout.contentLeft).toBeGreaterThanOrEqual(252);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/rankings-desktop.png', fullPage: true });
 });

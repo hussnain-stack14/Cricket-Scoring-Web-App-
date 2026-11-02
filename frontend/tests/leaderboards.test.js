@@ -197,6 +197,26 @@ test('qualified and provisional rankings keep undefined averages out while prese
     rankPlayers(rows, 'Batters', 'battingRating', {}, { provisional: true }).map((player) => player.id),
     [],
   );
+  assert.deepEqual(
+    rankPlayers(rows, 'Batters', 'runs', {}, { provisional: true }),
+    [],
+  );
+  const shortSample = {
+    ...rows[0],
+    id: 'short-sample',
+    innings: 1,
+    balls: 12,
+    runs: 20,
+    battingRating: 500,
+  };
+  const qualified = rankPlayers([...rows, shortSample], 'Batters', 'battingRating');
+  const provisional = rankPlayers([...rows, shortSample], 'Batters', 'battingRating', {}, { provisional: true });
+  assert.deepEqual(qualified.map((player) => player.id), ['all-rounder', 'not-out', 'dismissed']);
+  assert.deepEqual(provisional.map((player) => player.id), ['short-sample']);
+  assert.equal(
+    qualified.some((player) => provisional.some((candidate) => candidate.id === player.id)),
+    false,
+  );
 });
 
 test('ratings are bounded, use both disciplines, and keep legacy points separate', () => {

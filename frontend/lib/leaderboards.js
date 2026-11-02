@@ -27,6 +27,8 @@ const ratio = (a, b) => (b ? a / b : null);
 const unique = (rows = []) => [...new Map(rows.map((row) => [row.id, row])).values()];
 const rateMetrics = new Set(['average', 'strikeRate', 'bowlingAverage', 'economy', 'bowlingStrikeRate']);
 const ratingMetrics = new Set(['battingRating', 'bowlingRating', 'allRounderRating']);
+// Count rankings describe participation. Rates and ratings need a meaningful sample.
+export const requiresQualification = (metric) => rateMetrics.has(metric) || ratingMetrics.has(metric);
 
 function qualification(row, category, criteria) {
   const minimum = {
@@ -127,12 +129,12 @@ function tieBreak(left, right, metric) {
 
 export function rankPlayers(rows, category, metric, criteria = {}, { provisional = false } = {}) {
   const direction = rankingMetrics[category].find((item) => item[0] === metric)?.[2] || 'desc';
-  const requiresQualification = rateMetrics.has(metric) || ratingMetrics.has(metric);
+  const qualifiedMetric = requiresQualification(metric);
   const ranked = rows.filter((row) => {
     const participates = category === 'Batters' ? row.innings > 0 : category === 'Bowlers' ? row.bowlingInnings > 0 : row.innings > 0 && row.bowlingInnings > 0;
     if (!participates || row[metric] === null || row[metric] === undefined) return false;
     const status = qualification(row, category, criteria);
-    return provisional ? !status.qualified : !requiresQualification || status.qualified;
+    return provisional ? qualifiedMetric && !status.qualified : !qualifiedMetric || status.qualified;
   }).sort((left, right) => primaryCompare(left, right, metric, direction) || tieBreak(left, right, metric) || left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   let rank = 1;
   return ranked.slice(0, 20).map((row, index) => {

@@ -1,15 +1,34 @@
 ﻿'use client';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Empty, Field, Select, Tabs } from './ui';
+import { Empty, Field, Tabs } from './ui';
 import TeamStatistics from './TeamStatistics';
-import { defaultQualification, playerTotals, rankPlayers, rankingMetrics } from '../lib/leaderboards';
+import {
+  defaultQualification,
+  playerTotals,
+  rankPlayers,
+  rankingMetrics,
+  requiresQualification,
+} from '../lib/leaderboards';
 const display = (value) =>
   value === null || value === undefined
     ? '—'
     : typeof value === 'number' && !Number.isInteger(value)
       ? value.toFixed(2)
       : value;
+function FilterSelect({ label, options, ...props }) {
+  return (
+    <Field label={label}>
+      <select {...props}>
+        {options.map((option) => (
+          <option key={option.id ?? option} value={option.id ?? option}>
+            {option.name ?? option}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
 export default function Statistics({ data }) {
   const [category, setCategory] = useState('Batters'),
     [metric, setMetric] = useState('runs'),
@@ -44,7 +63,7 @@ export default function Statistics({ data }) {
   );
   const provisionalRows = useMemo(
     () =>
-      category === 'Team reports'
+      category === 'Team reports' || !requiresQualification(metric)
         ? []
         : rankPlayers(totals, category, metric, criteria, { provisional: true }),
     [totals, category, metric, criteria],
@@ -86,6 +105,7 @@ export default function Statistics({ data }) {
             ['allRounderRating', 'All-round rating'],
           ];
   const label = rankingMetrics[category]?.find((m) => m[0] === metric)?.[1];
+  const usesQualification = category !== 'Team reports' && requiresQualification(metric);
   const team = data.teams.find((t) => t.id === (teamId || teams[0]?.id));
   return (
     <section className="statistics-view leaderboards">
@@ -100,7 +120,7 @@ export default function Statistics({ data }) {
         label="Statistics views"
       />
       <div className="ranking-filters">
-        <Select
+        <FilterSelect
           label="Team"
           value={teamId}
           onChange={(e) => setTeamId(e.target.value)}
@@ -108,37 +128,37 @@ export default function Statistics({ data }) {
         />
         {category !== 'Team reports' && (
           <>
-            <Select
+            <FilterSelect
               label="Match format"
               value={format}
               onChange={(e) => setFormat(e.target.value)}
               options={[
-                { id: '', name: 'All formats' },
+                { id: '', name: 'All Formats' },
                 ...[...new Set(data.matches.map((m) => m.rules.overs))]
                   .sort((a, b) => a - b)
                   .map((n) => ({ id: String(n), name: n + ' overs' })),
               ]}
             />
-            <Select
+            <FilterSelect
               label="Time period"
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               options={[
-                { id: '', name: 'All time' },
+                { id: '', name: 'All Time' },
                 { id: '30', name: 'Last 30 days' },
                 { id: '90', name: 'Last 90 days' },
                 { id: '365', name: 'Last year' },
               ]}
             />
             {tournaments.length > 0 && (
-              <Select
+              <FilterSelect
                 label="Tournament"
                 value={tournament}
                 onChange={(e) => setTournament(e.target.value)}
                 options={[{ id: '', name: 'All tournaments' }, ...tournaments]}
               />
             )}
-            <Select
+            <FilterSelect
               label="Ranking"
               value={metric}
               onChange={(e) => {
@@ -172,7 +192,7 @@ export default function Statistics({ data }) {
           <>
             <div className="ranking-heading">
               <h2>Top 20 {category}</h2>
-              <span>{rows.length} eligible players</span>
+              <span>{rows.length} {usesQualification ? 'qualified players' : 'players'}</span>
             </div>
             {category === 'All-Rounders' && (
               <p className="help">
@@ -188,7 +208,7 @@ export default function Statistics({ data }) {
                 visible as provisional. Shared values share a competition rank.
               </p>
             </details>
-            {['average', 'strikeRate', 'bowlingAverage', 'economy', 'bowlingStrikeRate', 'battingRating', 'bowlingRating', 'allRounderRating'].includes(metric) && (
+            {usesQualification && (
               <details className="ranking-qualification">
                 <summary>Qualification</summary>
                 <div className="ranking-filters">
@@ -226,8 +246,10 @@ export default function Statistics({ data }) {
               </details>
             )}
             {!rows.length ? (
-              <Empty title="No eligible players">
-                Complete matches or adjust your filters and qualification.
+              <Empty title={usesQualification ? 'No eligible players' : 'No players yet'}>
+                {usesQualification
+                  ? 'Complete matches or adjust your filters and qualification.'
+                  : 'Complete matches or adjust your filters.'}
               </Empty>
             ) : (
               <>
@@ -304,21 +326,21 @@ export default function Statistics({ data }) {
                     </details>
                   ))}
                 </div>
-                {provisionalRows.length > 0 && (
-                  <details className="ranking-qualification">
-                    <summary>Provisional players ({provisionalRows.length})</summary>
-                    <p className="help">These players have recorded completed-match statistics but have not reached the selected participation threshold.</p>
-                    <ul className="ranking-provisional-list">
-                      {provisionalRows.map((p) => (
-                        <li key={p.id}>
-                          <Link href={'/app/player/?id=' + p.id}>{p.name}</Link>
-                          <span>{category === 'Batters' ? p.battingProgress : category === 'Bowlers' ? p.bowlingProgress : `${p.battingProgress}; ${p.bowlingProgress}`}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
               </>
+            )}
+            {usesQualification && provisionalRows.length > 0 && (
+              <details className="ranking-qualification">
+                <summary>Provisional players ({provisionalRows.length})</summary>
+                <p className="help">These players have recorded completed-match statistics but have not reached the selected participation threshold.</p>
+                <ul className="ranking-provisional-list">
+                  {provisionalRows.map((p) => (
+                    <li key={p.id}>
+                      <Link href={'/app/player/?id=' + p.id}>{p.name}</Link>
+                      <span>{category === 'Batters' ? p.battingProgress : category === 'Bowlers' ? p.bowlingProgress : `${p.battingProgress}; ${p.bowlingProgress}`}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
           </>
         )}
