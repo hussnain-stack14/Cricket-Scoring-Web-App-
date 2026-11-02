@@ -108,7 +108,7 @@ test('leaderboards use unique completed match snapshots, retain archived identit
     0,
   );
 });
-test('top 20 caps output, preserves deterministic competition ties, and sorts lower-is-better rates correctly', () => {
+test('top 20 caps output, uses deterministic sequential ranks, and sorts lower-is-better rates correctly', () => {
   const rows = Array.from({ length: 25 }, (_, i) => ({
     id: String(i).padStart(2, '0'),
     name: 'Player ' + String(i).padStart(2, '0'),
@@ -141,7 +141,7 @@ test('top 20 caps output, preserves deterministic competition ties, and sorts lo
   );
   assert.deepEqual(
     tied.map((p) => p.rank),
-    [1, 1, 3],
+    [1, 2, 3],
   );
   assert.equal(rankPlayers(rows, 'Batters', 'average', { minInnings: 3 }).length, 0);
   assert.equal(
@@ -156,6 +156,31 @@ test('top 20 caps output, preserves deterministic competition ties, and sorts lo
     0,
   );
   assert.equal(rankPlayers(rows.slice(0, 2), 'All-Rounders', 'points').length, 2);
+});
+
+test('batting and bowling performance comparators handle ties, not outs, and wicketless bowlers', () => {
+  const batters = [
+    { id: 'b', name: 'Not out', innings: 1, balls: 20, runs: 30, average: null, strikeRate: 150 },
+    { id: 'a', name: 'Dismissed', innings: 1, balls: 24, runs: 30, average: 30, strikeRate: 125 },
+    { id: 'c', name: 'Fast not out', innings: 1, balls: 15, runs: 30, average: null, strikeRate: 200 },
+  ];
+  assert.deepEqual(
+    rankPlayers(batters, 'Batters', 'battingPerformance').map((player) => [player.id, player.rank]),
+    [['c', 1], ['b', 2], ['a', 3]],
+  );
+
+  const bowlers = [
+    { id: 'z', name: 'No balls', bowlingInnings: 1, wickets: 0, bowlingAverage: null, economy: null },
+    { id: 'e', name: 'Economical', bowlingInnings: 1, wickets: 0, bowlingAverage: null, economy: 5.67 },
+    { id: 'f', name: 'Other wicketless', bowlingInnings: 1, wickets: 0, bowlingAverage: null, economy: 8.5 },
+    { id: 'd', name: 'Higher average', bowlingInnings: 1, wickets: 1, bowlingAverage: 39, economy: 13 },
+    { id: 'c', name: 'Lower average', bowlingInnings: 1, wickets: 1, bowlingAverage: 34, economy: 8.5 },
+    { id: 'b', name: 'Two wickets', bowlingInnings: 1, wickets: 2, bowlingAverage: 15.5, economy: 15.5 },
+  ];
+  assert.deepEqual(
+    rankPlayers(bowlers, 'Bowlers', 'bowlingPerformance').map((player) => [player.id, player.rank]),
+    [['b', 1], ['c', 2], ['d', 3], ['e', 4], ['f', 5], ['z', 6]],
+  );
 });
 
 test('qualified and provisional rankings keep undefined averages out while preserving raw statistics', () => {

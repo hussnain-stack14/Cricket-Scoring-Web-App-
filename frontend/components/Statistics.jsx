@@ -16,6 +16,13 @@ const display = (value) =>
     : typeof value === 'number' && !Number.isInteger(value)
       ? value.toFixed(2)
       : value;
+const isOrderedPerformance = (metric) => ['battingPerformance', 'bowlingPerformance'].includes(metric);
+const primaryValue = (player, category, metric) =>
+  metric === 'battingPerformance'
+    ? `${player.runs} runs`
+    : metric === 'bowlingPerformance'
+      ? `${player.wickets} wickets`
+      : display(player[metric]);
 function FilterSelect({ label, options, ...props }) {
   return (
     <Field label={label}>
@@ -31,7 +38,7 @@ function FilterSelect({ label, options, ...props }) {
 }
 export default function Statistics({ data }) {
   const [category, setCategory] = useState('Batters'),
-    [metric, setMetric] = useState('runs'),
+    [metric, setMetric] = useState('battingPerformance'),
     [teamId, setTeamId] = useState(''),
     [format, setFormat] = useState(''),
     [period, setPeriod] = useState(''),
@@ -89,7 +96,7 @@ export default function Statistics({ data }) {
         ? [
             ['matches', 'Matches'],
             ['overs', 'Overs'],
-            ['conceded', 'Runs'],
+            ['conceded', 'Runs conceded'],
             ['wickets', 'Wickets'],
             ['bowlingAverage', 'Average'],
             ['economy', 'Economy'],
@@ -191,7 +198,7 @@ export default function Statistics({ data }) {
         ) : (
           <>
             <div className="ranking-heading">
-              <h2>Top 20 {category}</h2>
+              <h2>Top 20 {category} — {label}</h2>
               <span>{rows.length} {usesQualification ? 'qualified players' : 'players'}</span>
             </div>
             {category === 'All-Rounders' && (
@@ -203,11 +210,18 @@ export default function Statistics({ data }) {
             <details className="ranking-qualification ranking-explainer">
               <summary>How rankings work</summary>
               <p className="help">
-                Traditional tables use completed-match event history only. Rate and rating tables
+                Traditional tables use completed-match event history only. Each row has a unique
+                rank using documented tie-breakers and stable player IDs. Rate and rating tables
                 require 3 appearances and 24 relevant balls; players below that threshold remain
-                visible as provisional. Shared values share a competition rank.
+                visible as provisional.
               </p>
             </details>
+            {metric === 'bowlingPerformance' && (
+              <p className="help">
+                Bowling rankings prioritize wickets, followed by lower bowling average and lower
+                economy. Wicketless bowlers are compared by economy.
+              </p>
+            )}
             {usesQualification && (
               <details className="ranking-qualification">
                 <summary>Qualification</summary>
@@ -275,7 +289,7 @@ export default function Statistics({ data }) {
                             {metric === key ? ' ↕' : ''}
                           </th>
                         ))}
-                        {!columns.some(([k]) => k === metric) && <th>{label}</th>}
+                        {!columns.some(([k]) => k === metric) && !isOrderedPerformance(metric) && <th>{label}</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -291,7 +305,7 @@ export default function Statistics({ data }) {
                           {columns.map(([k]) => (
                             <td key={k}>{display(p[k])}</td>
                           ))}
-                          {!columns.some(([k]) => k === metric) && <td>{display(p[metric])}</td>}
+                          {!columns.some(([k]) => k === metric) && !isOrderedPerformance(metric) && <td>{display(p[metric])}</td>}
                         </tr>
                       ))}
                     </tbody>
@@ -310,7 +324,7 @@ export default function Statistics({ data }) {
                           </small>
                         </span>
                         <span className="ranking-primary">
-                          {display(p[metric])}
+                          {primaryValue(p, category, metric)}
                           <small>{label}</small>
                         </span>
                       </summary>

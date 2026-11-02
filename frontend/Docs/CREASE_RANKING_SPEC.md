@@ -13,7 +13,11 @@ All values are derived at read time from completed, non-deleted, non-excluded ma
 
 Most Runs and Most Wickets include every player with completed-match participation. Rate and rating tables separate qualified players from provisional players. The default qualification is 3 batting innings and 24 balls faced, or 3 bowling appearances and 24 legal balls. All-rounders must meet both requirements.
 
-Rows are deterministically ordered by the displayed metric, then documented tie-breakers, then name and stable player ID. Shared positions use competition ranking: `1, 1, 3`. Most Runs uses balls faced then strike rate to order ties; Most Wickets uses bowling average then economy. Tie-breakers do not alter a shared rank.
+Rows use deterministic ordered comparators and unique sequential positions: `1, 2, 3`. A stable player ID is the final tie-breaker, so two players never share a displayed rank.
+
+- **Batting Performance** (the default batter view): runs descending, then batting average descending when both averages are defined, then strike rate descending, then stable player ID. When one or both batters are not out, average is not comparable and strike rate is used next.
+- **Bowling Performance** (the default bowler view): wickets descending, then bowling average ascending, then economy ascending, then stable player ID. A wicketless bowler has an undefined bowling average and is therefore ordered after a bowler with the same wickets and a defined average; wicketless bowlers are then ordered by economy. A bowler with no legal balls is below one with a valid economy.
+- Standalone metrics use that selected metric first and the corresponding performance comparator as their documented tie-breaker.
 
 ## Crease Rating v1
 

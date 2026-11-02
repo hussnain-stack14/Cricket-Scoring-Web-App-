@@ -477,9 +477,11 @@ export default function App({ screen }) {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 4);
   const currentSyncStatus =
-    !isOnline || session?.offlineCached
+    !isOnline
       ? 'offline'
-      : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
+      : syncing
+        ? 'syncing'
+        : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
   const currentSyncLabel = SYNC_STATUS_LABELS[currentSyncStatus] || 'Sync needs attention';
 
   function renderDraftCard(draft) {
@@ -694,7 +696,7 @@ export default function App({ screen }) {
                 <span className="header-status-dot" />
                 <Cloud size={17} />
                 <span className="offline-readiness-label">
-                  {offline.ready ? 'Ready offline' : 'Offline setup'}
+                  {currentSyncLabel}
                 </span>
               </summary>
               <div className="header-popover-panel">
@@ -705,6 +707,9 @@ export default function App({ screen }) {
                   error={syncMeta?.lastError}
                   onSync={session ? syncNow : undefined}
                   syncing={syncing}
+                  variant="popover"
+                  online={isOnline}
+                  offlineReady={offline.ready}
                 />
               </div>
             </details>
@@ -761,11 +766,11 @@ export default function App({ screen }) {
               </button>
             )}
             <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
-              <summary title={currentSyncLabel}>
+              <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
                 <span className="header-status-dot" />
                 <Cloud size={17} />
                 <span className="offline-readiness-label">
-                  {offline.ready ? 'Ready offline' : 'Offline setup'}
+                  {currentSyncLabel}
                 </span>
               </summary>
               <div className="header-popover-panel">
@@ -776,6 +781,9 @@ export default function App({ screen }) {
                   error={syncMeta?.lastError}
                   onSync={session ? syncNow : undefined}
                   syncing={syncing}
+                  variant="popover"
+                  online={isOnline}
+                  offlineReady={offline.ready}
                 />
               </div>
             </details>

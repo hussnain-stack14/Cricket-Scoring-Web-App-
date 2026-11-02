@@ -34,13 +34,48 @@ test('profile popover toggles, closes outside and closes with Escape at mobile a
   }
 });
 
+test('sync and offline popover remains readable, contained, and dismissible across viewport sizes', async ({
+  page,
+}) => {
+  await workspace(page);
+  for (const width of [320, 360, 390, 414, 768, 1440]) {
+    await page.setViewportSize({ width, height: 860 });
+    for (const theme of ['green', 'red-ball', 'blue']) {
+      await page.evaluate((nextTheme) => {
+        if (nextTheme === 'green') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', nextTheme);
+      }, theme);
+      const trigger = page.locator('.sync-popover:visible > summary');
+      await trigger.click();
+      const panel = page.locator('.sync-popover:visible .header-popover-panel');
+      await expect(panel.getByText('Sync & offline')).toBeVisible();
+      await expect(panel.getByText('Not synced yet')).toBeVisible();
+      const bounds = await panel.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, width: rect.width, viewport: innerWidth };
+      });
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(bounds.viewport);
+      expect(bounds.width).toBeLessThanOrEqual(Math.min(340, bounds.viewport - 24));
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.sync-popover[open]')).toHaveCount(0);
+    }
+  }
+  await page.setViewportSize({ width: 360, height: 860 });
+  await page.locator('.sync-popover:visible > summary').click();
+  await page.screenshot({ path: 'test-results/sync-status-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator('.sync-popover:visible > summary').click();
+  await page.screenshot({ path: 'test-results/sync-status-desktop.png', fullPage: true });
+});
+
 test('statistics shows compact offline-ready Top 20 controls without desktop overflow', async ({
   page,
 }) => {
   await workspace(page);
   await page.goto('/app/statistics/');
   await expect(page.getByRole('tab', { name: 'Batters' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Top 20 Batters' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Top 20 Batters.*Batting Performance/ })).toBeVisible();
   await expect(page.getByLabel('Team')).toHaveValue('');
   await expect(page.getByLabel('Team').locator('option:checked')).toHaveText('All Teams');
   await expect(page.getByLabel('Match format').locator('option:checked')).toHaveText('All Formats');
@@ -48,6 +83,7 @@ test('statistics shows compact offline-ready Top 20 controls without desktop ove
   await expect(page.getByText('0 players')).toBeVisible();
   await page.getByRole('tab', { name: 'Bowlers' }).click();
   await expect(page.getByLabel('Ranking')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Top 20 Bowlers.*Bowling Performance/ })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 820 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('tab', { name: 'All-Rounders' }).click();

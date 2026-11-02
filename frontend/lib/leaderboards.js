@@ -4,19 +4,21 @@ import { teamStatistics } from './statistics.js';
 export const RATING_ENGINE_VERSION = 'crease-rating-v1';
 export const rankingMetrics = {
   Batters: [
+    ['battingPerformance', 'Batting Performance', 'desc'],
     ['runs', 'Most runs', 'desc'], ['average', 'Highest average', 'desc'],
     ['strikeRate', 'Highest strike rate', 'desc'], ['fours', 'Most fours', 'desc'],
     ['sixes', 'Most sixes', 'desc'], ['fifties', 'Most fifties', 'desc'],
     ['hundreds', 'Most hundreds', 'desc'], ['battingRating', 'Crease batting rating', 'desc'],
   ],
   Bowlers: [
+    ['bowlingPerformance', 'Bowling Performance', 'desc'],
     ['wickets', 'Most wickets', 'desc'], ['bowlingAverage', 'Best average', 'asc'],
     ['economy', 'Best economy', 'asc'], ['bowlingStrikeRate', 'Best strike rate', 'asc'],
     ['dots', 'Most dot balls', 'desc'], ['maidens', 'Most maidens', 'desc'],
     ['bestFigures', 'Best figures', 'desc'], ['bowlingRating', 'Crease bowling rating', 'desc'],
   ],
   'All-Rounders': [
-    ['allRounderRating', 'Crease all-rounder rating', 'desc'],
+    ['allRounderRating', 'Performance Rating', 'desc'],
     ['points', 'Legacy Crease points', 'desc'],
   ],
 };
@@ -117,14 +119,44 @@ export function playerTotals(data, { teamId = '', format = '', since = '', tourn
   });
 }
 
-function primaryCompare(left, right, metric, direction) {
-  if (metric === 'bestFigures') return right.bestWickets - left.bestWickets || left.bestRuns - right.bestRuns;
-  return (direction === 'asc' ? 1 : -1) * (left[metric] - right[metric]);
+function compareNumber(left, right, direction = 'desc', { nullsLast = true } = {}) {
+  const leftMissing = left === null || left === undefined || Number.isNaN(left);
+  const rightMissing = right === null || right === undefined || Number.isNaN(right);
+  if (leftMissing || rightMissing) {
+    if (leftMissing && rightMissing) return 0;
+    return leftMissing ? (nullsLast ? 1 : -1) : (nullsLast ? -1 : 1);
+  }
+  return direction === 'asc' ? left - right : right - left;
 }
-function tieBreak(left, right, metric) {
-  if (metric === 'runs') return right.balls - left.balls || right.strikeRate - left.strikeRate;
-  if (metric === 'wickets') return (left.bowlingAverage ?? Infinity) - (right.bowlingAverage ?? Infinity) || (left.economy ?? Infinity) - (right.economy ?? Infinity);
-  return 0;
+
+function battingPerformanceCompare(left, right) {
+  const runs = compareNumber(left.runs, right.runs);
+  if (runs) return runs;
+  // A not-out average is undefined, so only compare averages when both are meaningful.
+  if (left.average !== null && right.average !== null) {
+    const average = compareNumber(left.average, right.average);
+    if (average) return average;
+  }
+  return compareNumber(left.strikeRate, right.strikeRate);
+}
+
+function bowlingPerformanceCompare(left, right) {
+  const wickets = compareNumber(left.wickets, right.wickets);
+  if (wickets) return wickets;
+  const average = compareNumber(left.bowlingAverage, right.bowlingAverage, 'asc');
+  if (average) return average;
+  return compareNumber(left.economy, right.economy, 'asc');
+}
+
+function comparator(left, right, category, metric, direction) {
+  if (metric === 'battingPerformance') return battingPerformanceCompare(left, right);
+  if (metric === 'bowlingPerformance') return bowlingPerformanceCompare(left, right);
+  if (metric === 'bestFigures') return right.bestWickets - left.bestWickets || compareNumber(left.bestRuns, right.bestRuns, 'asc');
+  const primary = compareNumber(left[metric], right[metric], direction);
+  if (primary) return primary;
+  if (category === 'Batters') return battingPerformanceCompare(left, right);
+  if (category === 'Bowlers') return bowlingPerformanceCompare(left, right);
+  return compareNumber(left.allRounderRating, right.allRounderRating);
 }
 
 export function rankPlayers(rows, category, metric, criteria = {}, { provisional = false } = {}) {
@@ -132,14 +164,12 @@ export function rankPlayers(rows, category, metric, criteria = {}, { provisional
   const qualifiedMetric = requiresQualification(metric);
   const ranked = rows.filter((row) => {
     const participates = category === 'Batters' ? row.innings > 0 : category === 'Bowlers' ? row.bowlingInnings > 0 : row.innings > 0 && row.bowlingInnings > 0;
-    if (!participates || row[metric] === null || row[metric] === undefined) return false;
+    if (!participates || (metric !== 'battingPerformance' && metric !== 'bowlingPerformance' && (row[metric] === null || row[metric] === undefined))) return false;
     const status = qualification(row, category, criteria);
     return provisional ? qualifiedMetric && !status.qualified : !qualifiedMetric || status.qualified;
-  }).sort((left, right) => primaryCompare(left, right, metric, direction) || tieBreak(left, right, metric) || left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
-  let rank = 1;
+  }).sort((left, right) => comparator(left, right, category, metric, direction) || left.id.localeCompare(right.id));
   return ranked.slice(0, 20).map((row, index) => {
-    if (index && primaryCompare(row, ranked[index - 1], metric, direction)) rank = index + 1;
     const status = qualification(row, category, criteria);
-    return { ...row, ...status, rank, provisional: !status.qualified };
+    return { ...row, ...status, rank: index + 1, provisional: !status.qualified };
   });
 }
