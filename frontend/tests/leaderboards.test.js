@@ -129,9 +129,10 @@ test('top 20 caps output, preserves deterministic competition ties, and sorts lo
     points: 160 - i,
   }));
   assert.equal(rankPlayers(rows, 'Batters', 'runs').length, 20);
-  assert.equal(rankPlayers(rows, 'Bowlers', 'economy')[0].id, '00');
-  assert.equal(rankPlayers(rows, 'Bowlers', 'bowlingAverage')[0].id, '00');
-  assert.equal(rankPlayers(rows, 'Bowlers', 'bowlingStrikeRate')[0].id, '00');
+  const twoAppearanceThreshold = { minBowlInnings: 2, minBowlBalls: 12 };
+  assert.equal(rankPlayers(rows, 'Bowlers', 'economy', twoAppearanceThreshold)[0].id, '00');
+  assert.equal(rankPlayers(rows, 'Bowlers', 'bowlingAverage', twoAppearanceThreshold)[0].id, '00');
+  assert.equal(rankPlayers(rows, 'Bowlers', 'bowlingStrikeRate', twoAppearanceThreshold)[0].id, '00');
   assert.equal(rankPlayers(rows, 'Bowlers', 'bestFigures')[0].id, '23');
   const tied = rankPlayers(
     [{ ...rows[0], runs: 100 }, { ...rows[1], runs: 100 }, rows[2]],
@@ -155,4 +156,45 @@ test('top 20 caps output, preserves deterministic competition ties, and sorts lo
     0,
   );
   assert.equal(rankPlayers(rows.slice(0, 2), 'All-Rounders', 'points').length, 2);
+});
+
+test('qualified and provisional rankings keep undefined averages out while preserving raw statistics', () => {
+  const rows = [
+    {
+      id: 'not-out', name: 'Not out', innings: 3, balls: 30, runs: 48, dismissals: 0,
+      average: null, strikeRate: 160, bowlingInnings: 0, legalBalls: 0, wickets: 0,
+      bowlingAverage: null, economy: null, bowlingStrikeRate: null, battingRating: 640,
+    },
+    {
+      id: 'dismissed', name: 'Dismissed', innings: 3, balls: 30, runs: 45, dismissals: 3,
+      average: 15, strikeRate: 150, bowlingInnings: 3, legalBalls: 24, wickets: 0,
+      bowlingAverage: null, economy: 4.5, bowlingStrikeRate: null, battingRating: 610,
+      bowlingRating: 120, allRounderRating: 73.2,
+    },
+    {
+      id: 'all-rounder', name: 'All rounder', innings: 3, balls: 30, runs: 45, dismissals: 2,
+      average: 22.5, strikeRate: 150, bowlingInnings: 3, legalBalls: 24, wickets: 3,
+      bowlingAverage: 8, economy: 6, bowlingStrikeRate: 8, battingRating: 700,
+      bowlingRating: 600, allRounderRating: 420,
+    },
+  ];
+  assert.deepEqual(rankPlayers(rows, 'Batters', 'average').map((player) => player.id), [
+    'all-rounder',
+    'dismissed',
+  ]);
+  assert.deepEqual(rankPlayers(rows, 'Bowlers', 'bowlingAverage').map((player) => player.id), [
+    'all-rounder',
+  ]);
+  assert.deepEqual(rankPlayers(rows, 'Bowlers', 'economy').map((player) => player.id), [
+    'dismissed',
+    'all-rounder',
+  ]);
+  assert.deepEqual(rankPlayers(rows, 'All-Rounders', 'allRounderRating').map((player) => player.id), [
+    'all-rounder',
+    'dismissed',
+  ]);
+  assert.deepEqual(
+    rankPlayers(rows, 'Batters', 'battingRating', {}, { provisional: true }).map((player) => player.id),
+    [],
+  );
 });

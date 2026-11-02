@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Empty, Field, Select, Tabs } from './ui';
 import TeamStatistics from './TeamStatistics';
-import { playerTotals, rankPlayers, rankingMetrics } from '../lib/leaderboards';
+import { defaultQualification, playerTotals, rankPlayers, rankingMetrics } from '../lib/leaderboards';
 const display = (value) =>
   value === null || value === undefined
     ? '—'
@@ -18,10 +18,7 @@ export default function Statistics({ data }) {
     [period, setPeriod] = useState(''),
     [tournament, setTournament] = useState('');
   const [criteria, setCriteria] = useState({
-    minInnings: 2,
-    minBatBalls: 20,
-    minBowlBalls: 12,
-    minWickets: 2,
+    ...defaultQualification,
   });
   const teams = useMemo(
     () => [
@@ -43,6 +40,13 @@ export default function Statistics({ data }) {
   );
   const rows = useMemo(
     () => (category === 'Team reports' ? [] : rankPlayers(totals, category, metric, criteria)),
+    [totals, category, metric, criteria],
+  );
+  const provisionalRows = useMemo(
+    () =>
+      category === 'Team reports'
+        ? []
+        : rankPlayers(totals, category, metric, criteria, { provisional: true }),
     [totals, category, metric, criteria],
   );
   const tournaments = [
@@ -170,32 +174,30 @@ export default function Statistics({ data }) {
             </div>
             {category === 'All-Rounders' && (
               <p className="help">
-                Crease points = runs + 20 × wickets. Requires batting and bowling participation.
+                All-rounder rating = batting rating × bowling rating ÷ 1000. Legacy Crease points
+                remain available as a separate metric.
               </p>
             )}
-            {['average', 'strikeRate', 'bowlingAverage', 'economy', 'bowlingStrikeRate'].includes(
-              metric,
-            ) && (
+            {['average', 'strikeRate', 'bowlingAverage', 'economy', 'bowlingStrikeRate', 'battingRating', 'bowlingRating', 'allRounderRating'].includes(metric) && (
               <details className="ranking-qualification">
                 <summary>Qualification</summary>
                 <div className="ranking-filters">
                   {Object.entries(criteria)
                     .filter(
                       ([key]) =>
-                        key === 'minInnings' ||
-                        (category === 'Batters'
-                          ? key === 'minBatBalls'
-                          : ['minBowlBalls', 'minWickets'].includes(key)),
+                        (category === 'Batters' && ['minBatInnings', 'minBatBalls'].includes(key)) ||
+                        (category === 'Bowlers' && ['minBowlInnings', 'minBowlBalls'].includes(key)) ||
+                        (category === 'All-Rounders' && ['minBatInnings', 'minBatBalls', 'minBowlInnings', 'minBowlBalls'].includes(key)),
                     )
                     .map(([key, value]) => (
                       <Field
                         key={key}
                         label={
                           {
-                            minInnings: 'Minimum innings',
+                            minBatInnings: 'Minimum batting innings',
                             minBatBalls: 'Minimum balls faced',
+                            minBowlInnings: 'Minimum bowling appearances',
                             minBowlBalls: 'Minimum legal balls',
-                            minWickets: 'Minimum wickets',
                           }[key]
                         }
                         type="number"
@@ -292,6 +294,20 @@ export default function Statistics({ data }) {
                     </details>
                   ))}
                 </div>
+                {provisionalRows.length > 0 && (
+                  <details className="ranking-qualification">
+                    <summary>Provisional players ({provisionalRows.length})</summary>
+                    <p className="help">These players have recorded completed-match statistics but have not reached the selected participation threshold.</p>
+                    <ul className="ranking-provisional-list">
+                      {provisionalRows.map((p) => (
+                        <li key={p.id}>
+                          <Link href={'/app/player/?id=' + p.id}>{p.name}</Link>
+                          <span>{category === 'Batters' ? p.battingProgress : category === 'Bowlers' ? p.bowlingProgress : `${p.battingProgress}; ${p.bowlingProgress}`}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </>
             )}
           </>
