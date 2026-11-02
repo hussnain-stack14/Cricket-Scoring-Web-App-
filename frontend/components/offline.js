@@ -58,6 +58,18 @@ export function useOffline() {
   const [update, setUpdate] = useState(false);
   const registrationRef = useRef(null);
   const checkTimerRef = useRef(null);
+  const releaseVersionRef = useRef(null);
+
+  const readRelease = useCallback(async () => {
+    if (!navigator.onLine) return null;
+    const response = await fetch('/release.json', {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!response.ok) return null;
+    const release = await response.json();
+    return typeof release?.version === 'string' && release.version ? release : null;
+  }, []);
 
   const verify = useCallback(async (reg) => {
     if (!reg?.active) {
@@ -132,6 +144,14 @@ export function useOffline() {
       if (reg.installing || reg.waiting) updateFound();
       registrationRef.current = reg;
       setUpdate(!!reg.waiting);
+      // Read release metadata independently of Cache Storage. A failed/offline
+      // request is not an update and never changes local scoring data.
+      try {
+        const release = await readRelease();
+        if (release) releaseVersionRef.current = release.version;
+      } catch {
+        // Service-worker revalidation below remains the source of truth.
+      }
       // A registration alone does not check Vercel for a new worker after launch.
       // updateViaCache:none ensures sw.js itself is always revalidated.
       await reg.update();
@@ -141,7 +161,7 @@ export function useOffline() {
       setMessage(offlineFailure);
       return false;
     }
-  }, [verify]);
+  }, [readRelease, verify]);
 
   useEffect(() => {
     const updateInstalledState = () => {
@@ -201,13 +221,20 @@ export function useOffline() {
     if (!reg || !navigator.onLine) return false;
     registrationRef.current = reg;
     try {
+      const release = await readRelease();
+      const releaseChanged = Boolean(
+        release && releaseVersionRef.current && release.version !== releaseVersionRef.current,
+      );
+      if (release) releaseVersionRef.current = release.version;
       await reg.update();
-      setUpdate(Boolean(reg.waiting));
-      return Boolean(reg.waiting);
+      const hasUpdate = Boolean(reg.waiting);
+      setUpdate(hasUpdate);
+      // Metadata is advisory. A worker must be waiting before an update can be applied.
+      return hasUpdate || releaseChanged;
     } catch {
       return false;
     }
-  }, []);
+  }, [readRelease]);
 
   const install = useCallback(async () => {
     if (installed) return 'installed';

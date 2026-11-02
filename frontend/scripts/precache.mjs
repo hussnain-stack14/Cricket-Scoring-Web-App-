@@ -22,7 +22,11 @@ async function filesUnder(root) {
       const path = resolve(directory, entry.name);
       if (entry.isDirectory()) {
         await walk(path);
-      } else if (!path.endsWith('.map') && !path.endsWith('sw.js')) {
+      } else if (
+        !path.endsWith('.map') &&
+        !path.endsWith('sw.js') &&
+        !path.endsWith('release.json')
+      ) {
         files.push(path);
       }
     }
@@ -53,6 +57,7 @@ for (const path of publicFiles.sort()) {
 }
 for (const path of staticUrls) hash.update(path);
 const version = hash.digest('hex').slice(0, 16);
+const buildId = (await readFile('.next/BUILD_ID', 'utf8')).trim();
 const source = await readFile('scripts/sw-template.js', 'utf8');
 await writeFile(
   resolve(publicRoot, 'sw.js'),
@@ -61,5 +66,11 @@ await writeFile(
 await writeFile(
   resolve('.next', 'precache-report.json'),
   JSON.stringify({ version, count: files.length, files }, null, 2),
+);
+// This is deliberately outside the precache. The client fetches it with no-store
+// so a foregrounded app can discover a newly deployed worker without clearing data.
+await writeFile(
+  resolve(publicRoot, 'release.json'),
+  JSON.stringify({ version, buildId, generatedAt: new Date().toISOString() }),
 );
 console.log(`Precached ${files.length} Next.js resources; cache version ${version}.`);

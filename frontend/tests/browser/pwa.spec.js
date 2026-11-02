@@ -40,6 +40,8 @@ test('production install controls, manifest, icons and offline precache are accu
     );
     const startPage = await fetch(manifest.start_url);
     const worker = await fetch('/sw.js');
+    const release = await fetch('/release.json', { cache: 'no-store' });
+    const releaseMetadata = await release.json();
     const registration = await navigator.serviceWorker.ready;
     const verification = await new Promise((resolve, reject) => {
       const channel = new MessageChannel();
@@ -61,6 +63,8 @@ test('production install controls, manifest, icons and offline precache are accu
       icons,
       workerStatus: worker.status,
       workerType: worker.headers.get('content-type'),
+      releaseStatus: release.status,
+      releaseMetadata,
       verification,
     };
   });
@@ -79,6 +83,8 @@ test('production install controls, manifest, icons and offline precache are accu
   ]);
   expect(resources.workerStatus).toBe(200);
   expect(resources.workerType).toContain('javascript');
+  expect(resources.releaseStatus).toBe(200);
+  expect(resources.releaseMetadata.version).toMatch(/^[a-f0-9]{16}$/);
   expect(resources.verification.ready).toBe(true);
   expect(resources.verification.missing).toBe(0);
 

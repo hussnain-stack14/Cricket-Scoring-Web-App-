@@ -103,6 +103,7 @@ export default function App({ screen }) {
   const moreMenuRef = useRef(null);
   const syncBusy = useRef(false);
   const syncRef = useRef(null);
+  const automaticUpdateStarted = useRef(false);
   const validatedSession = useRef(null);
   const sessionRef = useRef(session);
   const workspaceRef = useRef(w);
@@ -461,6 +462,23 @@ export default function App({ screen }) {
   const completedMatches = matches.filter((match) => match.status === 'completed');
   const upcoming = upcomingMatches(matches, clock);
   const drafts = data?.drafts ?? [];
+  useEffect(() => {
+    // A dashboard-only restart is safe because it is outside live scoring. Pending
+    // changes remain durably stored in IndexedDB and are not a reason to block an
+    // application update forever. Other screens keep the explicit update notice.
+    if (
+      !offline.update ||
+      automaticUpdateStarted.current ||
+      screen !== 'dashboard' ||
+      liveMatches.length > 0
+    )
+      return undefined;
+    const timer = window.setTimeout(() => {
+      automaticUpdateStarted.current = true;
+      void offline.applyUpdate();
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [liveMatches.length, offline, screen]);
   const listedMatches =
     filter === 'upcoming' ? upcoming : matches.filter((m) => m.status === filter);
   const teamStats = useMemo(

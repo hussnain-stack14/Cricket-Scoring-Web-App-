@@ -70,7 +70,16 @@ self.addEventListener('fetch', (event) => {
       if (event.request.mode === 'navigate') {
         const path =
           url.pathname === '/' || url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;
-        return (await cache.match(path)) || (await fetch(event.request));
+        // HTML must be network-first. Cache-first documents can pair stale Next
+        // markup with a newer asset manifest and leave an installed app pinned to
+        // an old release. The versioned precache remains an offline fallback only.
+        try {
+          const response = await fetch(event.request);
+          if (response.ok) return response;
+        } catch {
+          // A real offline navigation falls back to the known-compatible shell.
+        }
+        return (await cache.match(path)) || Response.error();
       }
       const cached = await cache.match(url.pathname);
       return cached || fetch(event.request);

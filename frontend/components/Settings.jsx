@@ -302,6 +302,10 @@ export default function Settings({
             Share, then Add to Home Screen. Prepare offline while connected before leaving for the
             ground.
           </p>
+          <p className="help">
+            Safe updates restart automatically from the dashboard. During live scoring, an update
+            stays ready until you finish or choose to restart when safe.
+          </p>
           {offline.update && (
             <div className="notice">
               <p>
@@ -382,8 +386,14 @@ export default function Settings({
           <h2>Storage & backup</h2>
           <p>
             {session
-              ? 'Records are cached locally and synchronized with your team account when connected. Check sync status to confirm whether server updates have completed. Keep a separate backup for additional protection.'
+              ? 'Records are saved on this device and available on another device after they have successfully synchronized to your account. Check sync status for pending cloud backup changes, and keep a separate export for additional protection.'
               : 'Records stay in this browser profile unless linked to a team account. Clearing browser data, storage eviction, or losing this device can remove them. Export regularly and keep the file somewhere safe.'}
+          </p>
+          <p className="help">
+            Uninstalling Crease does not delete your cloud account records. Browser and operating
+            system rules decide whether local storage remains after uninstall. After reinstalling,
+            sign in to the same account and wait for cloud synchronization to restore backed-up
+            records. Changes that never synchronized remain only on the original device.
           </p>
           <p className="help">
             Last export requested:{' '}

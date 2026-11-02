@@ -13,6 +13,7 @@ build/
 .next/
 out/
 public/sw.js
+public/release.json
 public/icons/
 coverage/
 *.tsbuildinfo
