@@ -20,6 +20,10 @@ const UNSYNCED_MESSAGE =
 
 export default function SignOutAction({ workspaceId, compact = false }) {
   const busyRef = useRef(false);
+  const triggerRef = useRef(null);
+  const signOutAttemptRef = useRef(0);
+  const signOutTokenRef = useRef(null);
+  const finishingRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -39,13 +43,12 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     return () => window.clearInterval(interval);
   }, [open, signOutToken, workspaceId]);
 
-  async function releaseLock() {
-    if (!signOutToken) return;
-    await cancelSignOut(workspaceId, signOutToken);
-    setSignOutToken(null);
+  function rememberSignOutToken(token) {
+    signOutTokenRef.current = token;
+    setSignOutToken(token);
   }
 
-  async function checkAndSync() {
+  async function checkAndSync(attempt = signOutAttemptRef.current) {
     if (!workspaceId || busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
@@ -55,10 +58,23 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     setReauthenticate(false);
     setAttemptedSync(false);
     let token;
+    const wasCancelled = () => signOutAttemptRef.current !== attempt;
+    const abandon = async () => {
+      if (token) await cancelSignOut(workspaceId, token).catch(() => {});
+      if (signOutTokenRef.current === token) rememberSignOutToken(null);
+    };
     try {
       token = await beginSignOut(workspaceId);
-      setSignOutToken(token);
+      if (wasCancelled()) {
+        await abandon();
+        return;
+      }
+      rememberSignOutToken(token);
       const initialState = await getSyncState(workspaceId);
+      if (wasCancelled()) {
+        await abandon();
+        return;
+      }
       setPending(initialState.pending);
       if (!initialState.pending && !initialState.conflicts.length) {
         setReady(true);
@@ -66,7 +82,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       }
       if (!navigator.onLine) {
         await cancelSignOut(workspaceId, token);
-        setSignOutToken(null);
+        rememberSignOutToken(null);
         token = null;
         setBlocked(true);
         setError(
@@ -78,8 +94,16 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       }
 
       const result = await sync(workspaceId, { signOutToken: token });
+      if (wasCancelled()) {
+        await abandon();
+        return;
+      }
       setAttemptedSync(true);
       const finalState = await getSyncState(workspaceId);
+      if (wasCancelled()) {
+        await abandon();
+        return;
+      }
       setPending(finalState.pending);
       if (
         result.status !== 'synced' ||
@@ -87,7 +111,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
         finalState.conflicts.length !== 0
       ) {
         await cancelSignOut(workspaceId, token);
-        setSignOutToken(null);
+        rememberSignOutToken(null);
         setBlocked(true);
         setReauthenticate(result.status === 'unauthenticated');
         setError(
@@ -100,6 +124,10 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       }
       setReady(true);
     } catch (syncError) {
+      if (wasCancelled()) {
+        await abandon();
+        return;
+      }
       setAttemptedSync(true);
       let lockError;
       if (token) {
@@ -110,7 +138,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
           console.error('Could not release the sign-out write lock:', releaseError);
         }
       }
-      setSignOutToken(null);
+      rememberSignOutToken(null);
       setBlocked(true);
       setError(
         lockError instanceof Error
@@ -121,26 +149,35 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       );
     } finally {
       busyRef.current = false;
-      setBusy(false);
+      if (!wasCancelled()) setBusy(false);
     }
   }
 
-  async function showConfirmation() {
+  function showConfirmation() {
+    if (busyRef.current || finishingRef.current || sessionInvalidated) return;
+    const attempt = ++signOutAttemptRef.current;
     setOpen(true);
-    await checkAndSync();
+    void checkAndSync(attempt);
   }
 
-  async function closeConfirmation() {
-    if (busyRef.current) return;
-    try {
-      await releaseLock();
-      setOpen(false);
-      setReady(false);
-      setBlocked(false);
-      setError('');
-    } catch (releaseError) {
-      setError(releaseError instanceof Error ? releaseError.message : 'Could not cancel sign out.');
-    }
+  function closeConfirmation() {
+    // Preparing or syncing is reversible. Close immediately so its native-dialog
+    // backdrop can never trap the rest of the application behind a slow request.
+    if (finishingRef.current || sessionInvalidated) return;
+    signOutAttemptRef.current += 1;
+    const token = signOutTokenRef.current;
+    rememberSignOutToken(null);
+    setOpen(false);
+    setBusy(false);
+    setReady(false);
+    setBlocked(false);
+    setError('');
+    if (token) void cancelSignOut(workspaceId, token).catch(() => {});
+    window.setTimeout(() => {
+      const trigger = triggerRef.current;
+      const popover = trigger?.closest('details.header-popover');
+      (popover && !popover.open ? popover.querySelector('summary') : trigger)?.focus();
+    }, 0);
   }
 
   async function downloadBackup() {
@@ -163,6 +200,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
   async function finishSignOut() {
     if (!ready || !signOutToken || busyRef.current) return;
     busyRef.current = true;
+    finishingRef.current = true;
     setBusy(true);
     setError('');
     try {
@@ -176,7 +214,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
         setSessionInvalidated(true);
       }
       await clearAccountWorkspace(workspaceId, signOutToken);
-      setSignOutToken(null);
+      rememberSignOutToken(null);
       if (typeof BroadcastChannel !== 'undefined') {
         const channel = new BroadcastChannel('crease-account-session');
         channel.postMessage({ type: 'signed-out', workspaceId });
@@ -200,6 +238,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       );
     } finally {
       busyRef.current = false;
+      finishingRef.current = false;
       setBusy(false);
     }
   }
@@ -207,6 +246,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
   return (
     <>
       <button
+        ref={triggerRef}
         className={`sidebar-link signout-link ${compact ? 'compact' : ''}`}
         type="button"
         onClick={showConfirmation}
@@ -217,17 +257,17 @@ export default function SignOutAction({ workspaceId, compact = false }) {
       </button>
       {open && (
         <Sheet
-          title={ready ? 'Sign out of Crease?' : 'Unsynced changes'}
+          title="Sign out of Crease?"
           close={() => {
-            if (!busy && !sessionInvalidated) void closeConfirmation();
+            closeConfirmation();
           }}
         >
           {ready ? (
             <>
               <p>
-                Your team data is safely synchronized. Signing out will remove this team&apos;s
-                downloaded data from this device. Your cloud records will remain available when you
-                sign in again.
+                Are you sure you want to sign out? Your team data is safely synchronized. Signing
+                out will remove this team&apos;s downloaded data from this device. Your cloud records
+                will remain available when you sign in again.
               </p>
               <p role="status">All changes synced</p>
             </>
@@ -274,7 +314,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
                   className="button secondary"
                   type="button"
                   onClick={closeConfirmation}
-                  disabled={busy || sessionInvalidated}
+                  disabled={sessionInvalidated}
                 >
                   Cancel
                 </button>
@@ -309,7 +349,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
                   className="button secondary"
                   type="button"
                   onClick={closeConfirmation}
-                  disabled={busy}
+                  disabled={sessionInvalidated}
                 >
                   Cancel
                 </button>

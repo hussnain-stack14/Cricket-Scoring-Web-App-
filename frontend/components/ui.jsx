@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ArrowRight, CircleDot } from 'lucide-react';
 export function Button({ children, secondary, danger, compact, ...props }) {
   return (
@@ -66,13 +67,22 @@ export function Empty({ title, children, href, action }) {
 export function Sheet({ title, children, close }) {
   const titleId = useId();
   const ref = useRef(null);
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const d = ref.current;
-    d.showModal();
-    return () => d.close();
+    setMounted(true);
   }, []);
-  return (
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const d = ref.current;
+    if (!d?.open) d?.showModal();
+    return () => {
+      if (d?.open) d.close();
+    };
+  }, [mounted]);
+  if (!mounted) return null;
+  return createPortal(
     <dialog
+      aria-modal="true"
       aria-labelledby={titleId}
       ref={ref}
       onCancel={(event) => {
@@ -88,7 +98,8 @@ export function Sheet({ title, children, close }) {
         </button>
       </div>
       {children}
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }
 export const playerLabel = (p) => ({ id: p.id, name: p.name });

@@ -1,5 +1,37 @@
 import { test, expect } from '@playwright/test';
 
+const signedInSession = {
+  authenticated: true,
+  teamId: 'CRS-123456',
+  workspaceKey: 'CRS-123456',
+  teamName: 'Demo Team',
+  memberId: 'owner-member',
+  role: 'owner',
+};
+
+async function mockSignedInAccount(page) {
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(signedInSession) }),
+  );
+  await page.route('**/api/team/members', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ members: [] }) }),
+  );
+  await page.route('**/api/sync/push', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ applied: [], rejected: [], pushedAt: new Date().toISOString() }),
+    }),
+  );
+  await page.route('**/api/sync/pull**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ records: [], pulledAt: new Date().toISOString(), hasMore: false }),
+    }),
+  );
+}
+
 test('session endpoint reports an absent session as unauthorized, not a server failure', async ({
   request,
 }) => {
@@ -106,6 +138,154 @@ test('sync diagnostics export is read-only and does not start synchronization', 
 
   expect(download.suggestedFilename()).toBe('crease-sync-diagnostics.json');
   expect(syncRequests).toBe(0);
+});
+
+test('profile sign-out dialog can be cancelled or escaped without leaving a blocking backdrop', async ({
+  page,
+}) => {
+  await mockSignedInAccount(page);
+  await page.goto('/app/');
+  await expect(page.getByRole('heading', { name: 'Your cricket, at a glance.' })).toBeVisible();
+
+  const accountMenu = page.locator('.desktop-topbar .account-popover summary');
+  await accountMenu.click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  const dialog = page.locator('dialog.sheet[open]');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(accountMenu).toBeFocused();
+
+  await page.getByRole('link', { name: 'View teams' }).click();
+  await expect(page).toHaveURL(/\/app\/teams\/$/);
+  await page.goto('/app/');
+  await accountMenu.click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+
+  for (const width of [320, 360, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/account/settings/');
+    await expect(page.getByRole('heading', { name: 'Demo Team' })).toBeVisible();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    const mobileDialog = page.locator('dialog.sheet[open]');
+    await expect(mobileDialog).toBeVisible();
+    const box = await mobileDialog.boundingBox();
+    expect(box?.x).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width);
+    await mobileDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(mobileDialog).toBeHidden();
+  }
+});
+
+test('a slow pending sync can be cancelled without losing its local operation or trapping the page', async ({
+  page,
+}) => {
+  await mockSignedInAccount(page);
+  await page.route('**/api/sync/push', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Retry later"}' });
+  });
+  await page.goto('/account/settings/');
+  await expect(page.getByRole('heading', { name: 'Demo Team' })).toBeVisible();
+
+  const pending = await page.evaluate(async () => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('crease-local');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const workspaceId = await new Promise((resolve, reject) => {
+      const request = database.transaction('syncMeta').objectStore('syncMeta').getAll();
+      request.onsuccess = () => resolve(request.result[0].workspaceId);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(['pendingChanges', 'syncMeta'], 'readwrite');
+      transaction.objectStore('pendingChanges').put({
+        id: `${workspaceId}:teams:pending-team`,
+        changeId: 'pending-sign-out-change',
+        workspaceId,
+        table: 'teams',
+        recordId: 'pending-team',
+        data: { id: 'pending-team', workspaceId, name: 'Pending team' },
+        deleted: false,
+        baseRevision: 0,
+        queuedAt: new Date().toISOString(),
+      });
+      const metaStore = transaction.objectStore('syncMeta');
+      const getMeta = metaStore.get(workspaceId);
+      getMeta.onsuccess = () => metaStore.put({ ...getMeta.result, syncStatus: 'pending' });
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    return { workspaceId };
+  });
+
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  const dialog = page.locator('dialog.sheet[open]');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole('link', { name: /App/ }).click();
+  await expect(page).toHaveURL(/\/app\/$/);
+
+  const pendingAfterCancel = await page.evaluate(async ({ workspaceId }) => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('crease-local');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const request = database
+      .transaction('pendingChanges')
+      .objectStore('pendingChanges')
+      .get(`${workspaceId}:teams:pending-team`);
+    return await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(Boolean(request.result));
+      request.onerror = () => reject(request.error);
+    });
+  }, pending);
+  expect(pendingAfterCancel).toBe(true);
+});
+
+test('confirmed sign-out redirects only after the logout API succeeds', async ({ page }) => {
+  await mockSignedInAccount(page);
+  await page.route('**/api/auth/logout', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }),
+  );
+  await page.goto('/account/settings/');
+  await expect(page.getByRole('heading', { name: 'Demo Team' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  const dialog = page.locator('dialog.sheet[open]');
+  await expect(dialog).toContainText('Are you sure you want to sign out?');
+  await dialog.getByRole('button', { name: 'Confirm Sign Out' }).click();
+  await expect(page).toHaveURL(/\/account\/login\/$/);
+});
+
+test('a logout API failure leaves an actionable dialog and preserves normal navigation', async ({ page }) => {
+  await mockSignedInAccount(page);
+  await page.route('**/api/auth/logout', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Sign out is temporarily unavailable.' }),
+    }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/account/settings/');
+  await expect(page.getByRole('heading', { name: 'Demo Team' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  const dialog = page.locator('dialog.sheet[open]');
+  await dialog.getByRole('button', { name: 'Confirm Sign Out' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Sign out is temporarily unavailable.');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole('link', { name: /App/ }).click();
+  await expect(page).toHaveURL(/\/app\/$/);
 });
 
 test('account owners can update login credentials in responsive security dialogs', async ({
