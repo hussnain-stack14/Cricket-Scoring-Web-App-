@@ -455,7 +455,7 @@ export default function App({ screen }) {
       active: screen === 'statistics',
     },
     { label: 'Reports', href: `${base}/reports/`, icon: FileText, active: screen === 'reports' },
-    { label: 'Settings / More', href: `${base}/more/`, icon: Ellipsis, active: screen === 'more' },
+    { label: 'Settings', href: `${base}/more/`, icon: SettingsIcon, active: screen === 'more' },
   ];
   const matches = data?.matches ?? [];
   const liveMatches = matches.filter((match) => match.status === 'live');
@@ -591,20 +591,27 @@ export default function App({ screen }) {
             <ArrowUpRight size={17} />
           </div>
         </Link>
-        {canDelete && (
-          <Button
-            secondary
-            compact
-            danger
-            onClick={() => setDeleting({ table: 'matches', record: match })}
-          >
-            Delete match
-          </Button>
-        )}
-        {match.status === 'completed' && (
-          <div className="match-card-history-action">
-            <DownloadScorecardButton match={match} states={states} compact />
-          </div>
+        {(canDelete || match.status === 'completed') && (
+          <details className="match-card-menu">
+            <summary aria-label={`More actions for ${match.teams.map((team) => team.name).join(' versus ')}`}>
+              <EllipsisVertical size={18} aria-hidden="true" />
+            </summary>
+            <div className="match-card-menu-panel">
+              {match.status === 'completed' && (
+                <DownloadScorecardButton match={match} states={states} compact />
+              )}
+              {canDelete && (
+                <Button
+                  secondary
+                  compact
+                  danger
+                  onClick={() => setDeleting({ table: 'matches', record: match })}
+                >
+                  Delete match
+                </Button>
+              )}
+            </div>
+          </details>
         )}
       </div>
     );
@@ -988,24 +995,6 @@ export default function App({ screen }) {
                             All matches <ArrowRight size={15} />
                           </Link>
                         </div>
-                        {liveMatches.length > 0 && (
-                          <div className="continue-scoring">
-                            <span className="live-pulse" />
-                            <div>
-                              <strong>Continue scoring</strong>
-                              <small>
-                                {liveMatches.length} match{liveMatches.length === 1 ? '' : 'es'} in
-                                progress
-                              </small>
-                            </div>
-                            <Link
-                              className="button compact"
-                              href={`${base}/match/?id=${liveMatches[0].id}`}
-                            >
-                              Resume
-                            </Link>
-                          </div>
-                        )}
                         {recentMatches.length ? (
                           <div className="match-grid dashboard-match-grid">
                             {recentMatches.map(renderMatchCard)}

@@ -1,7 +1,10 @@
 import './globals.css';
+import './marketing.css';
+import './marketing-fixes.css';
 import ThemeController from '../components/ThemeController';
 import PwaInstallCapture from '../components/PwaInstallCapture';
 export const metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://crease-scoring.vercel.app'),
   title: 'Crease · Your game, recorded',
   description: 'Offline cricket scoring, teams and player statistics on your device.',
   manifest: '/manifest.webmanifest',

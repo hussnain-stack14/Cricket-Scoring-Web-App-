@@ -5829,3 +5829,13 @@ pre {
 [data-theme='red-ball'] .empty-icon,
 [data-theme='red-ball'] .pill { background: #fef2f2; }
 [data-theme='red-ball'] .local-badge > span { background: var(--green); }
+
+/* Dashboard match actions stay compact; destructive controls remain behind an explicit menu. */
+.match-card-item { position: relative; }
+.match-card-menu { position: absolute; top: 10px; right: 10px; z-index: 3; }
+.match-card-menu > summary { display: grid; place-items: center; width: 36px; height: 36px; list-style: none; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.match-card-menu > summary::-webkit-details-marker { display: none; }
+.match-card-menu[open] > summary { color: var(--color-primary-text); border-color: var(--color-primary-border); background: var(--color-primary-soft); }
+.match-card-menu-panel { position: absolute; top: 42px; right: 0; display: grid; min-width: 154px; gap: 5px; padding: 7px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 14px 30px #152b2024; }
+.match-card-menu-panel .button, .match-card-menu-panel .report-actions { width: 100%; margin: 0; justify-content: flex-start; }
+.match-card-menu-panel .report-actions { display: grid; gap: 5px; }

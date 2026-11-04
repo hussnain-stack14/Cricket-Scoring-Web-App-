@@ -88,7 +88,7 @@ test('production install controls, manifest, icons and offline precache are accu
   expect(resources.verification.ready).toBe(true);
   expect(resources.verification.missing).toBe(0);
 
-  await page.getByRole('button', { name: 'Download app' }).first().click();
+  await page.getByRole('button', { name: 'Install Crease' }).first().click();
   await expect(page.getByText('Install on desktop')).toBeVisible();
   await expect(
     page.getByText('Installation instructions available', { exact: true }),
@@ -105,8 +105,8 @@ test('production install controls, manifest, icons and offline precache are accu
     return event.defaultPrevented;
   });
   expect(promptPreserved).toBe(true);
-  await expect(page.locator('.offline-setup-status').last()).toContainText('Install Crease');
-  await page.getByRole('button', { name: 'Install Crease' }).click();
+  await expect(page.getByRole('button', { name: 'Install Crease' }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Install Crease' }).first().click();
   await expect.poll(() => page.evaluate(() => window.__creasePromptCalled)).toBe(true);
 
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
