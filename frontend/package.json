@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack",
-    "build": "next build --webpack && node scripts/precache.mjs",
+    "dev": "node scripts/render-brand-assets.mjs && next dev --webpack",
+    "build": "node scripts/render-brand-assets.mjs && next build --webpack && node scripts/precache.mjs",
     "start": "next start",
     "test": "node --test tests/*.test.js",
     "inspect:match-sync": "node scripts/inspect-match-sync.mjs",

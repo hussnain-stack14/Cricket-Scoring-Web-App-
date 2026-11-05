@@ -15,6 +15,14 @@ out/
 public/sw.js
 public/release.json
 public/icons/
+/public/about.webp
+/public/about-mobile.webp
+/public/howitwork.webp
+/public/howitwork-mobile.webp
+/public/bg-dashboard-heading.webp
+/public/bg-dashboard-heading-mobile.webp
+/public/ready.webp
+/public/ready-mobile.webp
 coverage/
 *.tsbuildinfo
 

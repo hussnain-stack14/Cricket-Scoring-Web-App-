@@ -124,7 +124,8 @@
   aspect-ratio: 3 / 2;
   align-self: center;
   border-radius: 20px;
-  background: #e8efe9 url('/howitwork.png') 61% center / cover no-repeat;
+  position: relative;
+  background: #e8efe9;
   box-shadow: 0 20px 46px #123b2724;
 }
 .public-site .how-hero::after { content: none; }
@@ -134,7 +135,8 @@
   aspect-ratio: 4 / 3;
   align-self: center;
   border-radius: 22px;
-  background: #edf4ed url('/about.png') center / cover no-repeat;
+  position: relative;
+  background: #edf4ed;
   box-shadow: 0 20px 46px #123b2724;
 }
 @media (max-width: 900px) {
@@ -144,4 +146,168 @@
 @media (max-width: 720px) {
   .public-site .how-ground { min-height: 0; margin-top: 8px; }
   .public-site .about-ground { min-height: 0; margin-top: 8px; }
+}
+
+.public-site .how-ground > picture,
+.public-site .about-ground > picture {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.public-site .how-ground > picture > img,
+.public-site .about-ground > picture > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.public-site .how-ground > picture > img { object-position: 61% center; }
+.public-site .about-ground > picture > img { object-position: center; }
+.public-site .about-cta-art {
+  background: #06452d;
+}
+.public-site .about-cta-art > picture {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.public-site .about-cta-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 57%;
+}
+@media (max-width: 720px) {
+  .public-site .about-final-cta > div:last-child { order: -1; }
+}
+
+/* About page: editorial story and one clearly illustrative scorecard. */
+.public-site .about-editorial-hero,
+.public-site .about-story,
+.public-site .about-comparison,
+.public-site .about-principles,
+.public-site .about-showcase,
+.public-site .about-closing { width: min(1180px, calc(100% - 40px)); margin-left: auto; margin-right: auto; }
+.public-site .about-editorial-hero { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: end; gap: 20px 28px; margin-top: 44px; }
+.public-site .about-editorial-title { grid-column: 1 / span 8; min-width: 0; }
+.public-site .about-editorial-title .site-kicker,
+.public-site .about-editorial-intro .site-kicker { margin-bottom: 14px; }
+.public-site .about-editorial-title h1 { max-width: 800px; margin: 0; color: var(--site-ink); font-size: clamp(54px, 7.2vw, 92px); letter-spacing: -.075em; line-height: .94; }
+.public-site .about-editorial-title h1 em { color: var(--site-green); font-style: normal; }
+.public-site .about-editorial-intro { grid-column: 9 / -1; align-self: end; max-width: 340px; padding-bottom: 5px; }
+.public-site .about-editorial-intro > p { margin: 0 0 17px; color: var(--site-muted); font-size: 16px; line-height: 1.7; }
+.public-site .about-editorial-photo { grid-column: 2 / -1; width: 100%; aspect-ratio: 1.9 / 1; margin: 27px 0 0; overflow: hidden; border-radius: 22px; background: #edf2ed; }
+.public-site .about-editorial-photo picture,
+.public-site .about-editorial-photo img { display: block; width: 100%; height: 100%; }
+.public-site .about-editorial-photo img { object-fit: cover; object-position: center 63%; }
+.public-site .about-editorial-caption { grid-column: 2 / -1; display: flex; justify-content: space-between; gap: 16px; padding-top: 12px; border-top: 1px solid var(--site-line); color: var(--site-muted); font-size: 12px; }
+.public-site .about-story { display: grid; grid-template-columns: .7fr 1.3fr; align-items: start; gap: 48px; margin-top: 105px; margin-bottom: 105px; padding: 38px 0; border: 0; border-top: 1px solid var(--site-line); border-bottom: 1px solid var(--site-line); border-radius: 0; background: transparent; }
+.public-site .about-section-index { display: grid; gap: 7px; color: var(--site-muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+.public-site .about-story-copy { max-width: 740px; }
+.public-site .about-story-copy h2,
+.public-site .about-section-heading h2,
+.public-site .about-principles > header h2,
+.public-site .about-showcase-copy h2,
+.public-site .about-closing-copy h2 { margin: 0; color: var(--site-ink); font-size: clamp(34px, 4.3vw, 56px); letter-spacing: -.06em; line-height: 1.04; }
+.public-site .about-story-copy > p { margin: 18px 0 0; color: var(--site-muted); font-size: 17px; line-height: 1.75; }
+.public-site .about-comparison { padding: 58px clamp(24px, 6vw, 78px); background: #f5f7f5; }
+.public-site .about-section-heading { max-width: 650px; margin-bottom: 34px; }
+.public-site .about-section-heading h2 { margin-top: 8px; }
+.public-site .about-comparison-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.public-site .about-comparison-columns article { min-width: 0; padding: 0 32px 0 0; }
+.public-site .about-comparison-columns article + article { padding: 0 0 0 32px; border-left: 1px solid #d8dfd9; }
+.public-site .about-column-label { margin: 0 0 14px; color: var(--site-green); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+.public-site .about-comparison-columns ul { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.public-site .about-comparison-columns li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 14px 0; border-top: 1px solid #dfe5e0; color: var(--site-ink); font-size: 14px; line-height: 1.55; }
+.public-site .about-comparison-columns li span { color: var(--site-muted); font-variant-numeric: tabular-nums; }
+.public-site .about-sync-note { margin: 16px 0 0; color: var(--site-muted); font-size: 12px; line-height: 1.6; }
+.public-site .about-principles { display: grid; grid-template-columns: .8fr 1.2fr; gap: 52px; margin-top: 105px; margin-bottom: 105px; }
+.public-site .about-principles > header .site-kicker { margin: 0 0 12px; }
+.public-site .about-principles > header h2 { font-size: clamp(32px, 3.5vw, 44px); }
+.public-site .about-principle-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--site-line); border-bottom: 1px solid var(--site-line); }
+.public-site .about-principle-list article { min-width: 0; padding: 18px 17px; }
+.public-site .about-principle-list article + article { border-left: 1px solid var(--site-line); }
+.public-site .about-principle-list article > span { color: var(--site-green); font-size: 12px; font-weight: 850; }
+.public-site .about-principle-list h3 { margin: 24px 0 7px; color: var(--site-ink); font-size: 17px; }
+.public-site .about-principle-list p { margin: 0; color: var(--site-muted); font-size: 13px; line-height: 1.65; }
+.public-site .about-showcase { display: grid; grid-template-columns: .85fr 1.15fr; align-items: center; gap: 64px; padding: 55px 0; border-top: 1px solid var(--site-line); border-bottom: 1px solid var(--site-line); }
+.public-site .about-showcase-copy { max-width: 470px; }
+.public-site .about-showcase-copy .site-kicker { margin: 0 0 12px; }
+.public-site .about-showcase-copy > p:not(.site-kicker) { margin: 16px 0 18px; color: var(--site-muted); font-size: 15px; line-height: 1.7; }
+.public-site .about-sample-scorecard { min-width: 0; padding: clamp(20px, 4vw, 38px); border-radius: 18px; color: #fff; background: #123d29; box-shadow: 0 18px 44px #123d2920; }
+.public-site .about-sample-heading { display: flex; justify-content: space-between; gap: 10px; color: #c3dfca; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+.public-site .about-sample-scorecard h3 { margin: 25px 0 14px; color: #fff; font-size: 21px; }
+.public-site .about-sample-innings { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid #ffffff38; border-bottom: 1px solid #ffffff38; }
+.public-site .about-sample-innings > div { display: grid; gap: 5px; padding: 15px 12px 15px 0; }
+.public-site .about-sample-innings > div + div { padding-left: 16px; border-left: 1px solid #ffffff38; }
+.public-site .about-sample-innings span { color: #d3e5d7; font-size: 12px; }
+.public-site .about-sample-innings strong { color: #fff; font-size: clamp(25px, 4vw, 38px); letter-spacing: -.04em; }
+.public-site .about-sample-innings small { color: #c3dfca; font-size: 11px; }
+.public-site .about-sample-result { margin: 15px 0 3px; color: #fff; font-weight: 750; }
+.public-site .about-sample-footnote { margin: 0; color: #d2e0d5; font-size: 11px; }
+.public-site .about-closing { display: grid; grid-template-columns: 1fr .85fr; align-items: center; gap: 40px; margin-top: 86px; margin-bottom: 84px; padding: 44px; border: 1px solid var(--site-line); border-radius: 20px; background: #f6f8f6; }
+.public-site .about-closing-copy { max-width: 560px; }
+.public-site .about-closing-copy .site-kicker { margin: 0 0 12px; }
+.public-site .about-closing-copy > p:not(.site-kicker) { margin: 14px 0 0; color: var(--site-muted); line-height: 1.65; }
+.public-site .about-closing-copy .site-actions { flex-wrap: wrap; margin-top: 21px; }
+.public-site .about-closing-image { width: 100%; aspect-ratio: 1.35 / 1; margin: 0; overflow: hidden; border-radius: 14px; background: #e9efe9; }
+.public-site .about-closing-image picture,
+.public-site .about-closing-image img { display: block; width: 100%; height: 100%; }
+.public-site .about-closing-photo { object-fit: cover; object-position: center 57%; }
+.public-site .about-editorial-hero a:focus-visible,
+.public-site .about-closing a:focus-visible { outline: 3px solid var(--site-green); outline-offset: 4px; }
+@media (max-width: 900px) {
+  .public-site .about-editorial-title { grid-column: 1 / span 8; }
+  .public-site .about-editorial-title h1 { font-size: clamp(52px, 8vw, 76px); }
+  .public-site .about-editorial-intro { grid-column: 9 / -1; }
+  .public-site .about-story { gap: 28px; }
+  .public-site .about-principles { grid-template-columns: 1fr; gap: 25px; }
+  .public-site .about-showcase { gap: 30px; }
+  .public-site .about-closing { padding: 30px; }
+}
+@media (max-width: 620px) {
+  .public-site .about-editorial-hero,
+  .public-site .about-story,
+  .public-site .about-comparison,
+  .public-site .about-principles,
+  .public-site .about-showcase,
+  .public-site .about-closing { width: calc(100% - 28px); }
+  .public-site .about-editorial-hero { grid-template-columns: minmax(0, 1fr); gap: 13px; margin-top: 26px; }
+  .public-site .about-editorial-title,
+  .public-site .about-editorial-intro,
+  .public-site .about-editorial-photo,
+  .public-site .about-editorial-caption { grid-column: 1; }
+  .public-site .about-editorial-title h1 { font-size: clamp(46px, 13vw, 62px); }
+  .public-site .about-editorial-intro { max-width: 100%; }
+  .public-site .about-editorial-intro > p { margin-bottom: 10px; font-size: 15px; }
+  .public-site .about-editorial-photo { aspect-ratio: 1.25 / 1; margin-top: 9px; border-radius: 16px; }
+  .public-site .about-editorial-photo img { object-position: 58% center; }
+  .public-site .about-editorial-caption { font-size: 10px; }
+  .public-site .about-story { grid-template-columns: 1fr; gap: 17px; margin-top: 62px; margin-bottom: 62px; padding: 22px 0; }
+  .public-site .about-story-copy h2,
+  .public-site .about-section-heading h2,
+  .public-site .about-showcase-copy h2,
+  .public-site .about-closing-copy h2 { font-size: clamp(32px, 9vw, 42px); }
+  .public-site .about-story-copy > p { font-size: 15px; }
+  .public-site .about-comparison { padding: 30px 20px; }
+  .public-site .about-section-heading { margin-bottom: 21px; }
+  .public-site .about-comparison-columns { grid-template-columns: 1fr; gap: 20px; }
+  .public-site .about-comparison-columns article { padding: 0; }
+  .public-site .about-comparison-columns article + article { padding: 20px 0 0; border-top: 1px solid #d8dfd9; border-left: 0; }
+  .public-site .about-principles { gap: 18px; margin-top: 62px; margin-bottom: 62px; }
+  .public-site .about-principles > header h2 { font-size: 34px; }
+  .public-site .about-principle-list { grid-template-columns: 1fr; }
+  .public-site .about-principle-list article { padding: 16px 0; }
+  .public-site .about-principle-list article + article { border-top: 1px solid var(--site-line); border-left: 0; }
+  .public-site .about-principle-list h3 { margin: 8px 0 4px; }
+  .public-site .about-showcase { grid-template-columns: 1fr; gap: 23px; padding: 30px 0; }
+  .public-site .about-sample-scorecard { padding: 22px 18px; }
+  .public-site .about-closing { grid-template-columns: 1fr; gap: 23px; margin-top: 62px; margin-bottom: 38px; padding: 24px 20px 20px; }
+  .public-site .about-closing-image { grid-row: 2; aspect-ratio: 1.6 / 1; }
+  .public-site .about-closing-copy .site-actions { display: grid; grid-template-columns: 1fr; }
+  .public-site .about-closing-copy .site-button { width: 100%; }
 }

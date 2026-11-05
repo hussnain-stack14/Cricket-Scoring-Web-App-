@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -800,6 +801,17 @@ function HowItWorks() {
           </div>
         </div>
         <div className="how-ground" aria-hidden="true">
+          <picture>
+            <source media="(max-width: 900px)" srcSet="/howitwork-mobile.webp" type="image/webp" />
+            <Image
+              src="/howitwork.webp"
+              alt=""
+              width={1536}
+              height={1024}
+              sizes="(max-width: 900px) 100vw, 50vw"
+              fetchPriority="high"
+            />
+          </picture>
         </div>
       </section>
       <section className="how-process">
@@ -969,126 +981,168 @@ function DownloadPage() {
 }
 
 function About() {
-  const values = [
-    ['Local cricket focus', 'Designed for real, on-ground cricket.', Users],
-    ['Works offline', 'Keep scoring even without internet after preparation.', WifiOff],
-    ['Simple & practical', 'Fast, intuitive and easy to use.', Play],
-    ['Complete records', 'Keep scorecards and player history organized.', BarChart3],
-  ];
-  const reasons = [
-    [
-      'Play anywhere',
-      'Score matches even when an internet connection is unavailable after offline preparation.',
-      WifiOff,
-    ],
-    ['Stay organized', 'Keep teams, players and match records in one place.', Users],
-    [
-      'Keep a cricket history',
-      'Build a clear, reviewable record of matches and player performances.',
-      BarChart3,
-    ],
-  ];
   return (
     <>
-      <section className="about-premium-hero">
-        <div className="about-hero-copy">
-          <p className="site-kicker">ABOUT CREASE</p>
+      <section className="about-editorial-hero">
+        <div className="about-editorial-title">
+          <p className="site-kicker">ABOUT CREASE · A SCOREBOOK FOR LOCAL CRICKET</p>
           <h1>
             Built for the game
             <br />
             <em>we play.</em>
           </h1>
+        </div>
+        <div className="about-editorial-intro">
           <p>
-            Crease started with a simple goal: make cricket scoring easier for local matches, even
-            when the internet is not reliable.
+            Crease was created to make cricket scoring simpler for local players and teams, even
+            when the internet is unreliable.
           </p>
+          <Link className="text-action" href="/how-it-works/">
+            Explore how Crease works <ArrowRight size={16} />
+          </Link>
+        </div>
+        <figure className="about-editorial-photo">
+          <picture>
+            <source media="(max-width: 900px)" srcSet="/about-mobile.webp" type="image/webp" />
+            <Image
+              src="/about.webp"
+              alt="A cricket pitch, stumps and ball beneath an open sky."
+              width={1448}
+              height={1086}
+              sizes="(max-width: 900px) calc(100vw - 28px), 92vw"
+              fetchPriority="high"
+            />
+          </picture>
+        </figure>
+        <div className="about-editorial-caption">
+          <span>A local game, recorded as it unfolds.</span>
+          <span>01 / THE SCOREBOOK</span>
+        </div>
+      </section>
+      <section className="about-story">
+        <div className="about-section-index">
+          <span>OUR STORY</span>
+          <span>01 — WHY CREASE EXISTS</span>
+        </div>
+        <div className="about-story-copy">
+          <h2>Cricket deserves more than a forgotten scorebook.</h2>
+          <p>
+            Local cricket creates moments worth remembering. Paper scorebooks, scattered match
+            details and unreliable connectivity can make an accurate record difficult to keep.
+            Crease brings scoring, teams and player performances into one organized place.
+          </p>
+        </div>
+      </section>
+      <section className="about-comparison">
+        <header className="about-section-heading">
+          <p className="site-kicker">THE CHALLENGE, AND A PRACTICAL RESPONSE</p>
+          <h2>Keep the whole match connected.</h2>
+        </header>
+        <div className="about-comparison-columns">
+          <article>
+            <p className="about-column-label">THE CHALLENGE</p>
+            <ul>
+              <li><span>01</span> Paper scorebooks take care and attention to maintain.</li>
+              <li><span>02</span> Player and match details can end up scattered.</li>
+              <li><span>03</span> A ground’s internet connection can be unreliable.</li>
+            </ul>
+          </article>
+          <article>
+            <p className="about-column-label">THE CREASE APPROACH</p>
+            <ul>
+              <li><span>01</span> Record the innings delivery by delivery.</li>
+              <li><span>02</span> Keep teams, players and completed scorecards together.</li>
+              <li><span>03</span> Prepare while connected, then score locally offline.</li>
+            </ul>
+            <p className="about-sync-note">
+              Account copies appear on another device after synchronization succeeds.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section className="about-principles">
+        <header>
+          <p className="site-kicker">PRODUCT PHILOSOPHY · 02</p>
+          <h2>Useful at the boundary. Careful with the record.</h2>
+        </header>
+        <div className="about-principle-list">
+          <article>
+            <span>01</span>
+            <div>
+              <h3>Simplicity</h3>
+              <p>Scoring should be easy to understand and quick to operate during a real match.</p>
+            </div>
+          </article>
+          <article>
+            <span>02</span>
+            <div>
+              <h3>Reliability</h3>
+              <p>Keep records on this device and show cloud status only after confirmed sync.</p>
+            </div>
+          </article>
+          <article>
+            <span>03</span>
+            <div>
+              <h3>Accessibility</h3>
+              <p>Score with ordinary phones and supported browsers, at the ground or at home.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section className="about-showcase">
+        <div className="about-showcase-copy">
+          <p className="site-kicker">ONE MATCH, CLEARLY RECORDED · 03</p>
+          <h2>From the first ball to the final score.</h2>
+          <p>
+            Set up the sides, record each delivery, then review the completed scorecard and player
+            performance in one place.
+          </p>
+          <Link className="text-action" href="/features/#live-scoring">
+            See how scoring works <ArrowRight size={16} />
+          </Link>
+        </div>
+        <div className="about-sample-scorecard" aria-label="Illustrative sample scorecard">
+          <div className="about-sample-heading">
+            <span>ILLUSTRATIVE SAMPLE</span>
+            <span>COMPLETED MATCH</span>
+          </div>
+          <h3>Final scorecard</h3>
+          <div className="about-sample-innings">
+            <div><span>Team A</span><strong>110/4</strong><small>15.3 overs</small></div>
+            <div><span>Team B</span><strong>108/7</strong><small>20 overs</small></div>
+          </div>
+          <p className="about-sample-result">Team A won by 6 wickets</p>
+          <p className="about-sample-footnote">Example figures shown for illustration.</p>
+        </div>
+      </section>
+      <section className="about-closing">
+        <div className="about-closing-copy">
+          <p className="site-kicker">YOUR NEXT SCOREBOOK</p>
+          <h2>Every match has a story. Keep yours.</h2>
+          <p>Start scoring with Crease and keep the moments that matter organized.</p>
           <div className="site-actions">
             <Link className="site-button primary" href="/app/">
               Start Scoring <ArrowRight size={17} />
             </Link>
-            <InstallButton className="site-button secondary" />
-          </div>
-        </div>
-        <div className="about-ground" aria-hidden="true">
-        </div>
-      </section>
-      <section className="about-value-strip" aria-label="Crease values">
-        {values.map(([title, text, Icon]) => (
-          <article key={title}>
-            <span>
-              <Icon size={20} />
-            </span>
-            <div>
-              <h2>{title}</h2>
-              <p>{text}</p>
-            </div>
-          </article>
-        ))}
-      </section>
-      <section className="about-premium-story">
-        <div className="about-phones" aria-label="Read-only product interface previews">
-          <ProductPreview kind="matches" />
-          <ProductPreview kind="scoring" />
-        </div>
-        <div>
-          <p className="site-kicker">OUR STORY</p>
-          <h2>Less admin. More attention on the game.</h2>
-          <p>
-            We built Crease for players, teams and scorers who want a reliable, straightforward way
-            to score and manage cricket matches. It keeps the focus where it belongs—on the game
-            itself.
-          </p>
-          <ul>
-            {[
-              'Set up teams before the toss.',
-              'Capture every delivery as the match unfolds.',
-              'Get a complete scorecard and player history.',
-              'Keep your records accessible and organized.',
-            ].map((item) => (
-              <li key={item}>
-                <Check size={17} />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-      <section className="about-why">
-        <header>
-          <p className="site-kicker">WHY IT MATTERS</p>
-          <h2>Score the match. Keep the story.</h2>
-          <p>
-            Crease keeps practical local cricket records clear before, during and after a match.
-          </p>
-        </header>
-        <div>
-          {reasons.map(([title, text, Icon]) => (
-            <article key={title}>
-              <span>
-                <Icon size={22} />
-              </span>
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="about-final-cta">
-        <div className="about-cta-art" aria-hidden="true">
-          <div className="about-cta-player" />
-          <div className="about-cta-ball" />
-        </div>
-        <div>
-          <p className="site-kicker">READY AT THE BOUNDARY</p>
-          <h2>Your cricket deserves a reliable scorebook.</h2>
-          <p>Create a match, score live and keep a complete record with Crease.</p>
-          <div className="site-actions">
-            <Link className="site-button light" href="/app/">
-              Start Scoring <ArrowRight size={17} />
+            <Link className="site-button secondary" href="/how-it-works/">
+              Learn how it works
             </Link>
-            <InstallButton className="site-button ghost" />
           </div>
         </div>
+        <figure className="about-closing-image">
+          <picture>
+            <source media="(max-width: 720px)" srcSet="/ready-mobile.webp" type="image/webp" />
+            <Image
+              className="about-closing-photo"
+              src="/ready.webp"
+              alt="A batter playing a shot on a lit cricket ground."
+              width={1448}
+              height={1086}
+              sizes="(max-width: 720px) calc(100vw - 56px), 42vw"
+              loading="lazy"
+            />
+          </picture>
+        </figure>
       </section>
     </>
   );

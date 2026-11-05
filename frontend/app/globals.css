@@ -5024,12 +5024,6 @@ pre {
       radial-gradient(ellipse at 80% 82%, color-mix(in srgb, var(--green) 28%, transparent), transparent 31%),
       linear-gradient(108deg, #fff 0%, #ffffffed 48%, color-mix(in srgb, var(--lime) 34%, #fff) 100%);
   }
-  .dashboard-welcome::after {
-    position: absolute; inset: 0; z-index: -1; content: '';
-    opacity: .68;
-    background: repeating-radial-gradient(ellipse at 80% 93%, transparent 0 19px, color-mix(in srgb, var(--green) 13%, transparent) 20px 22px, transparent 23px 44px);
-    mask-image: linear-gradient(90deg, transparent 35%, #000 65%);
-  }
   .dashboard-welcome h2 { max-width: 620px; font-size: clamp(2.2rem, 3vw, 3.2rem); line-height: 1.04; letter-spacing: -1.8px; }
   .dashboard-kicker { font-size: 14px; }
   .dashboard-summary { max-width: 580px; margin: 9px 0 0; font-size: 15px; }
@@ -5093,21 +5087,42 @@ pre {
   padding: 28px clamp(18px, 3vw, 42px);
   overflow: hidden;
   border-radius: 18px;
-  background: #f4f8f4 url('/bg-dashboard-heading.png') center 62% / cover no-repeat;
+  background: #f4f8f4 url('/bg-dashboard-heading.webp') center 62% / cover no-repeat;
 }
 .dashboard-welcome::after {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 0;
   content: '';
-  background: linear-gradient(90deg, #f9fcf9f5 0%, #f9fcf9e8 37%, #f9fcf99c 59%, #f9fcf900 100%);
+  background: linear-gradient(90deg,
+    #f9fcf9fa 0%,
+    #f9fcf9fa 35%,
+    #f9fcf9e6 50%,
+    #f9fcf99e 66%,
+    #f9fcf933 84%,
+    #f9fcf900 100%);
 }
 .dashboard-welcome > div:first-child { position: relative; z-index: 1; }
+.dashboard-welcome > div:first-child { max-width: min(720px, 70%); }
+.dashboard-kicker { color: #35463a; font-weight: 650; }
+.dashboard-welcome h2 { color: #101c14; text-wrap: balance; }
+.dashboard-summary { color: #35463a; }
 @media (max-width: 899px) {
-  .dashboard-welcome { min-height: 0; padding: 18px; }
-  .dashboard-welcome::after {
-    background: linear-gradient(90deg, #f9fcf9f5 0%, #f9fcf9e8 53%, #f9fcf9a6 100%);
+  .dashboard-welcome {
+    min-height: 0;
+    padding: 18px;
+    background-image: url('/bg-dashboard-heading-mobile.webp');
+    background-position: 65% 55%;
   }
+  .dashboard-welcome::after {
+    background: linear-gradient(90deg,
+      #f9fcf9fa 0%,
+      #f9fcf9fa 62%,
+      #f9fcf9eb 78%,
+      #f9fcf9c7 100%);
+  }
+  .dashboard-welcome > div:first-child { max-width: 100%; }
+  .dashboard-welcome h2 { max-width: 28ch; }
 }
 
 /* Theme-neutralize legacy decorative greens so every selected theme is monochromatic. */
@@ -5174,6 +5189,7 @@ pre {
   .match-card-details { flex-wrap: wrap; }
   .sheet { padding: 16px; }
 }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
