@@ -15,12 +15,7 @@ test('production install controls, manifest, icons and offline precache are accu
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
-  await expect(page.locator('.offline-setup-status').last()).toContainText(
-    'Ready to use offline.',
-    {
-      timeout: 45000,
-    },
-  );
+  await expect(page.getByRole('button', { name: 'Install Crease' }).first()).toBeVisible();
 
   const resources = await page.evaluate(async () => {
     const manifestResponse = await fetch('/manifest.webmanifest');
@@ -29,12 +24,16 @@ test('production install controls, manifest, icons and offline precache are accu
       manifest.icons.map(async (icon) => {
         const response = await fetch(icon.src);
         const blob = await response.blob();
-        const bitmap = await createImageBitmap(blob);
+        const imageUrl = URL.createObjectURL(blob);
+        const image = new Image();
+        image.src = imageUrl;
+        await image.decode();
+        URL.revokeObjectURL(imageUrl);
         return {
           status: response.status,
           type: response.headers.get('content-type'),
-          width: bitmap.width,
-          height: bitmap.height,
+          width: image.naturalWidth,
+          height: image.naturalHeight,
         };
       }),
     );
@@ -89,9 +88,8 @@ test('production install controls, manifest, icons and offline precache are accu
   expect(resources.verification.missing).toBe(0);
 
   await page.getByRole('button', { name: 'Install Crease' }).first().click();
-  await expect(page.getByText('Install on desktop')).toBeVisible();
   await expect(
-    page.getByText('Installation instructions available', { exact: true }),
+    page.getByText('Use your browser address-bar install icon or its Install app menu item.'),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Install Crease' }).click();
 
@@ -110,7 +108,7 @@ test('production install controls, manifest, icons and offline precache are accu
   await expect.poll(() => page.evaluate(() => window.__creasePromptCalled)).toBe(true);
 
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
-  await expect(page.locator('.offline-setup-status').last()).toContainText('App Already Installed');
+  await expect(page.getByRole('link', { name: 'Open Crease' })).toBeVisible();
   await page.getByRole('link', { name: 'Open Crease' }).click();
   await expect(page).toHaveURL(/\/app\/$/);
   expect(consoleErrors).toEqual([]);
@@ -122,6 +120,23 @@ test('dashboard install suggestion is dismissible for the browser session and ne
   await page.goto('/app/');
   await page.getByLabel('Your scorer name').fill('Install banner scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
+
+  const desktopLogo = page.locator('.desktop-sidebar .crease-logo');
+  await expect(desktopLogo).toBeVisible();
+  await expect(desktopLogo.locator('img')).toHaveAttribute('src', '/icons/crease-app-icon.svg');
+  await expect(desktopLogo).toContainText('crease.');
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: 'test-results/branding-dashboard-desktop.png' });
+
+  await page.getByRole('button', { name: 'Collapse navigation' }).click();
+  await expect(page.locator('.desktop-sidebar .crease-logo > img')).toBeVisible();
+  await expect(page.locator('.desktop-sidebar .crease-logo-word')).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileLogo = page.locator('.brand .crease-logo');
+  await expect(mobileLogo).toBeVisible();
+  await expect(mobileLogo).toContainText('crease.');
+  await page.screenshot({ path: 'test-results/branding-dashboard-mobile.png' });
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   const banner = page.locator('.install-banner');
   await expect(banner).toBeVisible();
@@ -163,4 +178,13 @@ test('credential change APIs reject cross-origin and unauthenticated requests', 
     }, path);
     expect(unauthenticated.status, JSON.stringify(unauthenticated.body)).toBe(401);
   }
+});
+
+test('login uses the same approved full Crease logo', async ({ page }) => {
+  await page.goto('/account/login/');
+  const logo = page.locator('.auth-brand .crease-logo');
+  await expect(logo).toBeVisible();
+  await expect(logo.locator('img')).toHaveAttribute('src', '/icons/crease-app-icon.svg');
+  await expect(logo).toContainText('crease.');
+  await page.screenshot({ path: 'test-results/branding-login.png', fullPage: true });
 });

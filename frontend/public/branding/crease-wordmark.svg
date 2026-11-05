@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-labelledby="title">
+  <title id="title">Crease</title>
+  <g transform="translate(12 10) skewX(-10)">
+    <text x="0" y="57" fill="#10251a" font-family="Arial Black, Arial, sans-serif" font-size="58" font-weight="900" letter-spacing="-4">CREASE</text>
+    <path d="M4 72 C83 85 215 84 327 66" fill="none" stroke="#a9eb50" stroke-linecap="round" stroke-width="7"/>
+  </g>
+</svg>

@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { useOffline } from './offline';
+import CreaseLogo from './CreaseLogo';
 
 const links = [
   ['Features', '/features/'],
@@ -65,10 +66,7 @@ const featureData = [
 function Brand() {
   return (
     <Link className="site-brand" href="/" aria-label="Crease home">
-      <img src="/icons/main-logo.png" alt="" />
-      <span>
-        crease<span className="site-brand-dot">.</span>
-      </span>
+      <CreaseLogo />
     </Link>
   );
 }
@@ -802,21 +800,6 @@ function HowItWorks() {
           </div>
         </div>
         <div className="how-ground" aria-hidden="true">
-          <div className="ground-glow" />
-          <div className="ground-stands" />
-          <div className="ground-pitch">
-            <i />
-            <i />
-            <i />
-          </div>
-          <div className="ground-ball" />
-          <div className="ground-score-chip">
-            <Check size={16} />
-            <span>
-              <b>Every ball recorded</b>
-              <small>From toss to result</small>
-            </span>
-          </div>
         </div>
       </section>
       <section className="how-process">
@@ -1027,21 +1010,6 @@ function About() {
           </div>
         </div>
         <div className="about-ground" aria-hidden="true">
-          <div className="about-ground-light" />
-          <div className="about-ground-stands" />
-          <div className="about-pitch">
-            <i />
-            <i />
-            <i />
-          </div>
-          <div className="about-ball" />
-          <div className="about-ground-label">
-            <Trophy size={15} />
-            <span>
-              <b>Built for match day</b>
-              <small>Every ball, in one place</small>
-            </span>
-          </div>
         </div>
       </section>
       <section className="about-value-strip" aria-label="Crease values">

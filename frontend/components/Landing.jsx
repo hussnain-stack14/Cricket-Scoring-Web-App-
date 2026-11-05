@@ -13,6 +13,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 import { useOffline } from './offline';
 
 const features = [
@@ -75,10 +76,7 @@ export default function Landing() {
     <div className="landing">
       <header className="landing-nav">
         <a className="landing-brand" href="/" aria-label="Crease home">
-          <span className="landing-logo">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+          <CreaseLogo />
         </a>
         <button
           className="landing-menu-toggle"
@@ -358,10 +356,7 @@ export default function Landing() {
 
       <footer className="landing-footer">
         <a className="landing-brand" href="/" aria-label="Crease home">
-          <span className="landing-logo">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+          <CreaseLogo />
         </a>
         <p>Your game, recorded. Your records stay on your device.</p>
         <nav aria-label="Footer navigation">

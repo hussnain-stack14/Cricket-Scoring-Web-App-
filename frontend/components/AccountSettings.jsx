@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { Leaf, UserPlus, Trash2, Copy, Check, Shield, Link } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 import {
   activateAccountWorkspace,
   db,
@@ -393,11 +394,8 @@ export default function AccountSettings() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a className="auth-brand" href="/">
-          <span className="brand-mark">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+        <a className="auth-brand" href="/" aria-label="Crease home">
+          <CreaseLogo />
         </a>
         <a href="/app/" className="auth-header-app-link">
           ← App

@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Leaf, KeyRound, Mail, ArrowRight, CheckCircle2 } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountRecovery() {
@@ -53,11 +54,8 @@ export default function AccountRecovery() {
     return (
       <div className="auth-shell">
         <header className="auth-header">
-          <a className="auth-brand" href="/">
-            <span className="brand-mark">
-              <Leaf size={20} />
-            </span>
-            crease<span>.</span>
+          <a className="auth-brand" href="/" aria-label="Crease home">
+            <CreaseLogo />
           </a>
         </header>
 
@@ -90,11 +88,8 @@ export default function AccountRecovery() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a className="auth-brand" href="/">
-          <span className="brand-mark">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+        <a className="auth-brand" href="/" aria-label="Crease home">
+          <CreaseLogo />
         </a>
       </header>
 

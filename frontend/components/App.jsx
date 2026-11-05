@@ -12,7 +12,6 @@ import {
   Home,
   Plus,
   ArrowUpRight,
-  Leaf,
   LayoutDashboard,
   CalendarDays,
   ChartNoAxesCombined,
@@ -59,6 +58,7 @@ const Settings = dynamic(() => import('./Settings'), {
   loading: () => <ScreenSkeleton screen="account" />,
 });
 import { useOffline } from './offline';
+import CreaseLogo from './CreaseLogo';
 import { DownloadScorecardButton } from './ReportActions';
 import SyncStatus, { SYNC_STATUS_LABELS } from './SyncStatus';
 import TeamAccountMenu from './TeamAccountMenu';
@@ -494,12 +494,11 @@ export default function App({ screen }) {
   const recentMatches = [...completedMatches]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 4);
-  const currentSyncStatus =
-    !isOnline
-      ? 'offline'
-      : syncing
-        ? 'syncing'
-        : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
+  const currentSyncStatus = !isOnline
+    ? 'offline'
+    : syncing
+      ? 'syncing'
+      : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
   const currentSyncLabel = SYNC_STATUS_LABELS[currentSyncStatus] || 'Sync needs attention';
 
   function renderDraftCard(draft) {
@@ -593,7 +592,9 @@ export default function App({ screen }) {
         </Link>
         {(canDelete || match.status === 'completed') && (
           <details className="match-card-menu">
-            <summary aria-label={`More actions for ${match.teams.map((team) => team.name).join(' versus ')}`}>
+            <summary
+              aria-label={`More actions for ${match.teams.map((team) => team.name).join(' versus ')}`}
+            >
               <EllipsisVertical size={18} aria-hidden="true" />
             </summary>
             <div className="match-card-menu-panel">
@@ -657,12 +658,7 @@ export default function App({ screen }) {
       <aside className="desktop-sidebar">
         <div className="sidebar-brand">
           <Link href={`${base}/`} aria-label="Crease dashboard">
-            <span className="brand-mark">
-              <Leaf size={21} />
-            </span>
-            <span className="sidebar-brand-name">
-              crease<span>.</span>
-            </span>
+            <CreaseLogo />
           </Link>
           <button
             className="sidebar-collapse-button"
@@ -697,12 +693,7 @@ export default function App({ screen }) {
       <div className="app-workspace">
         <header className="brand">
           <Link href={`${base}/`} aria-label="Crease home">
-            <span className="brand-mark">
-              <Leaf size={22} />
-            </span>{' '}
-            <span className="mobile-brand-name">
-              crease<span className="brand-dot">.</span>
-            </span>
+            <CreaseLogo size="small" />
           </Link>
           <div className="mobile-header-actions">
             {installationRelevant && (
@@ -720,9 +711,7 @@ export default function App({ screen }) {
               <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
                 <span className="header-status-dot" />
                 <Cloud size={17} />
-                <span className="offline-readiness-label">
-                  {currentSyncLabel}
-                </span>
+                <span className="offline-readiness-label">{currentSyncLabel}</span>
               </summary>
               <div className="header-popover-panel">
                 <SyncStatus
@@ -759,13 +748,25 @@ export default function App({ screen }) {
               </button>
               {moreMenuOpen && (
                 <div className="header-more-panel" role="menu" aria-label="Settings and more">
-                  <Link href={`${base}/more/`} role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                  <Link
+                    href={`${base}/more/`}
+                    role="menuitem"
+                    onClick={() => setMoreMenuOpen(false)}
+                  >
                     <SettingsIcon size={17} aria-hidden="true" /> Settings
                   </Link>
-                  <Link href={`${base}/more/#backup`} role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                  <Link
+                    href={`${base}/more/#backup`}
+                    role="menuitem"
+                    onClick={() => setMoreMenuOpen(false)}
+                  >
                     <Ellipsis size={17} aria-hidden="true" /> Backup & more
                   </Link>
-                  <Link href={`${base}/more/#about`} role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                  <Link
+                    href={`${base}/more/#about`}
+                    role="menuitem"
+                    onClick={() => setMoreMenuOpen(false)}
+                  >
                     <CircleHelp size={17} aria-hidden="true" /> Help & about
                   </Link>
                 </div>
@@ -794,9 +795,7 @@ export default function App({ screen }) {
               <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
                 <span className="header-status-dot" />
                 <Cloud size={17} />
-                <span className="offline-readiness-label">
-                  {currentSyncLabel}
-                </span>
+                <span className="offline-readiness-label">{currentSyncLabel}</span>
               </summary>
               <div className="header-popover-panel">
                 <SyncStatus
@@ -920,14 +919,18 @@ export default function App({ screen }) {
                           Track matches, manage teams, and keep your scorebooks in one place.
                         </p>
                       </div>
-                      <div className="dashboard-hero-batter" aria-hidden="true" />
                     </div>
                     <div className="dashboard-stat-grid">
                       {[
                         ['Total matches', matches.length, CalendarDays, `${base}/matches/`],
                         ['Live matches', liveMatches.length, Play, `${base}/matches/`],
                         ['Completed', completedMatches.length, CheckCircle2, `${base}/reports/`],
-                        ['Teams', data.teams.filter((team) => !team.archived).length, Users, `${base}/teams/`],
+                        [
+                          'Teams',
+                          data.teams.filter((team) => !team.archived).length,
+                          Users,
+                          `${base}/teams/`,
+                        ],
                       ].map(([label, value, Icon, href]) => (
                         <Link
                           className="dashboard-stat-card"
@@ -942,7 +945,11 @@ export default function App({ screen }) {
                             <strong>{value}</strong>
                             <span>{label}</span>
                           </span>
-                          <ArrowRight className="dashboard-stat-arrow" size={17} aria-hidden="true" />
+                          <ArrowRight
+                            className="dashboard-stat-arrow"
+                            size={17}
+                            aria-hidden="true"
+                          />
                           <span className="dashboard-stat-trend" aria-hidden="true" />
                         </Link>
                       ))}
@@ -951,18 +958,26 @@ export default function App({ screen }) {
                       <section className="dashboard-panel">
                         <div className="dashboard-panel-heading">
                           <h2>Live matches</h2>
-                          <Link href={`${base}/matches/`}>See all <ArrowRight size={15} /></Link>
+                          <Link href={`${base}/matches/`}>
+                            See all <ArrowRight size={15} />
+                          </Link>
                         </div>
                         {liveMatches.length ? (
-                          <div className="match-grid">{liveMatches.slice(0, 2).map(renderMatchCard)}</div>
+                          <div className="match-grid">
+                            {liveMatches.slice(0, 2).map(renderMatchCard)}
+                          </div>
                         ) : (
-                          <p className="dashboard-empty-note">No matches are being scored right now.</p>
+                          <p className="dashboard-empty-note">
+                            No matches are being scored right now.
+                          </p>
                         )}
                       </section>
                       <section className="dashboard-panel">
                         <div className="dashboard-panel-heading">
                           <h2>Upcoming matches</h2>
-                          <Link href={`${base}/matches/`}>View all <ArrowRight size={15} /></Link>
+                          <Link href={`${base}/matches/`}>
+                            View all <ArrowRight size={15} />
+                          </Link>
                         </div>
                         {upcoming.length ? (
                           <div className="match-grid">
@@ -973,7 +988,9 @@ export default function App({ screen }) {
                             <CalendarDays size={30} aria-hidden="true" />
                             <strong>No upcoming matches</strong>
                             <span>Schedule a match to get started.</span>
-                            <Link className="button compact" href="/app/setup/?new=1">Schedule a match</Link>
+                            <Link className="button compact" href="/app/setup/?new=1">
+                              Schedule a match
+                            </Link>
                           </div>
                         )}
                       </section>
@@ -1176,7 +1193,11 @@ export default function App({ screen }) {
                         <p>Add Crease to your home screen for faster scoring.</p>
                       </div>
                       <div className="install-banner-actions">
-                        <button className="button compact" type="button" onClick={() => void requestInstall()}>
+                        <button
+                          className="button compact"
+                          type="button"
+                          onClick={() => void requestInstall()}
+                        >
                           Install
                         </button>
                         <button
@@ -1231,12 +1252,7 @@ export default function App({ screen }) {
             ],
             ['Teams', `${base}/teams/`, Users, screen === 'teams'],
             ['Players', `${base}/players/`, UserRound, screen === 'players' || screen === 'player'],
-            [
-              'Stats',
-              `${base}/statistics/`,
-              ChartNoAxesCombined,
-              screen === 'statistics',
-            ],
+            ['Stats', `${base}/statistics/`, ChartNoAxesCombined, screen === 'statistics'],
           ].map(([label, href, Icon, active]) => (
             <Link key={label} href={href} className={active ? 'selected' : ''}>
               <Icon size={21} />

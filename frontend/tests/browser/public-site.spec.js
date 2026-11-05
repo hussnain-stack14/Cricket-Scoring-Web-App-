@@ -66,3 +66,68 @@ test('public product pages are reachable, responsive and keep app CTAs working',
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'test-results/about-mobile.png', fullPage: true });
 });
+
+test('approved hero images load at desktop and mobile sizes without shifting or covering content', async ({
+  page,
+}) => {
+  const imageCases = [
+    ['/about/', '/about.png', '.about-ground', 'about'],
+    ['/how-it-works/', '/howitwork.png', '.how-ground', 'how-it-works'],
+  ];
+
+  for (const [route, imagePath, selector, name] of imageCases) {
+    const asset = await page.request.get(imagePath);
+    expect(asset.ok(), `${imagePath} should load`).toBe(true);
+
+    for (const viewport of [
+      { width: 1440, height: 900, label: 'desktop' },
+      { width: 390, height: 844, label: 'mobile' },
+    ]) {
+      await page.setViewportSize(viewport);
+      const imageResponse = page.waitForResponse((response) => response.url().endsWith(imagePath));
+      await page.goto(route);
+      const hero = page.locator(selector);
+      await expect(hero).toBeVisible();
+      await imageResponse;
+      const before = await hero.boundingBox();
+      const background = await hero.evaluate((element) => getComputedStyle(element).backgroundImage);
+      expect(background).toContain(imagePath);
+      await page.waitForTimeout(100);
+      const after = await hero.boundingBox();
+      expect(after.width).toBe(before.width);
+      expect(after.height).toBe(before.height);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: `test-results/${name}-hero-${viewport.label}.png`, fullPage: true });
+    }
+  }
+
+  await page.request.get('/bg-dashboard-heading.png').then((response) => {
+    expect(response.ok(), 'dashboard background should load').toBe(true);
+  });
+  await page.goto('/app/');
+  await page.getByLabel('Your scorer name').fill('Hero image QA');
+  await page.getByRole('button', { name: 'Get started' }).click();
+  for (const viewport of [
+    { width: 1440, height: 900, label: 'desktop' },
+    { width: 390, height: 844, label: 'mobile' },
+  ]) {
+    await page.setViewportSize(viewport);
+    const welcome = page.locator('.dashboard-welcome');
+    await expect(welcome).toBeVisible();
+    const background = await welcome.evaluate((element) => getComputedStyle(element).backgroundImage);
+    expect(background).toContain('/bg-dashboard-heading.png');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const heading = await welcome.getByRole('heading', { name: 'Your cricket, at a glance.' }).boundingBox();
+    const panel = await welcome.boundingBox();
+    expect(heading.x).toBeGreaterThanOrEqual(panel.x);
+    expect(heading.x + heading.width).toBeLessThanOrEqual(panel.x + panel.width);
+    if (viewport.width >= 1024) {
+      const sidebar = await page.locator('.desktop-sidebar').boundingBox();
+      expect(heading.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width);
+    }
+    await page.screenshot({
+      path: `test-results/dashboard-hero-${viewport.label}.png`,
+      fullPage: true,
+    });
+  }
+});

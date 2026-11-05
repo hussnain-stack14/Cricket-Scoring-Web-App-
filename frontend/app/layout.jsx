@@ -9,7 +9,11 @@ export const metadata = {
   description: 'Offline cricket scoring, teams and player statistics on your device.',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/icons/icon-192.png',
+    icon: [
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icons/crease-app-icon.svg', type: 'image/svg+xml' },
+    ],
     apple: '/icons/apple-touch-icon.png',
   },
   appleWebApp: { capable: true, title: 'Crease', statusBarStyle: 'default' },
@@ -18,7 +22,7 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#166534',
+  themeColor: '#06452D',
 };
 export default function Layout({ children }) {
   return (

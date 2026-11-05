@@ -8,6 +8,7 @@
 .public-site .preview-players small { display: block; margin: 0; color: #bcd6c4; font-size: 11px; line-height: 1.2; }
 .public-site .site-footer .site-brand { font-size: 25px; line-height: 1; }
 .public-site .site-footer .site-brand img { width: 34px; height: 34px; }
+.public-site .site-footer .crease-logo-word { color: #fff; }
 
 .public-site .about-hero { padding-bottom: 40px; }
 .public-site .about-hero h1 { max-width: 680px; }
@@ -115,3 +116,32 @@
 .public-site .about-final-cta { position: relative; display: grid; grid-template-columns: .62fr 1fr; gap: 48px; align-items: center; width: min(1180px, calc(100% - 40px)); min-height: 315px; margin: 84px auto; padding: 52px 64px; overflow: hidden; border-radius: 27px; color: #fff; background: radial-gradient(circle at 83% 32%, #2a8b53 0 7%, #1a6d41 38%, #06452d 79%); }.public-site .about-final-cta::after { position: absolute; right: -110px; top: -160px; width: 420px; height: 420px; content: ''; border: 1px solid #b8ef4b65; border-radius: 50%; box-shadow: 0 0 0 38px #b8ef4b17, 0 0 0 78px #b8ef4b0c; }.public-site .about-final-cta > * { position: relative; z-index: 1; }.public-site .about-final-cta > div:last-child { order: -1; }.public-site .about-final-cta .site-kicker { color: #b8ef4b; }.public-site .about-final-cta h2 { max-width: 610px; margin: 0; font-size: clamp(32px, 4vw, 51px); letter-spacing: -.06em; line-height: 1.06; }.public-site .about-final-cta > div:last-child > p:not(.site-kicker) { max-width: 520px; margin: 16px 0 0; color: #d5ead9; font-size: 16px; line-height: 1.6; }.public-site .about-final-cta .site-button.light { color: #10251a; background: #b8ef4b; }.public-site .about-final-cta .install-control { display: contents; }.public-site .about-final-cta .install-guidance { position: absolute; width: 280px; }.public-site .about-cta-art { position: relative; align-self: stretch; min-height: 210px; overflow: hidden; border-radius: 19px; background: radial-gradient(ellipse at 46% 30%, #ffffff38, transparent 42%), linear-gradient(145deg, #2d9157, #075130); }.public-site .about-cta-player { position: absolute; left: 39%; bottom: 15px; width: 80px; height: 144px; border-radius: 49% 49% 14px 14px; background: linear-gradient(90deg, #bedbca, #fff, #9bc1aa); box-shadow: -35px 42px 0 -29px #eff9e9, 36px 44px 0 -29px #eff9e9; transform: skewX(-8deg); }.public-site .about-cta-player::before { position: absolute; left: 20px; top: -33px; width: 42px; height: 42px; content: ''; border-radius: 50%; background: #f2c69f; }.public-site .about-cta-player::after { position: absolute; right: -47px; top: 25px; width: 10px; height: 126px; content: ''; border-radius: 8px; background: #dfc47c; transform: rotate(-47deg); transform-origin: top; }.public-site .about-cta-ball { position: absolute; right: 20%; top: 27%; width: 33px; height: 33px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #ffada3, #b62b27 45%, #711814 72%); box-shadow: -4px 3px #fff4 inset; }
 @media (max-width: 900px) { .public-site .about-premium-hero { grid-template-columns: 1fr; padding: 56px 48px 0; }.public-site .about-ground { min-height: 330px; }.public-site .about-value-strip { grid-template-columns: repeat(2, 1fr); gap: 8px; }.public-site .about-value-strip article:nth-child(2) { border-right: 0; }.public-site .about-value-strip article:nth-child(-n + 2) { border-bottom: 1px solid #e4ede6; padding-bottom: 14px; }.public-site .about-value-strip article:nth-child(n + 3) { padding-top: 14px; }.public-site .about-premium-story { gap: 42px; }.public-site .about-final-cta { padding: 45px; } }
 @media (max-width: 720px) { .public-site .about-premium-hero { width: min(100% - 28px, 1180px); margin-top: 14px; padding: 42px 23px 0; border-radius: 23px; }.public-site .about-premium-hero h1 { font-size: clamp(42px, 13vw, 58px); }.public-site .about-hero-copy > p:not(.site-kicker) { font-size: 15px; }.public-site .about-premium-hero .site-actions { display: grid; grid-template-columns: 1fr; }.public-site .about-premium-hero .site-button { width: 100%; }.public-site .about-premium-hero .install-guidance { position: static; width: 100%; }.public-site .about-ground { min-height: 270px; margin-top: 8px; }.public-site .about-ground-label { right: 4%; bottom: 8%; }.public-site .about-ball { right: 20%; }.public-site .about-value-strip { width: calc(100% - 28px); margin: -12px auto 64px; padding: 10px; border-radius: 15px; }.public-site .about-value-strip article { gap: 8px; padding: 9px!important; }.public-site .about-value-strip article > span { width: 33px; height: 33px; border-radius: 10px; }.public-site .about-value-strip h2 { font-size: 11px; }.public-site .about-value-strip p { font-size: 9px; }.public-site .about-premium-story { grid-template-columns: 1fr; width: calc(100% - 28px); gap: 37px; margin-bottom: 68px; }.public-site .about-phones { min-height: 345px; }.public-site .about-phones .product-preview { width: min(79%, 280px); padding: 13px; }.public-site .about-phones .preview-matches { top: 28px; left: 16px; }.public-site .about-phones .preview-scoring { right: 12px; bottom: 18px; }.public-site .about-premium-story h2 { font-size: 34px; }.public-site .about-premium-story > div:last-child > p:not(.site-kicker) { font-size: 15px; }.public-site .about-premium-story ul { font-size: 13px; }.public-site .about-why { padding: 64px 14px; }.public-site .about-why h2 { font-size: 34px; }.public-site .about-why > div { grid-template-columns: 1fr; gap: 12px; }.public-site .about-why article { padding: 22px; }.public-site .about-why h3 { margin-top: 17px; }.public-site .about-final-cta { grid-template-columns: 1fr; gap: 22px; width: calc(100% - 28px); min-height: 0; margin: 54px auto; padding: 32px 24px; border-radius: 21px; }.public-site .about-final-cta > div:last-child { order: 0; }.public-site .about-final-cta h2 { font-size: 34px; }.public-site .about-final-cta .site-actions { display: grid; grid-template-columns: 1fr; }.public-site .about-final-cta .site-button { width: 100%; }.public-site .about-final-cta .install-guidance { position: static; width: 100%; }.public-site .about-cta-art { min-height: 170px; }.public-site .about-cta-player { left: 42%; height: 113px; transform: scale(.86); transform-origin: bottom; } }
+
+/* Approved public hero artwork. Fixed aspect ratios prevent image loading from moving content. */
+.public-site .how-ground {
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 3 / 2;
+  align-self: center;
+  border-radius: 20px;
+  background: #e8efe9 url('/howitwork.png') 61% center / cover no-repeat;
+  box-shadow: 0 20px 46px #123b2724;
+}
+.public-site .how-hero::after { content: none; }
+.public-site .about-ground {
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
+  align-self: center;
+  border-radius: 22px;
+  background: #edf4ed url('/about.png') center / cover no-repeat;
+  box-shadow: 0 20px 46px #123b2724;
+}
+@media (max-width: 900px) {
+  .public-site .how-ground { min-height: 0; }
+  .public-site .about-ground { min-height: 0; }
+}
+@media (max-width: 720px) {
+  .public-site .how-ground { min-height: 0; margin-top: 8px; }
+  .public-site .about-ground { min-height: 0; margin-top: 8px; }
+}

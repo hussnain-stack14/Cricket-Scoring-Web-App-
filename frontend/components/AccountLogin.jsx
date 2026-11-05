@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Leaf, LogIn, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 import { isValidLoginTeamId, normalizeLoginTeamId } from '../lib/accountCredentials';
 import { fetchWithTimeout } from '../lib/request';
 
@@ -78,11 +79,8 @@ export default function AccountLogin() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <Link className="auth-brand" href="/">
-          <span className="brand-mark">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+        <Link className="auth-brand" href="/" aria-label="Crease home">
+          <CreaseLogo />
         </Link>
       </header>
 

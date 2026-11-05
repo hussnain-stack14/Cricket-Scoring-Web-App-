@@ -190,7 +190,7 @@ button:disabled {
   margin-left: -9px;
 }
 .brand-mark {
-  background: #fff url('/icons/main-logo.png') center / 76% no-repeat;
+  background: transparent url('/icons/crease-app-icon.svg') center / contain no-repeat;
   color: transparent;
   display: grid;
   place-items: center;
@@ -1643,7 +1643,7 @@ pre {
   height: 38px;
   border-radius: 13px;
   color: transparent;
-  background: #fff url('/icons/main-logo.png') center / 76% no-repeat;
+  background: transparent url('/icons/crease-app-icon.svg') center / contain no-repeat;
   overflow: hidden;
   box-shadow: 0 1px 4px #1118271a;
 }
@@ -5084,6 +5084,32 @@ pre {
 }
 @media (prefers-reduced-motion: reduce) { .dashboard-stat-card, .quick-action-link { transition: none; } }
 
+/* Stadium artwork is confined to the dashboard welcome section. */
+.dashboard-welcome {
+  position: relative;
+  isolation: isolate;
+  min-height: 180px;
+  margin: 0 0 18px;
+  padding: 28px clamp(18px, 3vw, 42px);
+  overflow: hidden;
+  border-radius: 18px;
+  background: #f4f8f4 url('/bg-dashboard-heading.png') center 62% / cover no-repeat;
+}
+.dashboard-welcome::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, #f9fcf9f5 0%, #f9fcf9e8 37%, #f9fcf99c 59%, #f9fcf900 100%);
+}
+.dashboard-welcome > div:first-child { position: relative; z-index: 1; }
+@media (max-width: 899px) {
+  .dashboard-welcome { min-height: 0; padding: 18px; }
+  .dashboard-welcome::after {
+    background: linear-gradient(90deg, #f9fcf9f5 0%, #f9fcf9e8 53%, #f9fcf9a6 100%);
+  }
+}
+
 /* Theme-neutralize legacy decorative greens so every selected theme is monochromatic. */
 .button { background: var(--color-primary-gradient); }
 .button.secondary { color: var(--color-primary-text); }
@@ -5105,6 +5131,30 @@ pre {
 .dashboard-stat-trend { border-color: var(--color-primary); }
 .sidebar-brand-name > span,
 .brand-dot { color: var(--color-primary); }
+.app-wordmark { display: block; width: 154px; height: auto; max-height: 42px; }
+.sidebar-brand > a .app-wordmark { width: 154px; }
+.brand > a .app-wordmark { width: 122px; max-height: 34px; }
+.crease-logo { display: inline-flex; align-items: center; gap: 9px; min-width: 0; color: #10251a; line-height: 1; white-space: nowrap; }
+.crease-logo > img { display: block; width: 34px; height: 34px; flex: 0 0 auto; object-fit: contain; }
+.crease-logo-word { color: #10251a; font-size: 25px; font-weight: 850; letter-spacing: -1.55px; }
+.crease-logo-word > span { color: #0b903f; }
+.crease-logo-small { gap: 7px; }
+.crease-logo-small > img { width: 29px; height: 29px; }
+.crease-logo-small .crease-logo-word { font-size: 21px; }
+.crease-logo-large > img { width: 42px; height: 42px; }
+.crease-logo-large .crease-logo-word { font-size: 30px; }
+.sidebar-brand > a .crease-logo { max-width: 164px; }
+.brand > a .crease-logo { gap: 7px; }
+.brand > a .crease-logo > img { width: 29px; height: 29px; }
+.brand > a .crease-logo-word { font-size: 21px; }
+.auth-brand .crease-logo { gap: 9px; }
+.auth-brand .crease-logo-word { color: var(--ink); font-size: 25px; }
+.landing-brand .crease-logo { gap: 9px; }
+.landing-brand .crease-logo-word { font-size: 27px; }
+.sidebar-collapsed .sidebar-brand > a { display: flex; }
+.sidebar-collapsed .sidebar-brand .crease-logo-word { display: none; }
+.sidebar-collapsed .sidebar-brand .crease-logo { width: 34px; justify-content: center; }
+.sidebar-collapsed .sidebar-brand .crease-logo > img { width: 34px; height: 34px; }
 .page-heading > div { min-width: 0; }
 .page-heading h1, .page-heading p { overflow-wrap: anywhere; }
 .dashboard-view > .dashboard-panel { margin-bottom: 20px; }

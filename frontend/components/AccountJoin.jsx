@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Leaf, Eye, EyeOff, ArrowRight, Users } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountJoin() {
@@ -61,14 +62,22 @@ export default function AccountJoin() {
     return (
       <div className="auth-shell">
         <header className="auth-header">
-          <a className="auth-brand" href="/"><span className="brand-mark"><Leaf size={20} /></span>crease<span>.</span></a>
+          <a className="auth-brand" href="/" aria-label="Crease home">
+            <CreaseLogo />
+          </a>
         </header>
         <main className="auth-main auth-main-narrow">
           <div className="auth-success-box">
-            <span className="auth-success-icon"><Users size={36} /></span>
+            <span className="auth-success-icon">
+              <Users size={36} />
+            </span>
             <h1>You're in!</h1>
             <p>Your team account is active. You can now score or view matches on this device.</p>
-            <a className="auth-submit" href="/app/" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+            <a
+              className="auth-submit"
+              href="/app/"
+              style={{ display: 'inline-flex', justifyContent: 'center' }}
+            >
               Open the app <ArrowRight size={17} style={{ marginLeft: 6 }} />
             </a>
           </div>
@@ -80,16 +89,24 @@ export default function AccountJoin() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a className="auth-brand" href="/"><span className="brand-mark"><Leaf size={20} /></span>crease<span>.</span></a>
+        <a className="auth-brand" href="/" aria-label="Crease home">
+          <CreaseLogo />
+        </a>
       </header>
       <main className="auth-main auth-main-narrow">
         <div className="auth-hero">
-          <span className="auth-kicker"><Users size={14} /> TEAM INVITE</span>
+          <span className="auth-kicker">
+            <Users size={14} /> TEAM INVITE
+          </span>
           <h1>Join the team.</h1>
           <p>Set up your personal password to access this team account on Crease.</p>
         </div>
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
-          {error && <div role="alert" className="auth-error">{error}</div>}
+          {error && (
+            <div role="alert" className="auth-error">
+              {error}
+            </div>
+          )}
           <div className="auth-field">
             <label htmlFor="join-name">Your display name (optional)</label>
             <input
@@ -130,7 +147,13 @@ export default function AccountJoin() {
             />
           </div>
           <button className="auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Setting up account…' : <>Accept invite <ArrowRight size={17} /></>}
+            {busy ? (
+              'Setting up account…'
+            ) : (
+              <>
+                Accept invite <ArrowRight size={17} />
+              </>
+            )}
           </button>
         </form>
       </main>

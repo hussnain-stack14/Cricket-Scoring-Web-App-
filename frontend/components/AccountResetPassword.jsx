@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Leaf, KeyRound, Eye, EyeOff, ArrowRight, CheckCircle2 } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 import { fetchWithTimeout } from '../lib/request';
 
 export default function AccountResetPassword() {
@@ -78,11 +79,8 @@ export default function AccountResetPassword() {
     return (
       <div className="auth-shell">
         <header className="auth-header">
-          <a className="auth-brand" href="/">
-            <span className="brand-mark">
-              <Leaf size={20} />
-            </span>
-            crease<span>.</span>
+          <a className="auth-brand" href="/" aria-label="Crease home">
+            <CreaseLogo />
           </a>
         </header>
 
@@ -118,11 +116,8 @@ export default function AccountResetPassword() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a className="auth-brand" href="/">
-          <span className="brand-mark">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+        <a className="auth-brand" href="/" aria-label="Crease home">
+          <CreaseLogo />
         </a>
       </header>
 

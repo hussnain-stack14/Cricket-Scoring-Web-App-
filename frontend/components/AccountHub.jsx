@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Leaf, LogIn, UserPlus, Copy, Check, ArrowRight, Shield } from 'lucide-react';
+import CreaseLogo from './CreaseLogo';
 
 export default function AccountHub() {
   const [copied, setCopied] = useState(false);
@@ -15,11 +16,8 @@ export default function AccountHub() {
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a className="auth-brand" href="/">
-          <span className="brand-mark">
-            <Leaf size={20} />
-          </span>
-          crease<span>.</span>
+        <a className="auth-brand" href="/" aria-label="Crease home">
+          <CreaseLogo />
         </a>
       </header>
 
