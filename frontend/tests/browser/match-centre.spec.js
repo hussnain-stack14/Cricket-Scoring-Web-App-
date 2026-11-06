@@ -7,6 +7,14 @@ async function newWorkspace(page) {
   await expect(page.getByText('Your scorebook starts here')).toBeVisible();
 }
 
+async function expectOfflineScoringReady(page) {
+  const popover = page.locator('.sync-popover:visible');
+  await expect(popover.locator('summary')).toHaveAttribute('aria-label', 'Sync status: Sign in to sync');
+  await popover.locator('summary').click();
+  await expect(popover.getByText('Offline scoring ready')).toBeVisible({ timeout: 45000 });
+  await popover.locator('summary').click();
+}
+
 test('scheduled toss restores offline, starts only explicitly, and scoring stays responsive at every breakpoint', async ({
   page,
   context,
@@ -15,9 +23,7 @@ test('scheduled toss restores offline, starts only explicitly, and scoring stays
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await newWorkspace(page);
-  await expect(page.locator('.brand .offline-readiness-label')).toHaveText('Ready offline', {
-    timeout: 45000,
-  });
+  await expectOfflineScoringReady(page);
   await page.goto('/app/setup/?new=1');
   await page.getByLabel('Or create Team A').fill('North Rangers');
   await page.getByRole('button', { name: 'Create team', exact: true }).first().click();
@@ -176,9 +182,7 @@ test('player profile and team management confirm archives, restore offline and d
   context,
 }) => {
   await newWorkspace(page);
-  await expect(page.locator('.brand .offline-readiness-label')).toHaveText('Ready offline', {
-    timeout: 45000,
-  });
+  await expectOfflineScoringReady(page);
   await context.setOffline(true);
   await page.goto('/app/players/');
   await page.getByRole('button', { name: 'Add player', exact: true }).click();

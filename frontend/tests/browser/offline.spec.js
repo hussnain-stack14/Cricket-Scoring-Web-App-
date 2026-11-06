@@ -8,20 +8,16 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   test.setTimeout(180000);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
-  await expect(page.locator('.offline-setup-status').last()).toContainText(
-    'Ready to use offline.',
-    {
-      timeout: 45000,
-    },
-  );
-  await page.getByRole('link', { name: 'Open web app' }).click();
+  await page.locator('.site-hero').getByRole('link', { name: 'Start scoring' }).click();
   await expect(page).toHaveURL(/\/app\/$/);
   await expect(page.getByText('A workspace of your own')).toBeVisible({ timeout: 15000 });
   await page.getByLabel('Your scorer name').fill('Local scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
-  await expect(page.locator('.brand .offline-readiness-label')).toHaveText('Ready offline', {
-    timeout: 45000,
-  });
+  const syncPopover = page.locator('.sync-popover:visible');
+  await expect(syncPopover.locator('summary')).toHaveAttribute('aria-label', 'Sync status: Sign in to sync');
+  await syncPopover.locator('summary').click();
+  await expect(syncPopover.getByText('Offline scoring ready')).toBeVisible({ timeout: 45000 });
+  await syncPopover.locator('summary').click();
   await expect(page.getByText('Your scorebook starts here')).toBeVisible();
   await page.goto('/app/matches/');
   await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
@@ -219,6 +215,9 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
     (card) => card.getBoundingClientRect().width,
   );
   expect(completedCardWidth).toBeLessThan(768);
+  await completedMatchCard.locator('.match-card-menu > summary').focus();
+  await completedMatchCard.locator('.match-card-menu > summary').press('Enter');
+  await expect(completedMatchCard.locator('.match-card-menu')).toHaveAttribute('open', '');
   const historyPdfPromise = page.waitForEvent('download');
   await completedMatchCard.getByRole('button', { name: 'Download Scorecard' }).click();
   expect((await historyPdfPromise).suggestedFilename()).toMatch(/^Crease_North_vs_South_.*\.pdf$/);
@@ -356,7 +355,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   const fresh = await isolated.newPage();
   await fresh.goto('/');
   await expect(fresh.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
-  await fresh.getByRole('link', { name: 'Open web app' }).click();
+  await fresh.locator('.site-hero').getByRole('link', { name: 'Start scoring' }).click();
   await expect(fresh).toHaveURL(/\/app\/$/);
   await expect(fresh.getByText('A workspace of your own')).toBeVisible();
   await isolated.close();
@@ -402,10 +401,12 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.bottom-nav a')).toHaveCount(5);
-  for (const label of ['Dashboard', 'Matches', 'Teams', 'Players', 'More']) {
+  for (const label of ['Dashboard', 'Matches', 'Teams', 'Players', 'Stats']) {
     await expect(page.locator('.bottom-nav').getByRole('link', { name: label })).toBeVisible();
   }
-  await page.goto('/app/more/');
+  await page.getByRole('button', { name: 'Open settings and more options' }).click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  await expect(page).toHaveURL(/\/app\/more\/$/);
   await expect(page.getByRole('heading', { name: 'More' })).toBeVisible();
   await page.screenshot({ path: 'test-results/settings-mobile.png', fullPage: true });
   await page.getByRole('button', { name: /Storage & backup/ }).click();

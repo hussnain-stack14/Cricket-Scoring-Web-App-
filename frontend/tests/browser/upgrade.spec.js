@@ -33,7 +33,10 @@ test('draft resume, schedule, cancellation, deletion and responsive accessible d
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    await page.getByRole('button', { name: 'Delete match', exact: true }).click();
+    const menu = page.locator('.match-card-menu');
+    if ((await menu.getAttribute('open')) === null) await menu.locator('summary').click();
+    await expect(menu).toHaveAttribute('open', '');
+    await menu.getByRole('button', { name: 'Delete match', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Delete match?' });
     await expect(dialog).toBeVisible();
     const box = await dialog.boundingBox();
@@ -57,9 +60,13 @@ test('draft resume, schedule, cancellation, deletion and responsive accessible d
   await expect(page.locator('.match-centre-header .match-status')).toBeVisible();
   await page.goto('/app/matches/');
   await page.getByRole('button', { name: /Cancelled/ }).click();
-  await page.getByRole('button', { name: 'Delete match', exact: true }).click();
+  const cancelledMenu = page.locator('.match-card-menu');
+  if ((await cancelledMenu.getAttribute('open')) === null)
+    await cancelledMenu.locator('summary').click();
+  await expect(cancelledMenu).toHaveAttribute('open', '');
+  await cancelledMenu.getByRole('button', { name: 'Delete match', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm delete' }).click();
-  await expect(page.getByRole('button', { name: 'Delete match', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('More actions for North XI versus South XI')).toHaveCount(0);
 });
 
 test('cached account dashboard renders before background validation and navigation avoids document reloads', async ({
