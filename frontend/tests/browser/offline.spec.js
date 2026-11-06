@@ -8,7 +8,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   test.setTimeout(180000);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
-  await page.locator('.site-hero').getByRole('link', { name: 'Start scoring' }).click();
+  await page.locator('.home-hero').getByRole('link', { name: 'Start scoring' }).click();
   await expect(page).toHaveURL(/\/app\/$/);
   await expect(page.getByText('A workspace of your own')).toBeVisible({ timeout: 15000 });
   await page.getByLabel('Your scorer name').fill('Local scorer');
@@ -355,7 +355,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   const fresh = await isolated.newPage();
   await fresh.goto('/');
   await expect(fresh.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
-  await fresh.locator('.site-hero').getByRole('link', { name: 'Start scoring' }).click();
+  await fresh.locator('.home-hero').getByRole('link', { name: 'Start scoring' }).click();
   await expect(fresh).toHaveURL(/\/app\/$/);
   await expect(fresh.getByText('A workspace of your own')).toBeVisible();
   await isolated.close();

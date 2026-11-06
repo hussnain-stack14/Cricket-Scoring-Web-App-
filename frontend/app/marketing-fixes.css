@@ -56,6 +56,7 @@
 /* Homepage has its own stadium-night composition; internal pages stay light and editorial. */
 .public-site:has(.site-hero) .site-header { background: #063d2beb; border-color: #ffffff1f; }
 .public-site:has(.site-hero) .site-brand, .public-site:has(.site-hero) .site-nav-links { color: #fff; }
+.public-site:has(.site-hero) .site-brand .crease-logo-word { color:#fff; }.public-site:has(.site-hero) .site-brand .crease-logo-word > span { color:#b8ef4b; }
 .public-site:has(.site-hero) .site-nav-links > a { color: #d9eadf; }.public-site:has(.site-hero) .site-nav-links > a:hover { color: #b8f34a; }
 .public-site:has(.site-hero) .site-menu-button { color: #fff; }.public-site:has(.site-hero) .site-nav .nav-button { color: #10231b; background: #b8f34a; box-shadow: none; }
 .public-site .site-hero { position: relative; width: 100%; max-width: none; padding: 92px max(20px, calc((100% - 1180px) / 2)); overflow: hidden; background: radial-gradient(ellipse at 76% 35%, #237b4a 0, #063d2b 42%, #04281d 100%); }

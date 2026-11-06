@@ -12,6 +12,60 @@ const publicRoutes = [
   ['/terms/', 'Using Crease responsibly.'],
 ];
 
+test('homepage uses real local-demo screens, truthful offline messaging and working actions', async ({ page }) => {
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Every Ball. Every Moment.' })).toBeVisible();
+    await expect(page.locator('.home-live-controls-crop img')).toHaveAttribute('src', '/marketing/scoring-mobile-2x.webp');
+    await expect(page.locator('.home-scorecard img').first()).toHaveAttribute('src', '/marketing/scorecard-mobile-2x.webp');
+    await expect(page.locator('.home-teams img')).toHaveAttribute('src', '/marketing/teams-mobile-2x.webp');
+    await expect(page.locator('.home-statistics img')).toHaveAttribute('src', '/marketing/statistics-mobile-2x.webp');
+    await expect(page.getByText('Shown only after the server confirms the changes.')).toBeVisible();
+    await expect(page.locator('.home-hero').getByRole('link', { name: 'Start scoring' })).toHaveAttribute('href', '/app/');
+    await expect(page.locator('.home-hero').getByRole('button', { name: 'Install Crease' })).toBeVisible();
+    await expect(page.locator('.home-live').getByRole('link', { name: /Explore scoring features/ })).toHaveAttribute('href', '/features/#live-scoring');
+    await expect(page.locator('.home-statistics').getByRole('link', { name: /Explore statistics/ })).toHaveAttribute('href', '/features/#statistics');
+    await expect(page.locator('.home-journey').getByRole('link', { name: /See how Crease works/ })).toHaveAttribute('href', '/how-it-works/');
+    await expect(page.locator('.home-final').getByRole('link', { name: 'Start scoring' })).toHaveAttribute('href', '/app/');
+    await expect(page.locator('.home-final').getByRole('button', { name: 'Install Crease' })).toBeVisible();
+    for (const image of await page.locator('.home-page img:visible').all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate((element) => element.complete && element.naturalWidth > 0)).toBe(true);
+      expect(await image.evaluate((element) => element.naturalWidth >= element.getBoundingClientRect().width)).toBe(true);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
+test('download page uses the real install workflow, platform guides and truthful data-state messaging', async ({ page }) => {
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 360, height: 640 },
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 414, height: 896 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/download/');
+    await expect(page.getByRole('heading', { name: 'Bring the scorebook to the ground.' })).toBeVisible();
+    await expect(page.locator('.download-phone img').last()).toHaveAttribute('src', '/marketing/scoring-mobile-2x.webp');
+    await expect(page.getByRole('heading', { name: 'Use the browser you already have.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Android' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'iPhone & iPad' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Desktop' })).toBeVisible();
+    await expect(page.getByText('Pending offline changes are not cloud-backed yet;')).toBeVisible();
+    await expect(page.locator('.download-hero').getByRole('link', { name: 'Open Crease' })).toHaveAttribute('href', '/app/');
+    await expect(page.locator('.download-hero').getByRole('button', { name: 'Install Crease' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open Help Center' })).toHaveAttribute('href', '/help/');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test('public product pages are reachable, responsive and keep app CTAs working', async ({ page }) => {
   for (const [path, heading] of publicRoutes) {
     await page.goto(path);
@@ -200,9 +254,11 @@ test('production image and icon assets load, fit target widths, and preserve the
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await page.goto('/');
-    await page.locator('.site-hero').screenshot({ path: `test-results/home-hero-${viewport.label}.png` });
-    const homeCta = page.locator('.final-cta');
+    await page.locator('.home-hero').screenshot({ path: `test-results/home-hero-${viewport.label}.png` });
+    const homeCta = page.locator('.home-final');
     await expect(homeCta).toBeVisible();
+    await homeCta.locator('img').scrollIntoViewIfNeeded();
+    await expect.poll(() => homeCta.locator('img').evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
     await page.screenshot({ path: `test-results/home-cta-${viewport.label}.png`, fullPage: true });
   }
 

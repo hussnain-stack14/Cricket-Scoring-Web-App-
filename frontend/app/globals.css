@@ -9,14 +9,16 @@
   --space-8: 32px;
   --control-height: 44px;
   --radius-control: 10px;
-  --green: #0b903f;
-  --green-deep: #0b903f;
-  --accent: #0b903f;
-  --bg: #f9fafb;
-  --ink: #111827;
-  --muted: #6b7280;
-  --lime: #e2f0e6;
-  --line: #e5e7eb;
+  /* Official Crease default palette. Legacy aliases below point here so the
+     existing application has one theme system rather than a parallel rewrite. */
+  --green: #08783d;
+  --green-deep: #06452d;
+  --accent: #08783d;
+  --bg: #f8faf8;
+  --ink: #101d17;
+  --muted: #5c6c64;
+  --lime: #eaf7ee;
+  --line: #dfe7e1;
   --red: #b91c1c;
   --surface: #fff;
   --surface-muted: #f9fafb;
@@ -30,14 +32,18 @@
   --color-text-muted: var(--muted);
   --color-border: var(--line);
   --color-accent: var(--accent);
-  --color-primary: #0b903f;
-  --color-primary-hover: #0b903f;
-  --color-primary-dark: #0b903f;
-  --color-primary-soft: #e2f0e6;
-  --color-primary-border: #badcc4;
-  --color-primary-text: #0b903f;
-  --color-primary-glow: #0b903f24;
-  --color-primary-gradient: linear-gradient(135deg, #0b903f, #0b903f);
+  --color-primary: #08783d;
+  --color-primary-hover: #06452d;
+  --color-primary-dark: #06452d;
+  --color-primary-soft: #eaf7ee;
+  --color-primary-border: #bfe3ca;
+  --color-primary-text: #06452d;
+  --color-primary-foreground: #fff;
+  --color-accent: #b8ef4b;
+  --color-accent-foreground: #101d17;
+  --color-focus: #08783d;
+  --color-primary-glow: #08783d24;
+  --color-primary-gradient: linear-gradient(135deg, #08783d, #06452d);
 }
 [data-theme='red-ball'] {
   --green: #a03336;
@@ -50,6 +56,10 @@
   --color-primary-soft: #ff7679;
   --color-primary-border: #ff7679;
   --color-primary-text: #740000;
+  --color-primary-foreground: #fff;
+  --color-accent: #ff7679;
+  --color-accent-foreground: #520100;
+  --color-focus: #a03336;
   --color-primary-glow: #a0333624;
   --color-primary-gradient: linear-gradient(135deg, #a03336, #740000);
 }
@@ -64,6 +74,10 @@
   --color-primary-soft: #deecfb;
   --color-primary-border: #bedaf7;
   --color-primary-text: #1666ba;
+  --color-primary-foreground: #fff;
+  --color-accent: #7ab3ef;
+  --color-accent-foreground: #101d17;
+  --color-focus: #368ce7;
   --color-primary-glow: #368ce724;
   --color-primary-gradient: linear-gradient(135deg, #368ce7, #1666ba);
 }
@@ -2742,6 +2756,37 @@ pre {
 .dashboard-welcome {
   margin-bottom: 18px;
 }
+.dashboard-primary-action { flex: none; text-decoration: none; }
+@media (max-width: 899px) {
+  .dashboard-welcome {
+    display: flex;
+    min-height: 142px;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--line));
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--color-primary-text), color-mix(in srgb, var(--color-primary) 78%, #10251a));
+    color: #fff;
+  }
+  .dashboard-welcome h2 { max-width: 230px; font-size: 22px; line-height: 1.08; }
+  .dashboard-welcome .dashboard-kicker,
+  .dashboard-welcome .dashboard-summary { color: #ffffffd9; }
+  .dashboard-welcome .dashboard-summary { max-width: 220px; font-size: 12px; }
+  .dashboard-primary-action { min-height: 42px; padding: 0 12px; white-space: nowrap; }
+  .dashboard-stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .dashboard-stat-card { grid-template-columns: 1fr; min-height: 82px; gap: 4px; padding: 10px; }
+  .dashboard-stat-icon { width: 30px; height: 30px; }
+  .dashboard-stat-content strong { font-size: 19px; }
+  .dashboard-stat-arrow, .dashboard-stat-trend { display: none; }
+  .dashboard-overview-grid { display: grid; gap: 10px; }
+  .dashboard-panel { padding: 14px; }
+  .dashboard-live-panel .match-card-item:not(:first-child),
+  .dashboard-recent .match-card-item:not(:first-child) { display: none; }
+  .dashboard-side-column { gap: 10px; }
+  .quick-actions-panel { display: none; }
+}
 .dashboard-kicker {
   margin: 0 0 4px;
   color: var(--muted);
@@ -4716,6 +4761,216 @@ pre {
 .team-account-identity small {
   color: var(--muted);
 }
+
+/* The header deliberately exposes one account-aware More menu. Keeping the
+   rows on a shared grid prevents icon drift between links and sign-out. */
+.account-more-panel {
+  width: min(280px, calc(100vw - 24px));
+  padding: 9px;
+}
+.account-more-panel .team-account-menu {
+  gap: 9px;
+}
+.account-more-panel .team-account-identity {
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 4px 3px 12px;
+}
+.team-account-avatar {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+.team-account-identity > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.account-menu-actions {
+  display: grid;
+  gap: 2px;
+}
+.account-menu-item {
+  display: grid;
+  width: 100%;
+  min-height: 42px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.account-menu-item > svg {
+  width: 19px;
+  height: 19px;
+}
+.account-menu-item:hover,
+.account-menu-item:focus-visible {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  text-decoration: none;
+}
+.account-menu-item:focus-visible,
+.header-more-trigger:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 42%, transparent);
+  outline-offset: 2px;
+}
+.account-menu-item.signout-link {
+  margin-top: 3px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 10px 10px;
+  color: var(--danger, #a1342e);
+}
+.account-menu-item.signout-link:hover,
+.account-menu-item.signout-link:focus-visible {
+  background: color-mix(in srgb, #e05245 10%, transparent);
+  color: var(--danger, #a1342e);
+}
+.account-more-panel .sync-status-bar {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+}
+.account-more-panel .sync-status-bar > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-more-panel .sync-status-bar > small {
+  margin-left: 0;
+  white-space: nowrap;
+}
+.account-more-panel .sync-status-bar button {
+  min-height: 28px;
+  margin-left: auto;
+  padding: 4px 7px;
+  font-size: 11px;
+}
+.account-menu-sync-error {
+  margin: -2px 0 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #fff0eb;
+  color: #983b1b;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.app-startup-splash {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  background: #073a26;
+  color: #fff;
+  text-align: center;
+  animation: app-splash-enter 220ms ease-out both;
+}
+.app-startup-splash .crease-logo {
+  justify-content: center;
+  color: #fff;
+}
+.app-startup-splash .crease-logo img {
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 10px 20px #0000003b);
+}
+.app-startup-splash .crease-logo-word {
+  font-size: 32px;
+}
+.app-startup-splash > span {
+  color: #d8eadc;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+@keyframes app-splash-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.install-success-content {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 8px 2px 2px;
+  text-align: center;
+}
+.install-success-content p {
+  max-width: 260px;
+  margin: 0;
+  color: var(--muted);
+}
+.install-success-mark {
+  position: relative;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  border-radius: 24px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-primary) 10%, transparent);
+  animation: install-success-pop 300ms cubic-bezier(.2,.8,.2,1) both;
+}
+.install-success-mark .crease-logo img {
+  width: 48px;
+  height: 48px;
+}
+.install-success-mark > svg {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  padding: 4px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--color-primary-text);
+}
+@keyframes install-success-pop {
+  from { opacity: 0; transform: scale(.84); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (max-width: 1023px) {
+  .mobile-header-actions .account-more-panel {
+    position: fixed;
+    z-index: 80;
+    top: calc(64px + env(safe-area-inset-top));
+    right: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-startup-splash,
+  .install-success-mark { animation: none; }
+}
 .settings-home {
   display: grid;
   gap: 14px;
@@ -5078,6 +5333,27 @@ pre {
 }
 @media (prefers-reduced-motion: reduce) { .dashboard-stat-card, .quick-action-link { transition: none; } }
 
+/* Final mobile density/readability pass. Kept late so legacy dashboard rules cannot
+   override the match-first presentation above. */
+@media (max-width: 899px) {
+  .dashboard-welcome { display:flex; min-height:142px; align-items:flex-end; justify-content:space-between; gap:14px; padding:18px; border:1px solid color-mix(in srgb,var(--color-primary) 26%,var(--line)); border-radius:18px; background:linear-gradient(135deg,var(--color-primary-text),color-mix(in srgb,var(--color-primary) 78%,#10251a)); color:#fff; }
+  .dashboard-welcome h2 { max-width:230px; font-size:22px; line-height:1.08; }
+  .dashboard-welcome .dashboard-kicker,.dashboard-welcome .dashboard-summary { color:#ffffffd9; }
+  .dashboard-welcome .dashboard-summary { max-width:220px; font-size:12px; }
+  .dashboard-primary-action { min-height:42px; padding:0 12px; white-space:nowrap; }
+  .dashboard-stat-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+  .dashboard-stat-card { grid-template-columns:1fr; min-height:82px; gap:4px; padding:10px; }
+  .dashboard-stat-icon { width:30px; height:30px; }
+  .dashboard-stat-content strong { font-size:19px; }
+  .dashboard-stat-arrow,.dashboard-stat-trend { display:none; }
+  .dashboard-overview-grid { display:grid; gap:10px; }
+  .dashboard-panel { padding:14px; }
+  .dashboard-live-panel .match-card-item:not(:first-child),.dashboard-recent .match-card-item:not(:first-child) { display:none; }
+  .quick-actions-panel { display:none; }
+  .match-card-details { font-size:12px; }
+  .bottom-nav a { font-size:10px; font-weight:650; }
+}
+
 /* Stadium artwork is confined to the dashboard welcome section. */
 .dashboard-welcome {
   position: relative;
@@ -5153,6 +5429,10 @@ pre {
 .crease-logo > img { display: block; width: 34px; height: 34px; flex: 0 0 auto; object-fit: contain; }
 .crease-logo-word { color: #10251a; font-size: 25px; font-weight: 850; letter-spacing: -1.55px; }
 .crease-logo-word > span { color: #0b903f; }
+.crease-logo-onLight .crease-logo-word { color: #101d17; }
+.crease-logo-onLight .crease-logo-word > span { color: #08783d; }
+.crease-logo-onDark .crease-logo-word { color: #fff; }
+.crease-logo-onDark .crease-logo-word > span { color: #b8ef4b; }
 .crease-logo-small { gap: 7px; }
 .crease-logo-small > img { width: 29px; height: 29px; }
 .crease-logo-small .crease-logo-word { font-size: 21px; }
@@ -5847,6 +6127,8 @@ pre {
 .ranking-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:20px 0 12px; }
 .ranking-heading h2 { font-size:20px; margin:0; }
 .ranking-heading>span { font-size:12px; color:#687a6d; }
+.ranking-heading > div { min-width:0; }
+.ranking-heading p { margin:3px 0 0; color:var(--color-text-muted); font-size:13px; }
 .ranking-qualification { margin:12px 0; font-size:13px; }
 .ranking-qualification summary { cursor:pointer; min-height:32px; }
 .ranking-desktop { border:1px solid #e0e8e1; border-radius:14px; overflow:auto; background:white; }
@@ -5878,6 +6160,18 @@ pre {
 }
 @media(prefers-reduced-motion:reduce) { .leaderboards [role=tabpanel] { animation:none!important; } .ranking-mobile details { transition:none; } }
 
+/* Keep dashboard copy readable: stadium art is intentionally retired from the
+   action surface, rather than competing with live-match controls. */
+.dashboard-welcome { background:linear-gradient(135deg,var(--color-primary-text),var(--color-primary)) !important; }
+.dashboard-welcome::after { display:none; }
+.dashboard-welcome h2 { color:#fff; }
+.dashboard-kicker,.dashboard-summary { color:#ffffffd9; }
+@media (max-width:899px) {
+  .dashboard-welcome > div:first-child { max-width:min(100% - 108px,230px); }
+  .ranking-heading { align-items:flex-start; }
+  .ranking-heading > span { flex:none; margin-top:4px; white-space:nowrap; }
+}
+
 /* Theme-safe mobile refinements. These override legacy green surface literals without duplicating screens. */
 @media (max-width: 360px) {
   .mobile-page-heading { gap: var(--space-2); }
@@ -5905,3 +6199,35 @@ pre {
 .match-card-menu-panel { position: absolute; top: 42px; right: 0; display: grid; min-width: 154px; gap: 5px; padding: 7px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 14px 30px #152b2024; }
 .match-card-menu-panel .button, .match-card-menu-panel .report-actions { width: 100%; margin: 0; justify-content: flex-start; }
 .match-card-menu-panel .report-actions { display: grid; gap: 5px; }
+
+/* Compact, cricket-focused statistics presentation. */
+.leaderboards { max-width: 1160px; }
+.leaderboards [role=tablist] { background:var(--color-surface-muted); border:1px solid var(--color-border); }
+.leaderboards [role=tab] { color:var(--color-text-muted); font-weight:650; }
+.leaderboards [aria-selected=true] { color:var(--color-primary-text); background:var(--color-surface); box-shadow:0 2px 8px color-mix(in srgb,var(--color-primary) 10%,transparent); }
+.ranking-heading { margin:18px 0 10px; }
+.ranking-heading h2 { color:var(--color-text); letter-spacing:-.35px; }
+.ranking-heading > span { padding:5px 8px; border-radius:999px; background:var(--color-primary-soft); color:var(--color-primary-text); font-weight:700; }
+.ranking-explainer { padding:0; border:1px solid var(--color-border); border-radius:12px; background:var(--color-surface); overflow:hidden; }
+.ranking-explainer summary { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; font-weight:700; color:var(--color-text); list-style:none; }
+.ranking-explainer summary::-webkit-details-marker { display:none; }
+.ranking-explainer summary svg:last-child { margin-left:auto; transition:transform 150ms ease; }
+.ranking-explainer[open] summary svg:last-child { transform:rotate(180deg); }
+.ranking-explainer[open] summary { border-bottom:1px solid var(--color-border); }
+.ranking-explainer p { padding:0 12px; line-height:1.5; }
+@media(max-width:767px) {
+ .leaderboards [role=tablist] { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; padding:4px; margin-bottom:12px; }
+ .leaderboards [role=tab] { min-height:42px; padding:8px 6px; font-size:12px; }
+ .ranking-filters { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:10px 0; }
+ .ranking-filters .field > span { font-size:11px; }
+ .ranking-filters select { min-height:40px; padding-inline:9px; font-size:12px; }
+ .ranking-heading { margin-top:14px; }
+ .ranking-heading h2 { font-size:19px; }
+ .ranking-heading > span { font-size:11px; }
+ .ranking-mobile details { padding:13px; border-color:var(--color-border); box-shadow:0 2px 8px color-mix(in srgb,#10251a 6%,transparent); }
+ .ranking-player { font-size:14px; }
+ .ranking-primary { font-size:14px; }
+ .ranking-mobile dl { gap:10px; font-size:12px; }
+ .leaderboards .empty { min-height:160px; padding:20px 14px; }
+ .leaderboards .empty h2 { font-size:18px; }
+}

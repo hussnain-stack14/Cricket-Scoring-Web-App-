@@ -132,6 +132,21 @@ test('cached account dashboard renders before background validation and navigati
   expect(released).toBe(false);
   await expect.poll(() => released).toBe(true);
   expect(authCalls).toBe(1);
+  const topbarActions = page.locator('.desktop-topbar-actions');
+  await expect(topbarActions.getByRole('button', { name: 'Open account and more options' })).toBeVisible();
+  await expect(topbarActions.getByRole('button', { name: 'Install Crease' })).toBeVisible();
+  await expect(topbarActions.getByRole('link', { name: 'New match' })).toHaveCount(0);
+  await topbarActions.getByRole('button', { name: 'Open account and more options' }).click();
+  const accountActions = page.getByRole('navigation', { name: 'Account actions' });
+  await expect(page.getByText('Ground scorer', { exact: true })).toBeVisible();
+  await expect(accountActions.getByRole('link', { name: 'Profile', exact: true })).toBeVisible();
+  await expect(accountActions.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(accountActions.getByRole('link', { name: 'Account settings', exact: true })).toBeVisible();
+  await expect(accountActions.getByRole('link', { name: 'Security', exact: true })).toBeVisible();
+  await expect(accountActions.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(accountActions).toHaveCount(0);
+  await expect(topbarActions.getByRole('button', { name: 'Open account and more options' })).toBeFocused();
   await page.evaluate(() => (window.__navigationMarker = 'preserved'));
   await page.getByRole('link', { name: 'Matches', exact: true }).filter({ visible: true }).click();
   await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
@@ -160,4 +175,28 @@ test('login lock shows remaining duration and disables retries', async ({ page }
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('.auth-error')).toContainText('Try again in 10:00');
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeDisabled();
+});
+
+test('startup splash is limited to boot and confirmed installation gets one compact notice', async ({
+  page,
+}) => {
+  await workspace(page);
+  await expect(page.locator('.app-startup-splash')).toHaveCount(0);
+  await page.goto('/app/matches/');
+  await expect(page.locator('.app-startup-splash')).toHaveCount(0);
+
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent('crease:pwa-install-state', { detail: { state: 'installed' } }),
+    );
+    window.dispatchEvent(
+      new CustomEvent('crease:pwa-install-state', { detail: { state: 'installed' } }),
+    );
+  });
+  const confirmation = page.getByRole('dialog', { name: 'Crease is installed!' });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByText("You're ready to score your next match.")).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Crease is installed!' })).toHaveCount(1);
+  await confirmation.getByRole('button', { name: 'Close' }).click();
+  await expect(confirmation).toHaveCount(0);
 });

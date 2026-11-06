@@ -1,6 +1,8 @@
 import './globals.css';
 import './marketing.css';
 import './marketing-fixes.css';
+import './home.css';
+import './download.css';
 import ThemeController from '../components/ThemeController';
 import PwaInstallCapture from '../components/PwaInstallCapture';
 import { siteUrl } from '../lib/seo';

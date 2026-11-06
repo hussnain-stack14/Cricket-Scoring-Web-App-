@@ -76,7 +76,7 @@ export default function Landing() {
     <div className="landing">
       <header className="landing-nav">
         <a className="landing-brand" href="/" aria-label="Crease home">
-          <CreaseLogo />
+          <CreaseLogo appearance="onLight" />
         </a>
         <button
           className="landing-menu-toggle"
@@ -356,7 +356,7 @@ export default function Landing() {
 
       <footer className="landing-footer">
         <a className="landing-brand" href="/" aria-label="Crease home">
-          <CreaseLogo />
+          <CreaseLogo appearance="onDark" />
         </a>
         <p>Your game, recorded. Your records stay on your device.</p>
         <nav aria-label="Footer navigation">

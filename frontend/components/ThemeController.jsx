@@ -11,7 +11,7 @@ export function setTheme(theme) {
   localStorage.setItem(THEME_STORAGE_KEY, next);
   document.querySelector('meta[name="theme-color"]')?.setAttribute(
     'content',
-    next === 'red-ball' ? '#B91C1C' : next === 'blue' ? '#2563EB' : '#166534',
+    next === 'red-ball' ? '#A03336' : next === 'blue' ? '#368CE7' : '#06452D',
   );
 }
 

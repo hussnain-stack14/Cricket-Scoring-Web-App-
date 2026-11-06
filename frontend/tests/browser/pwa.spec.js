@@ -91,7 +91,7 @@ test('production install controls, manifest, icons and offline precache are accu
   await expect(
     page.getByText('Use your browser address-bar install icon or its Install app menu item.'),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Install Crease' }).click();
+  await page.getByRole('region', { name: 'Every Ball. Every Moment.' }).getByRole('button', { name: 'Install Crease' }).click();
 
   const promptPreserved = await page.evaluate(() => {
     const event = new Event('beforeinstallprompt', { cancelable: true });
@@ -108,8 +108,9 @@ test('production install controls, manifest, icons and offline precache are accu
   await expect.poll(() => page.evaluate(() => window.__creasePromptCalled)).toBe(true);
 
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
-  await expect(page.getByRole('link', { name: 'Open Crease' })).toBeVisible();
-  await page.getByRole('link', { name: 'Open Crease' }).click();
+  const heroOpenApp = page.getByRole('region', { name: 'Every Ball. Every Moment.' }).getByRole('link', { name: 'Open Crease' });
+  await expect(heroOpenApp).toBeVisible();
+  await heroOpenApp.click();
   await expect(page).toHaveURL(/\/app\/$/);
   expect(consoleErrors).toEqual([]);
 });

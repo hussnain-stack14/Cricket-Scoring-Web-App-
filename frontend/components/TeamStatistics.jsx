@@ -406,16 +406,9 @@ export default function TeamStatistics({ team, data, onBack }) {
             <Metric title="Highest completed score" value={show(stats.highest)} />
             <Metric title="Lowest completed score" value={show(stats.lowest)} />
           </div>
-          <p className="help">
-            Only completed matches count. No-result matches are not currently supported by scoring.
-          </p>
           <div className="team-top-grid">
             <section className="card">
-              <h3>Top batsmen</h3>
-              <p className="help">
-                Crease Performance Score = average × strike rate ÷ 100. Requires 2 innings and 20
-                balls faced.
-              </p>
+              <h3>Top Batters</h3>
               {topBatters.length ? (
                 topBatters.map((player, index) => (
                   <div className="leader-row" key={player.id}>
@@ -432,7 +425,7 @@ export default function TeamStatistics({ team, data, onBack }) {
               )}
             </section>
             <section className="card">
-              <h3>Top bowlers</h3>
+              <h3>Top Bowlers</h3>
               <p className="help">
                 Crease Performance Score = wickets × 3 + dot-ball rate ÷ 10 − economy − bowling
                 average ÷ 10. Requires 2 innings, 12 legal balls and 2 wickets.

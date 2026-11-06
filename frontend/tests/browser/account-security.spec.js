@@ -147,7 +147,9 @@ test('profile sign-out dialog can be cancelled or escaped without leaving a bloc
   await page.goto('/app/');
   await expect(page.getByRole('heading', { name: 'Your cricket, at a glance.' })).toBeVisible();
 
-  const accountMenu = page.locator('.desktop-topbar .account-popover summary');
+  const accountMenu = page
+    .locator('.desktop-topbar')
+    .getByRole('button', { name: 'Open account and more options' });
   await accountMenu.click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   const dialog = page.locator('dialog.sheet[open]');

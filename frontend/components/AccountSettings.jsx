@@ -403,7 +403,7 @@ export default function AccountSettings() {
       </header>
 
       <main className="auth-main">
-        <div className="auth-hero" style={{ marginBottom: '1.5rem' }}>
+        <div className="auth-hero" id="account-profile" style={{ marginBottom: '1.5rem' }}>
           <span className="auth-kicker">
             <Shield size={14} /> ACCOUNT SETTINGS
           </span>

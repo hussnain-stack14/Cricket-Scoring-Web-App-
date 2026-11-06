@@ -1,6 +1,7 @@
 ﻿'use client';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { ChevronDown, Info } from 'lucide-react';
 import { Empty, Field, Tabs } from './ui';
 import TeamStatistics from './TeamStatistics';
 import {
@@ -198,30 +199,25 @@ export default function Statistics({ data }) {
         ) : (
           <>
             <div className="ranking-heading">
-              <h2>Top 20 {category} — {label}</h2>
+              <div>
+                <h2>{category === 'All-Rounders' ? 'Top All-Rounders' : `Top ${category}`}</h2>
+                <p>{label || 'Performance'}</p>
+              </div>
               <span>{rows.length} {usesQualification ? 'qualified players' : 'players'}</span>
             </div>
-            {category === 'All-Rounders' && (
-              <p className="help">
-                All-rounder rating = batting rating × bowling rating ÷ 1000. Legacy Crease points
-                remain available as a separate metric.
-              </p>
-            )}
             <details className="ranking-qualification ranking-explainer">
-              <summary>How rankings work</summary>
+              <summary>
+                <Info size={16} aria-hidden="true" />
+                <span>How rankings work</span>
+                <ChevronDown size={16} aria-hidden="true" />
+              </summary>
               <p className="help">
-                Traditional tables use completed-match event history only. Each row has a unique
-                rank using documented tie-breakers and stable player IDs. Rate and rating tables
-                require 3 appearances and 24 relevant balls; players below that threshold remain
-                visible as provisional.
+                Rankings use completed matches and stable tie-breakers. Rate and rating tables need
+                enough appearances and relevant balls; other players remain provisional.
               </p>
+              {category === 'All-Rounders' && <p className="help">Performance rating combines the existing batting and bowling ratings. Legacy Crease points remain available as a separate method.</p>}
+              {metric === 'bowlingPerformance' && <p className="help">Bowling performance prioritizes wickets, then lower average and economy. Wicketless bowlers are compared by economy.</p>}
             </details>
-            {metric === 'bowlingPerformance' && (
-              <p className="help">
-                Bowling rankings prioritize wickets, followed by lower bowling average and lower
-                economy. Wicketless bowlers are compared by economy.
-              </p>
-            )}
             {usesQualification && (
               <details className="ranking-qualification">
                 <summary>Qualification</summary>
@@ -260,10 +256,20 @@ export default function Statistics({ data }) {
               </details>
             )}
             {!rows.length ? (
-              <Empty title={usesQualification ? 'No eligible players' : 'No players yet'}>
-                {usesQualification
-                  ? 'Complete matches or adjust your filters and qualification.'
-                  : 'Complete matches or adjust your filters.'}
+              <Empty
+                title={
+                  !data.matches.some((match) => match.status === 'completed')
+                    ? `No ${category === 'All-Rounders' ? 'all-rounder' : category === 'Bowlers' ? 'bowling' : 'batting'} stats yet`
+                    : usesQualification
+                      ? 'No qualifying performance records'
+                      : 'No matching statistics'
+                }
+              >
+                {!data.matches.some((match) => match.status === 'completed')
+                  ? 'Finish matches to see rankings.'
+                  : usesQualification
+                    ? 'Finish more matches or adjust the qualification.'
+                    : 'Try changing your filters.'}
               </Empty>
             ) : (
               <>

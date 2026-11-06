@@ -5,10 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users,
   UserRound,
-  Ellipsis,
   EllipsisVertical,
   Settings as SettingsIcon,
-  CircleHelp,
   Home,
   Plus,
   ArrowUpRight,
@@ -22,7 +20,6 @@ import {
   Clock3,
   CheckCircle2,
   ArrowRight,
-  Cloud,
   Download,
 } from 'lucide-react';
 import {
@@ -60,8 +57,85 @@ const Settings = dynamic(() => import('./Settings'), {
 import { useOffline } from './offline';
 import CreaseLogo from './CreaseLogo';
 import { DownloadScorecardButton } from './ReportActions';
-import SyncStatus, { SYNC_STATUS_LABELS } from './SyncStatus';
 import TeamAccountMenu from './TeamAccountMenu';
+import { PWA_INSTALL_EVENT } from './PwaInstallCapture';
+
+// Retain already-read local state while Next transitions between app routes. The
+// cache exists only for this JavaScript session; Dexie remains the source of truth.
+let appShellCache = null;
+
+function readStartupSplashState() {
+  if (typeof window === 'undefined') return true;
+  try {
+    return sessionStorage.getItem('crease-app-started') !== '1';
+  } catch {
+    return true;
+  }
+}
+
+function StartupSplash() {
+  return (
+    <div className="app-startup-splash" role="status" aria-label="Starting Crease">
+      <CreaseLogo />
+      <span>Preparing your scorebook</span>
+    </div>
+  );
+}
+
+function MoreMenu({ children }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const restoreAfterClose = useRef(false);
+  useEffect(() => {
+    if (open || !restoreAfterClose.current) return;
+    restoreAfterClose.current = false;
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsidePress = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      window.setTimeout(() => triggerRef.current?.focus(), 0);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+  return (
+    <div className="header-more-menu" ref={rootRef}>
+      <button
+        ref={triggerRef}
+        className="header-more-trigger"
+        type="button"
+        aria-label="Open account and more options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <EllipsisVertical size={21} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="header-more-panel account-more-panel" aria-label="Account and more">
+          {children(
+            () => setOpen(false),
+            () => {
+              restoreAfterClose.current = true;
+              setOpen(false);
+            },
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function userError(error) {
   const message = error instanceof Error ? error.message : '';
   if (/another tab|revision/i.test(message))
@@ -77,15 +151,14 @@ function userError(error) {
   return message && message.length < 180 ? message : 'Something went wrong. Please try again.';
 }
 export default function App({ screen }) {
-  const [w, setW] = useState(null),
-    [data, setData] = useState(null),
+  const [w, setW] = useState(() => appShellCache?.w ?? null),
+    [data, setData] = useState(() => appShellCache?.data ?? null),
     [error, setError] = useState(''),
     [status, setStatus] = useState(''),
-    [loaded, setLoaded] = useState(false),
+    [loaded, setLoaded] = useState(() => Boolean(appShellCache)),
     [name, setName] = useState(''),
     [filter, setFilter] = useState('live'),
     [sidebarCollapsed, setSidebarCollapsed] = useState(false),
-    [moreMenuOpen, setMoreMenuOpen] = useState(false),
     [installHelpOpen, setInstallHelpOpen] = useState(false);
   const [installBannerDismissed, setInstallBannerDismissed] = useState(true);
   const [deleting, setDeleting] = useState(null);
@@ -94,19 +167,21 @@ export default function App({ screen }) {
     const timer = setInterval(() => setClock(Date.now()), 60000);
     return () => clearInterval(timer);
   }, []);
-  const [session, setSession] = useState(null);
-  const [syncMeta, setSyncMeta] = useState(null);
-  const [pendingSync, setPendingSync] = useState(0);
+  const [session, setSession] = useState(() => appShellCache?.session ?? null);
+  const [syncMeta, setSyncMeta] = useState(() => appShellCache?.syncMeta ?? null);
+  const [pendingSync, setPendingSync] = useState(() => appShellCache?.pendingSync ?? 0);
   const [syncing, setSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [showStartupSplash, setShowStartupSplash] = useState(readStartupSplashState);
+  const [installCelebration, setInstallCelebration] = useState(false);
   const busy = useRef(false);
-  const moreMenuRef = useRef(null);
   const syncBusy = useRef(false);
   const syncRef = useRef(null);
   const automaticUpdateStarted = useRef(false);
   const validatedSession = useRef(null);
   const sessionRef = useRef(session);
   const workspaceRef = useRef(w);
+  const installCelebrated = useRef(false);
   sessionRef.current = session;
   workspaceRef.current = w;
   const offline = useOffline();
@@ -138,20 +213,34 @@ export default function App({ screen }) {
     }
   }
   useEffect(() => {
-    if (!moreMenuOpen) return undefined;
-    const closeOnOutsidePress = (event) => {
-      if (!moreMenuRef.current?.contains(event.target)) setMoreMenuOpen(false);
+    if (!loaded) return;
+    setShowStartupSplash(false);
+    try {
+      sessionStorage.setItem('crease-app-started', '1');
+    } catch {
+      // This optional presentation preference must never affect scorekeeping.
+    }
+  }, [loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    appShellCache = w ? { w, data, session, syncMeta, pendingSync } : null;
+  }, [data, loaded, pendingSync, session, syncMeta, w]);
+  useEffect(() => {
+    const announceInstallation = (event) => {
+      if (event.detail?.state !== 'installed' || screen === 'match' || installCelebrated.current)
+        return;
+      try {
+        if (sessionStorage.getItem('crease-install-celebrated') === '1') return;
+        sessionStorage.setItem('crease-install-celebrated', '1');
+      } catch {
+        // The in-memory guard below still prevents duplicate notices for this app run.
+      }
+      installCelebrated.current = true;
+      setInstallCelebration(true);
     };
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setMoreMenuOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutsidePress);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePress);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [moreMenuOpen]);
+    window.addEventListener(PWA_INSTALL_EVENT, announceInstallation);
+    return () => window.removeEventListener(PWA_INSTALL_EVENT, announceInstallation);
+  }, [screen]);
   useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine);
     updateOnlineState();
@@ -173,8 +262,15 @@ export default function App({ screen }) {
   }, [w?.id, screen]);
   async function refresh() {
     const ws = await workspace();
+    const nextData = ws ? await all(ws.id) : null;
     setW(ws);
-    setData(ws ? await all(ws.id) : null);
+    setData(nextData);
+    // A route can begin before React has committed the state update above. Update
+    // the presentation cache in the same turn so a just-saved draft is never
+    // rendered as an older cached snapshot on the destination route.
+    appShellCache = ws
+      ? { w: ws, data: nextData, session: sessionRef.current, syncMeta, pendingSync }
+      : null;
     setLoaded(true);
   }
   useEffect(() => {
@@ -184,13 +280,24 @@ export default function App({ screen }) {
         const currentSession = await getActiveCachedAccountSession();
         const ws = currentSession ? await workspace() : await findGuestWorkspace();
         if (cancelled) return;
-        setSession(currentSession ? { ...currentSession, offlineCached: true } : null);
+        const cachedSession = currentSession ? { ...currentSession, offlineCached: true } : null;
+        const localData = ws ? await all(ws.id) : null;
+        setSession(cachedSession);
         setW(ws);
-        setData(ws ? await all(ws.id) : null);
+        setData(localData);
         if (ws && currentSession) {
           const syncState = await getSyncState(ws.id);
           setSyncMeta(syncState.meta);
           setPendingSync(syncState.pending);
+          appShellCache = {
+            w: ws,
+            data: localData,
+            session: cachedSession,
+            syncMeta: syncState.meta,
+            pendingSync: syncState.pending,
+          };
+        } else if (ws) {
+          appShellCache = { w: ws, data: localData, session: null, syncMeta: null, pendingSync: 0 };
         }
         setLoaded(true);
       } catch (e) {
@@ -360,34 +467,6 @@ export default function App({ screen }) {
       document.removeEventListener('visibilitychange', triggerSync);
     };
   }, [loaded, session?.offlineCached, session?.teamId, w?.id]);
-  useEffect(() => {
-    const closeOthers = (current) => {
-      document.querySelectorAll('.header-popover[open]').forEach((menu) => {
-        if (menu !== current) menu.open = false;
-      });
-    };
-    const onToggle = (event) => {
-      if (event.target.open) closeOthers(event.target);
-    };
-    const onPointerDown = (event) => {
-      if (!event.target.closest('.header-popover')) closeOthers(null);
-    };
-    const onKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
-      const openMenu = document.querySelector('.header-popover[open]');
-      if (!openMenu) return;
-      openMenu.open = false;
-      openMenu.querySelector('summary')?.focus();
-    };
-    document.addEventListener('toggle', onToggle, true);
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('toggle', onToggle, true);
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, []);
   async function run(fn, { awaitSync = false } = {}) {
     if (busy.current) return false;
     busy.current = true;
@@ -499,7 +578,6 @@ export default function App({ screen }) {
     : syncing
       ? 'syncing'
       : syncMeta?.syncStatus || (session ? 'pending' : 'unauthenticated');
-  const currentSyncLabel = SYNC_STATUS_LABELS[currentSyncStatus] || 'Sync needs attention';
 
   function renderDraftCard(draft) {
     const title = [draft.teamA, draft.teamB]
@@ -619,6 +697,7 @@ export default function App({ screen }) {
   }
   return (
     <div className={`app app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {showStartupSplash && <StartupSplash />}
       {deleting && (
         <Sheet
           title={deleting.table === 'drafts' ? 'Delete draft?' : 'Delete match?'}
@@ -707,71 +786,24 @@ export default function App({ screen }) {
                 <Download size={19} aria-hidden="true" />
               </button>
             )}
-            <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
-              <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
-                <span className="header-status-dot" />
-                <Cloud size={17} />
-                <span className="offline-readiness-label">{currentSyncLabel}</span>
-              </summary>
-              <div className="header-popover-panel">
-                <SyncStatus
-                  status={currentSyncStatus}
-                  pending={pendingSync}
+            <MoreMenu>
+              {(closeMenu, restoreFocus) => (
+                <TeamAccountMenu
+                  session={session}
+                  workspaceId={w?.id}
+                  syncStatus={currentSyncStatus}
+                  pendingSync={pendingSync}
                   lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
-                  error={syncMeta?.lastError}
-                  onSync={session ? syncNow : undefined}
+                  syncError={syncMeta?.lastError}
                   syncing={syncing}
-                  variant="popover"
+                  onSync={session ? syncNow : undefined}
                   online={isOnline}
                   offlineReady={offline.ready}
+                  onNavigate={closeMenu}
+                  onDismiss={restoreFocus}
                 />
-              </div>
-            </details>
-            <details className="header-popover account-popover">
-              <summary aria-label="Account menu" title="Account">
-                <UserRound size={19} />
-              </summary>
-              <div className="header-popover-panel account-popover-panel">
-                <TeamAccountMenu session={session} workspaceId={w?.id} />
-              </div>
-            </details>
-            <div className="header-more-menu" ref={moreMenuRef}>
-              <button
-                className="header-more-trigger"
-                type="button"
-                aria-label="Open settings and more options"
-                aria-haspopup="menu"
-                aria-expanded={moreMenuOpen}
-                onClick={() => setMoreMenuOpen((open) => !open)}
-              >
-                <EllipsisVertical size={21} aria-hidden="true" />
-              </button>
-              {moreMenuOpen && (
-                <div className="header-more-panel" role="menu" aria-label="Settings and more">
-                  <Link
-                    href={`${base}/more/`}
-                    role="menuitem"
-                    onClick={() => setMoreMenuOpen(false)}
-                  >
-                    <SettingsIcon size={17} aria-hidden="true" /> Settings
-                  </Link>
-                  <Link
-                    href={`${base}/more/#backup`}
-                    role="menuitem"
-                    onClick={() => setMoreMenuOpen(false)}
-                  >
-                    <Ellipsis size={17} aria-hidden="true" /> Backup & more
-                  </Link>
-                  <Link
-                    href={`${base}/more/#about`}
-                    role="menuitem"
-                    onClick={() => setMoreMenuOpen(false)}
-                  >
-                    <CircleHelp size={17} aria-hidden="true" /> Help & about
-                  </Link>
-                </div>
               )}
-            </div>
+            </MoreMenu>
           </div>
         </header>
         <header className="desktop-topbar">
@@ -791,40 +823,24 @@ export default function App({ screen }) {
                 <Download size={18} aria-hidden="true" />
               </button>
             )}
-            <details className={`header-popover sync-popover sync-state-${currentSyncStatus}`}>
-              <summary aria-label={`Sync status: ${currentSyncLabel}`} title={currentSyncLabel}>
-                <span className="header-status-dot" />
-                <Cloud size={17} />
-                <span className="offline-readiness-label">{currentSyncLabel}</span>
-              </summary>
-              <div className="header-popover-panel">
-                <SyncStatus
-                  status={currentSyncStatus}
-                  pending={pendingSync}
+            <MoreMenu>
+              {(closeMenu, restoreFocus) => (
+                <TeamAccountMenu
+                  session={session}
+                  workspaceId={w?.id}
+                  syncStatus={currentSyncStatus}
+                  pendingSync={pendingSync}
                   lastSuccessfulSync={syncMeta?.lastSuccessfulSync}
-                  error={syncMeta?.lastError}
-                  onSync={session ? syncNow : undefined}
+                  syncError={syncMeta?.lastError}
                   syncing={syncing}
-                  variant="popover"
+                  onSync={session ? syncNow : undefined}
                   online={isOnline}
                   offlineReady={offline.ready}
+                  onNavigate={closeMenu}
+                  onDismiss={restoreFocus}
                 />
-              </div>
-            </details>
-            {w && ['dashboard', 'matches'].includes(screen) && (
-              <Link className="button compact" href={`${base}/setup/?new=1`}>
-                <Plus size={17} /> New match
-              </Link>
-            )}
-            <details className="header-popover account-popover">
-              <summary title={session?.teamName || 'Account'}>
-                <UserRound size={17} />
-                <span>{session?.teamName || 'Account'}</span>
-              </summary>
-              <div className="header-popover-panel account-popover-panel">
-                <TeamAccountMenu session={session} workspaceId={w?.id} />
-              </div>
-            </details>
+              )}
+            </MoreMenu>
           </div>
         </header>
         <main className={`app-content ${screen === 'setup' ? 'setup-page-content' : ''}`}>
@@ -914,16 +930,20 @@ export default function App({ screen }) {
                     <div className="dashboard-welcome">
                       <div>
                         <p className="dashboard-kicker">Welcome back, {w.name} 👋</p>
-                        <h2>Your cricket, at a glance.</h2>
+                        <h2>{liveMatches.length ? 'Your match is ready.' : 'Ready for the next match?'}</h2>
                         <p className="dashboard-summary">
-                          Track matches, manage teams, and keep your scorebooks in one place.
+                          {liveMatches.length
+                            ? `${liveMatches.length} active ${liveMatches.length === 1 ? 'match' : 'matches'} saved on this device.`
+                            : 'Create a scorebook and keep every ball in one place.'}
                         </p>
                       </div>
+                      <Link className="button dashboard-primary-action" href={liveMatches.length ? `${base}/match/?id=${liveMatches[0].id}` : `${base}/setup/?new=1`}>
+                        {liveMatches.length ? 'Resume match' : 'New match'} <ArrowRight size={17} />
+                      </Link>
                     </div>
                     <div className="dashboard-stat-grid">
                       {[
                         ['Total matches', matches.length, CalendarDays, `${base}/matches/`],
-                        ['Live matches', liveMatches.length, Play, `${base}/matches/`],
                         ['Completed', completedMatches.length, CheckCircle2, `${base}/reports/`],
                         [
                           'Teams',
@@ -955,7 +975,7 @@ export default function App({ screen }) {
                       ))}
                     </div>
                     <div className="dashboard-overview-grid">
-                      <section className="dashboard-panel">
+                      <section className="dashboard-panel dashboard-live-panel">
                         <div className="dashboard-panel-heading">
                           <h2>Live matches</h2>
                           <Link href={`${base}/matches/`}>
@@ -984,14 +1004,7 @@ export default function App({ screen }) {
                             {upcoming.slice(0, 4).map(renderMatchCard)}
                           </div>
                         ) : (
-                          <div className="dashboard-upcoming-empty">
-                            <CalendarDays size={30} aria-hidden="true" />
-                            <strong>No upcoming matches</strong>
-                            <span>Schedule a match to get started.</span>
-                            <Link className="button compact" href="/app/setup/?new=1">
-                              Schedule a match
-                            </Link>
-                          </div>
+                          <p className="dashboard-empty-note">No upcoming matches.</p>
                         )}
                       </section>
                     </div>
@@ -1239,6 +1252,20 @@ export default function App({ screen }) {
             <p>{installHelpText}</p>
             <p className="help">{offline.installationMessage}</p>
             <Button onClick={() => setInstallHelpOpen(false)}>Done</Button>
+          </Sheet>
+        )}
+        {installCelebration && (
+          <Sheet title="Crease is installed!" close={() => setInstallCelebration(false)}>
+            <div className="install-success-content">
+              <span className="install-success-mark" aria-hidden="true">
+                <CreaseLogo variant="icon" />
+                <CheckCircle2 size={27} />
+              </span>
+              <p>You&apos;re ready to score your next match.</p>
+              <Link className="button" href={`${base}/`} onClick={() => setInstallCelebration(false)}>
+                Open Crease <ArrowRight size={17} aria-hidden="true" />
+              </Link>
+            </div>
           </Sheet>
         )}
         <nav className="bottom-nav" aria-label="Main navigation">

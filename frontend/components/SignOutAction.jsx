@@ -18,7 +18,7 @@ import {
 const UNSYNCED_MESSAGE =
   'Your changes are saved on this device. The cloud could not be reached. Please retry when the connection is available.';
 
-export default function SignOutAction({ workspaceId, compact = false }) {
+export default function SignOutAction({ workspaceId, compact = false, onOpen, restoreFocus }) {
   const busyRef = useRef(false);
   const triggerRef = useRef(null);
   const signOutAttemptRef = useRef(0);
@@ -155,6 +155,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
 
   function showConfirmation() {
     if (busyRef.current || finishingRef.current || sessionInvalidated) return;
+    onOpen?.();
     const attempt = ++signOutAttemptRef.current;
     setOpen(true);
     void checkAndSync(attempt);
@@ -174,6 +175,10 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     setError('');
     if (token) void cancelSignOut(workspaceId, token).catch(() => {});
     window.setTimeout(() => {
+      if (restoreFocus) {
+        restoreFocus();
+        return;
+      }
       const trigger = triggerRef.current;
       const popover = trigger?.closest('details.header-popover');
       (popover && !popover.open ? popover.querySelector('summary') : trigger)?.focus();
@@ -247,7 +252,7 @@ export default function SignOutAction({ workspaceId, compact = false }) {
     <>
       <button
         ref={triggerRef}
-        className={`sidebar-link signout-link ${compact ? 'compact' : ''}`}
+        className={`${compact ? 'account-menu-item' : 'sidebar-link'} signout-link ${compact ? 'compact' : ''}`}
         type="button"
         onClick={showConfirmation}
         title="Sign out"

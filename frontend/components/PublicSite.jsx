@@ -447,212 +447,121 @@ function Footer() {
   );
 }
 
-function Home() {
+function HomeShot({ src, width, height, alt, className = '', eager = false, sizes = '(max-width: 720px) 100vw, 55vw' }) {
   return (
-    <>
-      <section className="site-hero">
-        <div className="hero-copy">
-          <p className="site-kicker">
-            <i /> CRICKET, KEPT CLEAR
-          </p>
-          <h1>
-            Every Ball.
-            <br />
-            <em>Every Moment.</em>
-          </h1>
-          <p>
-            Score cricket matches with confidence, even without internet. Manage teams, track player
-            performances, and keep every match organized with Crease.
-          </p>
-          <div className="site-actions">
-            <Link className="site-button primary" href="/app/">
-              Start scoring <ArrowRight size={17} />
-            </Link>
-            <InstallButton className="site-button secondary" />
-          </div>
-          <div className="hero-notes">
-            <span>
-              <ShieldCheck size={16} /> Local-first records
-            </span>
-            <span>
-              <WifiOff size={16} /> Offline-ready scoring
-            </span>
-          </div>
-        </div>
-        <div className="hero-stage">
-          <div className="hero-glow" />
-          <ProductPreview />
-          <div className="hero-chip">
-            <i>
-              <WifiOff size={16} />
-            </i>
-            <span>
-              <strong>Keep scoring</strong>
-              <small>Even without a signal</small>
-            </span>
-            <Check size={18} />
-          </div>
-          <div className="hero-signal">C</div>
-        </div>
-      </section>
-      <section className="site-proof">
-        <p>BUILT FOR LOCAL CRICKET</p>
-        <div>
-          <span>
-            <Play /> Ball-by-ball
-          </span>
-          <span>
-            <WifiOff /> Offline ready
-          </span>
-          <span>
-            <Users /> Team management
-          </span>
-          <span>
-            <BarChart3 /> Match statistics
-          </span>
-        </div>
-      </section>
-      <FeatureSection />
-      <section className="site-showcase alternate">
-        <div>
-          <p className="site-kicker">MATCH DAY, MADE SIMPLE</p>
-          <h2>
-            Keep the score moving.
-            <br />
-            Keep the details right.
-          </h2>
-          <p>
-            Runs, extras, wickets, strike changes and overs are captured from the same delivery
-            history that powers the scorecard.
-          </p>
-          <Link className="text-action" href="/features/">
-            Explore scoring features <ArrowRight size={16} />
-          </Link>
-        </div>
-        <ProductPreview />
-      </section>
-      <section className="site-showcase">
-        <ProductPreview kind="teams" />
-        <div>
-          <p className="site-kicker">ONE SCOREBOOK, ONE PLACE</p>
-          <h2>Teams, players and match history—organized.</h2>
-          <p>
-            Create squads, keep player identities connected to matches, and return to completed
-            scorecards whenever you need them.
-          </p>
-          <Link className="text-action" href="/how-it-works/">
-            See how Crease works <ArrowRight size={16} />
-          </Link>
-        </div>
-      </section>
-      <section className="site-showcase alternate">
-        <div>
-          <p className="site-kicker">PERFORMANCE WITH CONTEXT</p>
-          <h2>See the game behind the score.</h2>
-          <p>
-            Completed match histories power player statistics, team performance and transparent
-            rankings.
-          </p>
-          <Link className="text-action" href="/features/">
-            View all capabilities <ArrowRight size={16} />
-          </Link>
-        </div>
-        <ProductPreview kind="stats" />
-      </section>
-      <Steps />
-      <FinalCta />
-    </>
+    <Image
+      className={className}
+      src={src}
+      width={width}
+      height={height}
+      alt={alt}
+      sizes={sizes}
+      loading={eager ? 'eager' : 'lazy'}
+      fetchPriority={eager ? 'high' : 'auto'}
+    />
   );
 }
 
-function FeatureSection() {
-  return (
-    <section className="site-section">
-      <header className="site-section-heading">
-        <p className="site-kicker">A COMPLETE SCOREBOOK</p>
-        <h2>Everything needed to record a real match.</h2>
-        <p>
-          Crease keeps the scorebook practical: quick at the boundary, detailed after the final
-          ball.
-        </p>
-      </header>
-      <div className="benefit-grid">
-        {featureData.slice(0, 4).map(([title, text, Icon], index) => (
-          <article key={title}>
-            <span>
-              <Icon size={20} />
-            </span>
-            <small>0{index + 1}</small>
-            <h3>{title}</h3>
-            <p>{text}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-function Steps({ visual = false }) {
-  const steps = [
-    [
-      '01',
-      'Set up the match',
-      'Choose teams, players, match rules and the opening lineup.',
-      'teams',
-    ],
-    [
-      '02',
-      'Score every delivery',
-      'Record runs, extras, wickets and overs with a scorebook built for match day.',
-      'scoring',
-    ],
-    [
-      '03',
-      'Review the result',
-      'Open the completed scorecard and see player performance in context.',
-      'scorecard',
-    ],
+function PremiumHome() {
+  const journey = [
+    ['01', 'Set up a match', 'Choose teams, players and match rules.', '/marketing/setup-mobile-2x.webp', 780, 3138],
+    ['02', 'Score every delivery', 'Record each run, extra and wicket.', '/marketing/scoring-mobile-2x.webp', 780, 2562],
+    ['03', 'Review the result', 'Open the scorecard and player statistics.', '/marketing/scorecard-mobile-2x.webp', 780, 3500],
   ];
   return (
-    <section className={`steps-section ${visual ? 'steps-visual' : ''}`}>
-      <div>
-        <p className="site-kicker">HOW IT WORKS</p>
-        <h2>
-          {visual
-            ? 'Three practical moments. One reliable scorebook.'
-            : 'From toss to scorecard in a few clear steps.'}
-        </h2>
-        <p>{visual ? 'Each screen follows the match in the same order a scorer does.' : null}</p>
-      </div>
-      <ol>
-        {steps.map(([number, title, text, kind]) => (
-          <li key={number}>
-            <b>{number}</b>
-            <div>
-              <h3>{title}</h3>
-              <p>{text}</p>
-              {visual && <ProductPreview kind={kind} />}
-            </div>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-function FinalCta() {
-  return (
-    <section className="final-cta">
-      <p className="site-kicker">READY AT THE BOUNDARY</p>
-      <h2>Your cricket deserves a reliable scorebook.</h2>
-      <p>Start a scorebook in your browser, then take it wherever the next match is played.</p>
-      <div className="site-actions">
-        <Link className="site-button light" href="/app/">
-          Start scoring <ArrowRight size={17} />
-        </Link>
-        <Link className="site-button ghost" href="/download/">
-          Install Crease
-        </Link>
-      </div>
-    </section>
+    <div className="home-page">
+      <section className="home-hero" aria-labelledby="home-title">
+        <div className="home-hero-copy">
+          <p className="home-eyebrow">CRICKET, KEPT CLEAR</p>
+          <h1 id="home-title">Every Ball.<br /><em>Every Moment.</em></h1>
+          <p>Score cricket matches ball by ball, even offline. Manage teams, track player performances and keep every scorecard organized with Crease.</p>
+          <div className="site-actions">
+            <Link className="site-button light" href="/app/">Start scoring <ArrowRight size={17} /></Link>
+            <InstallButton className="site-button ghost" />
+          </div>
+          <div className="home-hero-notes"><span><ShieldCheck size={16} /> Local scorebooks</span><span><WifiOff size={16} /> Offline scoring</span></div>
+        </div>
+        <figure className="home-hero-visual">
+          <div className="home-hero-screen">
+            <HomeShot className="home-desktop-shot" src="/marketing/scoring-desktop-2x.webp" width={2880} height={1800} sizes="(max-width: 720px) 100vw, 850px" alt="Actual Crease match centre showing a live innings, batter and bowler figures, recent balls and scoring controls" eager />
+            <HomeShot className="home-mobile-shot" src="/marketing/scoring-mobile-2x.webp" width={780} height={2562} sizes="(max-width: 720px) 100vw, 850px" alt="Actual Crease mobile scoring screen with live score and scoring controls" eager />
+          </div>
+          <figcaption>Actual Crease interface · Local test match</figcaption>
+        </figure>
+      </section>
+
+      <section className="home-overview home-container" aria-labelledby="home-overview-title">
+        <div className="home-section-intro">
+          <p className="site-kicker">ONE CONNECTED SCOREBOOK</p>
+          <h2 id="home-overview-title">Everything the match needs, without slowing it down.</h2>
+          <p>Score at the boundary, then return to the details behind every result.</p>
+        </div>
+        <div className="home-feature-list">
+          {featureData.slice(0, 4).map(([title, description, Icon], index) => (
+            <article key={title}>
+              <span className="home-feature-icon"><Icon size={21} aria-hidden="true" /></span>
+              <div><small>0{index + 1}</small><h3>{title}</h3><p>{description}</p></div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-live home-container" aria-labelledby="home-live-title">
+        <div className="home-live-copy">
+          <p className="site-kicker">LIVE SCORING</p>
+          <h2 id="home-live-title">Keep the score moving. Keep the details right.</h2>
+          <p>Record runs, wickets, extras and every legal delivery using controls designed for real match situations.</p>
+          <Link className="text-action" href="/features/#live-scoring">Explore scoring features <ArrowRight size={16} /></Link>
+        </div>
+        <figure className="home-live-screen">
+          <div className="home-live-score-crop"><HomeShot src="/marketing/scoring-mobile-2x.webp" width={780} height={2562} sizes="410px" alt="Actual Crease innings score with batter and bowler figures" /></div>
+          <div className="home-live-controls-crop"><HomeShot src="/marketing/scoring-mobile-2x.webp" width={780} height={2562} sizes="410px" alt="Actual Crease run, extras, wicket and undo controls" /></div>
+          <figcaption>Actual scoring screen · Example match</figcaption>
+        </figure>
+      </section>
+
+      <section className="home-capabilities home-container" aria-labelledby="home-capabilities-title">
+        <div className="home-section-intro">
+          <p className="site-kicker">FROM FINAL BALL TO FULL RECORD</p>
+          <h2 id="home-capabilities-title">The result is only the beginning of the scorebook.</h2>
+        </div>
+        <div className="home-capability-grid">
+          <article className="home-capability home-scorecard">
+            <div><p className="site-kicker">COMPLETE SCORECARDS</p><h3>See how the match unfolded.</h3><p>Innings totals, batting, bowling and the final result stay connected to the recorded deliveries.</p></div>
+            <figure><div className="home-scorecard-result-crop"><HomeShot src="/marketing/scorecard-mobile-2x.webp" width={780} height={3500} sizes="390px" alt="Actual completed Crease match result and innings totals" /></div><div className="home-scorecard-figures-crop"><HomeShot src="/marketing/scorecard-mobile-2x.webp" width={780} height={3500} sizes="390px" alt="Actual Crease batting scorecard figures" /></div><div className="home-scorecard-bowling-crop"><HomeShot src="/marketing/scorecard-mobile-2x.webp" width={780} height={3500} sizes="390px" alt="Actual Crease bowling scorecard figures" /></div><figcaption>Completed local test match</figcaption></figure>
+          </article>
+          <article className="home-capability home-teams">
+            <div><p className="site-kicker">TEAMS &amp; PLAYERS</p><h3>Keep every squad together.</h3><p>Manage player identities and team memberships before and after match day.</p></div>
+            <figure><HomeShot src="/marketing/teams-mobile-2x.webp" width={780} height={1688} sizes="390px" alt="Actual Crease team management screen showing two squads and their member counts" /><figcaption>Two teams in a local test workspace</figcaption></figure>
+          </article>
+          <article className="home-capability home-statistics">
+            <figure><HomeShot src="/marketing/statistics-mobile-2x.webp" width={780} height={2582} sizes="390px" alt="Actual Crease team statistics screen showing completed-match performance and ranking eligibility" /></figure>
+            <div><p className="site-kicker">STATISTICS WITH CONTEXT</p><h3>Understand performance beyond the final score.</h3><p>Review team results, player batting and bowling figures, and rankings when enough completed-match data qualifies. Preview from a completed local test match.</p><Link className="text-action" href="/features/#statistics">Explore statistics <ArrowRight size={16} /></Link></div>
+          </article>
+        </div>
+      </section>
+
+      <section className="home-offline" aria-labelledby="home-offline-title">
+        <div className="home-container home-offline-inner">
+          <div><p className="site-kicker">OFFLINE FIRST</p><h2 id="home-offline-title">No signal? Keep scoring.</h2><p>Prepare Crease while connected, then record matches offline. Changes remain on this device until they can synchronize through your signed-in account.</p><Link className="text-action" href="/download/">Prepare Crease for offline use <ArrowRight size={16} /></Link></div>
+          <ol className="home-sync-steps">
+            <li><span>01</span><div><strong>Saved on this device</strong><p>Local records remain available while you score offline.</p></div></li>
+            <li><span>02</span><div><strong>Changes pending</strong><p>A signed-in account retries upload when a connection returns.</p></div></li>
+            <li><span>03</span><div><strong>Cloud synced</strong><p>Shown only after the server confirms the changes.</p></div></li>
+          </ol>
+        </div>
+      </section>
+
+      <section className="home-journey home-container" aria-labelledby="home-journey-title">
+        <div className="home-section-intro"><p className="site-kicker">HOW IT WORKS</p><h2 id="home-journey-title">From setup to the scorecard.</h2><Link className="text-action" href="/how-it-works/">See how Crease works <ArrowRight size={16} /></Link></div>
+        <ol>{journey.map(([number, title, description, src, width, height]) => <li key={number}><figure><HomeShot src={src} width={width} height={height} alt={`Actual Crease screen: ${title.toLowerCase()}`} /></figure><div><b>{number}</b><h3>{title}</h3><p>{description}</p></div></li>)}</ol>
+      </section>
+
+      <section className="home-final home-container" aria-labelledby="home-final-title">
+        <div className="home-final-copy"><p className="home-eyebrow">READY AT THE BOUNDARY</p><h2 id="home-final-title">Your cricket deserves a reliable scorebook.</h2><p>Start your next match with Crease and keep every score organized.</p><div className="site-actions"><Link className="site-button light" href="/app/">Start scoring <ArrowRight size={17} /></Link><InstallButton className="site-button ghost" /></div></div>
+        <picture><source media="(max-width: 720px)" srcSet="/ready-mobile.webp" /><Image src="/ready.webp" width={1448} height={1086} sizes="(max-width: 720px) 100vw, 40vw" alt="Cricket ground ready for play" loading="lazy" /></picture>
+      </section>
+    </div>
   );
 }
 
@@ -917,66 +826,86 @@ function HowItWorks() {
 }
 
 function DownloadPage() {
+  const platformGuides = [
+    [
+      'Android',
+      Smartphone,
+      [
+        'Open Crease in a supported browser.',
+        'Select Install app or Add to Home Screen where available.',
+        'Confirm, then open Crease from your home screen.',
+      ],
+    ],
+    [
+      'iPhone & iPad',
+      Moon,
+      [
+        'Open Crease in Safari.',
+        'Tap Share in the browser toolbar.',
+        'Select Add to Home Screen and confirm.',
+      ],
+    ],
+    [
+      'Desktop',
+      Download,
+      [
+        'Open Crease in a supported browser.',
+        'Use the address-bar install icon or browser menu where available.',
+        'Confirm, then open Crease from the installed shortcut.',
+      ],
+    ],
+  ];
   return (
-    <>
-      <section className="download-hero">
-        <div>
+    <div className="download-page">
+      <section className="download-hero" aria-labelledby="download-title">
+        <div className="download-hero-copy">
           <p className="site-kicker">INSTALL CREASE</p>
-          <h1>Bring the scorebook to the ground.</h1>
+          <h1 id="download-title">Bring the scorebook to the ground.</h1>
           <p>
-            Crease is a Progressive Web App: open it in a browser, optionally install it, then
-            prepare it for offline scoring while connected.
+            Use Crease directly in your browser or install it for an app-like experience. Prepare
+            it while connected, then keep scoring even when you&apos;re offline.
           </p>
-          <InstallButton />
-          <p className="subtle-note">Crease is not an APK, EXE or separate native app download.</p>
+          <div className="site-actions">
+            <InstallButton />
+            <Link className="site-button secondary" href="/app/">Open Crease <ArrowRight size={17} /></Link>
+          </div>
+          <p className="download-note"><Check size={16} aria-hidden="true" /> No app store required on supported browsers.</p>
         </div>
-        <div className="phone-shell">
-          <ProductPreview />
-        </div>
+        <figure className="download-phone" aria-label="Installed Crease scoring application preview">
+          <div className="download-phone-bar"><Image src="/icons/crease-app-icon-v2.svg" width={30} height={30} alt="" /><span>crease.</span><i aria-hidden="true" /></div>
+          <div className="download-phone-screen">
+            <Image src="/marketing/scoring-mobile-2x.webp" width={780} height={2562} sizes="(max-width: 720px) min(100vw - 76px, 330px), 330px" alt="Actual Crease mobile scoring interface showing an innings score, players and scoring controls" fetchPriority="high" />
+          </div>
+          <figcaption>Install Crease for a focused scoring experience.</figcaption>
+        </figure>
       </section>
-      <section className="install-steps">
-        <article>
-          <Smartphone />
-          <h2>Android</h2>
-          <p>
-            Open the browser menu and choose <b>Install app</b> or <b>Add to Home screen</b> when
-            available.
-          </p>
-        </article>
-        <article>
-          <Moon />
-          <h2>iPhone &amp; iPad</h2>
-          <p>
-            Open Crease in Safari, tap <b>Share</b>, then choose <b>Add to Home Screen</b>.
-          </p>
-        </article>
-        <article>
-          <Download />
-          <h2>Desktop</h2>
-          <p>
-            Use your browser address-bar install icon or the browser menu on supported browsers.
-          </p>
-        </article>
-      </section>
-      <section className="site-section install-explainer">
-        <p className="site-kicker">WHAT TO EXPECT</p>
-        <h2>Offline, updates and your records.</h2>
+      <section className="download-guides" aria-labelledby="download-guides-title">
+        <header><p className="site-kicker">INSTALLATION GUIDES</p><h2 id="download-guides-title">Use the browser you already have.</h2><p>Installation options vary by browser and device. The guides below explain the supported browser flows.</p></header>
         <div>
-          <p>
-            <strong>Offline scoring:</strong> Prepare while connected; Crease caches the application
-            shell and keeps scorebook data locally.
-          </p>
-          <p>
-            <strong>Updates:</strong> New versions are detected when you return online. Crease waits
-            during live scoring and restarts safely when appropriate.
-          </p>
-          <p>
-            <strong>Cloud backup:</strong> A record is available on another device only after it has
-            successfully synchronized to your signed-in account.
-          </p>
+          {platformGuides.map(([name, Icon, steps]) => <article key={name}>
+            <span className="download-guide-icon"><Icon size={22} aria-hidden="true" /></span>
+            <h3>{name}</h3>
+            <ol>{steps.map((step, index) => <li key={step}><b>0{index + 1}</b><span>{step}</span></li>)}</ol>
+          </article>)}
         </div>
       </section>
-    </>
+      <section className="download-reliability" aria-labelledby="download-reliability-title">
+        <header><p className="site-kicker">WHAT TO EXPECT</p><h2 id="download-reliability-title">Offline, updates and your records.</h2></header>
+        <div className="download-reliability-grid">
+          <article><span>01</span><h3>Offline scoring</h3><p>Prepare the app while connected. Supported resources can be available offline and match records can be saved locally. Check that offline readiness is confirmed before relying on it.</p></article>
+          <article><span>02</span><h3>Safe updates</h3><p>New versions can become available when connected. Crease avoids interrupting active scoring, while installed-app update timing can vary by browser.</p></article>
+          <article><span>03</span><h3>Cloud records</h3><p>Records reach another device only after successful account synchronization. Pending offline changes are not cloud-backed yet; sign into the same account to find synced records.</p></article>
+        </div>
+      </section>
+      <section className="download-help" aria-labelledby="download-help-title">
+        <div><p className="site-kicker">NEED A HAND?</p><h2 id="download-help-title">Installation not appearing?</h2><p>If the install action is unavailable, your browser may not support a direct prompt, Crease may already be installed, or offline preparation may still be in progress. Your browser menu and Help Center explain the next step.</p></div>
+        <Link className="text-action" href="/help/">Open Help Center <ArrowRight size={16} /></Link>
+      </section>
+      <section className="download-final" aria-labelledby="download-final-title">
+        <div><p className="site-kicker">READY FOR MATCH DAY</p><h2 id="download-final-title">Ready for your next match?</h2><p>Open Crease, set up your teams and start scoring.</p></div>
+        <div className="site-actions"><Link className="site-button primary" href="/app/">Open Crease <ArrowRight size={17} /></Link><InstallButton className="site-button secondary" /></div>
+      </section>
+    </div>
   );
 }
 
@@ -1251,7 +1180,7 @@ function Legal({ type }) {
 
 export default function PublicSite({ page = 'home' }) {
   const content = {
-    home: <Home />,
+    home: <PremiumHome />,
     features: <Features />,
     how: <HowItWorks />,
     download: <DownloadPage />,
