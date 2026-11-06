@@ -1,10 +1,6 @@
 import PublicSite from '../../components/PublicSite';
-export const metadata = {
-  title: 'About Crease | Built for Local Cricket Scoring',
-  description:
-    'Learn why Crease was created to make cricket scoring simple, organized and reliable for local matches, including offline scoring.',
-  alternates: { canonical: '/about/' },
-};
+import { publicMetadata } from '../../lib/seo';
+export const metadata = publicMetadata({ title: 'About Crease | Cricket Scoring for Local Matches', description: 'Learn why Crease was created to make local cricket scoring simple, organized and reliable, even without a connection.', path: '/about/' });
 export default function Page() {
   return <PublicSite page="about" />;
 }

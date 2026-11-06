@@ -1,6 +1,11 @@
+import { siteUrl } from '../lib/seo';
+
 export default function robots() {
+  if (process.env.VERCEL_ENV === 'preview') {
+    return { rules: { userAgent: '*', disallow: '/' } };
+  }
   return {
-    rules: { userAgent: '*', allow: '/', disallow: ['/app/', '/account/', '/api/'] },
-    sitemap: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crease-scoring.vercel.app'}/sitemap.xml`,
+    rules: { userAgent: '*', allow: '/', disallow: ['/api/'] },
+    sitemap: `${siteUrl}/sitemap.xml`,
   };
 }

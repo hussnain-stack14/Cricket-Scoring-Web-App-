@@ -1,5 +1,6 @@
 import PublicSite from '../components/PublicSite';
-export const metadata = { title: 'Every Ball. Every Moment.', description: 'Score cricket matches with confidence, online or offline. Manage teams, track performances and preserve every match with Crease.', alternates: { canonical: '/' } };
+import { publicMetadata } from '../lib/seo';
+export const metadata = publicMetadata({ title: 'Crease — Free Cricket Scoring App | Score Matches Offline', description: 'Score cricket matches ball by ball, manage teams, track player statistics and keep complete scorecards. Score offline with Crease.', path: '/' });
 export default function Page() {
   return <PublicSite />;
 }

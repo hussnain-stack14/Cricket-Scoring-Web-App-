@@ -190,7 +190,7 @@ button:disabled {
   margin-left: -9px;
 }
 .brand-mark {
-  background: transparent url('/icons/crease-app-icon.svg') center / contain no-repeat;
+  background: transparent url('/icons/crease-app-icon-v2.svg') center / contain no-repeat;
   color: transparent;
   display: grid;
   place-items: center;
@@ -1643,7 +1643,7 @@ pre {
   height: 38px;
   border-radius: 13px;
   color: transparent;
-  background: transparent url('/icons/crease-app-icon.svg') center / contain no-repeat;
+  background: transparent url('/icons/crease-app-icon-v2.svg') center / contain no-repeat;
   overflow: hidden;
   box-shadow: 0 1px 4px #1118271a;
 }

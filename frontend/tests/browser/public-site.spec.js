@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import sharp from 'sharp';
 
 const publicRoutes = [
   ['/', 'Every Ball.'],
@@ -107,23 +108,50 @@ test('production image and icon assets load, fit target widths, and preserve the
     }
   });
 
-  const iconPaths = [
-    '/icons/crease-app-icon.svg',
-    '/icons/crease-app-icon-maskable.svg',
-    '/icons/favicon-16.png',
-    '/icons/favicon-32.png',
-    '/icons/apple-touch-icon.png',
+  const iconAssets = [
+    ['/icons/crease-app-icon-v2.svg', 512, 'image/svg+xml'],
+    ['/icons/crease-app-icon-maskable-v2.svg', 512, 'image/svg+xml'],
+    ['/icons/favicon-16-v2.png', 16, 'image/png'],
+    ['/icons/favicon-32-v2.png', 32, 'image/png'],
+    ['/icons/apple-touch-icon-v2.png', 180, 'image/png'],
+    ['/icons/crease-192-v2.png', 192, 'image/png'],
+    ['/icons/crease-512-v2.png', 512, 'image/png'],
+    ['/icons/crease-maskable-512-v2.png', 512, 'image/png'],
   ];
-  for (const path of iconPaths) {
+  for (const [path, size, contentType] of iconAssets) {
     const response = await page.request.get(path);
     expect(response.ok(), `${path} should exist in the production build`).toBe(true);
+    expect(response.headers()['content-type']).toContain(contentType);
+    const metadata = await sharp(await response.body()).metadata();
+    expect([metadata.width, metadata.height]).toEqual([size, size]);
   }
   const manifestResponse = await page.request.get('/manifest.webmanifest');
   expect(manifestResponse.ok()).toBe(true);
   const manifest = await manifestResponse.json();
+  expect(manifest).toMatchObject({ id: '/', start_url: '/app', scope: '/', display: 'standalone' });
+  expect(manifest.icons.map(({ src }) => src)).toEqual([
+    '/icons/crease-192-v2.png',
+    '/icons/crease-512-v2.png',
+    '/icons/crease-maskable-512-v2.png',
+  ]);
   for (const icon of manifest.icons) {
     expect((await page.request.get(icon.src)).ok(), `${icon.src} should load`).toBe(true);
   }
+  for (const route of ['/', '/features/', '/about/']) {
+    await page.goto(route);
+    for (const selector of ['.site-header .site-brand img', '.site-footer .site-brand img']) {
+      const logo = page.locator(selector);
+      await expect(logo).toHaveAttribute('src', '/icons/crease-app-icon-v2.svg');
+      await expect.poll(() => logo.evaluate((element) => element.complete && element.naturalWidth > 0)).toBe(true);
+    }
+  }
+  expect(await page.locator('head link[rel="icon"]').evaluateAll((links) =>
+    links.map((link) => link.getAttribute('href')))).toEqual([
+      '/icons/favicon-32-v2.png',
+      '/icons/favicon-16-v2.png',
+      '/icons/crease-app-icon-v2.svg',
+    ]);
+  await expect(page.locator('head link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/icons/apple-touch-icon-v2.png');
 
   const imageCases = [
     ['/about/', '.about-editorial-photo', '/about.webp', '/about-mobile.webp', 'about-hero'],

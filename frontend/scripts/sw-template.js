@@ -67,6 +67,17 @@ self.addEventListener('fetch', (event) => {
       if (event.request.headers.get('RSC') === '1' || url.searchParams.has('_rsc'))
         return fetch(event.request);
       const cache = await caches.open(CACHE);
+      if (url.pathname === '/manifest.webmanifest') {
+        // Installed apps need the current icon URLs when online. Keep the
+        // precached manifest available when the device has no connection.
+        try {
+          const response = await fetch(event.request, { cache: 'no-store' });
+          if (response.ok) return response;
+        } catch {
+          // Fall through to the offline copy.
+        }
+        return (await cache.match(url.pathname)) || Response.error();
+      }
       if (event.request.mode === 'navigate') {
         const path =
           url.pathname === '/' || url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;

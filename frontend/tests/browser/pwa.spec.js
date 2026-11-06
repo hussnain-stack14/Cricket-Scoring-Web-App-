@@ -123,7 +123,7 @@ test('dashboard install suggestion is dismissible for the browser session and ne
 
   const desktopLogo = page.locator('.desktop-sidebar .crease-logo');
   await expect(desktopLogo).toBeVisible();
-  await expect(desktopLogo.locator('img')).toHaveAttribute('src', '/icons/crease-app-icon.svg');
+  await expect(desktopLogo.locator('img')).toHaveAttribute('src', '/icons/crease-app-icon-v2.svg');
   await expect(desktopLogo).toContainText('crease.');
   await page.waitForTimeout(250);
   await page.screenshot({ path: 'test-results/branding-dashboard-desktop.png' });
@@ -184,7 +184,7 @@ test('login uses the same approved full Crease logo', async ({ page }) => {
   await page.goto('/account/login/');
   const logo = page.locator('.auth-brand .crease-logo');
   await expect(logo).toBeVisible();
-  await expect(logo.locator('img')).toHaveAttribute('src', '/icons/crease-app-icon.svg');
+  await expect(logo.locator('img')).toHaveAttribute('src', '/icons/crease-app-icon-v2.svg');
   await expect(logo).toContainText('crease.');
   await page.screenshot({ path: 'test-results/branding-login.png', fullPage: true });
 });

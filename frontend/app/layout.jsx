@@ -3,18 +3,20 @@ import './marketing.css';
 import './marketing-fixes.css';
 import ThemeController from '../components/ThemeController';
 import PwaInstallCapture from '../components/PwaInstallCapture';
+import { siteUrl } from '../lib/seo';
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://crease-scoring.vercel.app'),
-  title: 'Crease · Your game, recorded',
-  description: 'Offline cricket scoring, teams and player statistics on your device.',
+  metadataBase: new URL(siteUrl),
+  ...(process.env.VERCEL_ENV === 'preview' ? { robots: { index: false, follow: false } } : {}),
+  title: 'Crease — Free Cricket Scoring App | Score Matches Offline',
+  description: 'Score cricket matches ball by ball, manage teams, track player statistics and keep complete scorecards. Score offline with Crease.',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/icons/crease-app-icon.svg', type: 'image/svg+xml' },
+      { url: '/icons/favicon-32-v2.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/favicon-16-v2.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icons/crease-app-icon-v2.svg', type: 'image/svg+xml' },
     ],
-    apple: '/icons/apple-touch-icon.png',
+    apple: '/icons/apple-touch-icon-v2.png',
   },
   appleWebApp: { capable: true, title: 'Crease', statusBarStyle: 'default' },
 };

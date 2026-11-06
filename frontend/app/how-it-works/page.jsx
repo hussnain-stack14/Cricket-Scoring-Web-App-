@@ -1,3 +1,4 @@
 import PublicSite from '../../components/PublicSite';
-export const metadata = { title: 'How it works', description: 'Learn how to set up a cricket match, record deliveries and review a complete scorecard with Crease.', alternates: { canonical: '/how-it-works/' } };
+import { publicMetadata } from '../../lib/seo';
+export const metadata = publicMetadata({ title: 'How Cricket Scoring Works | Crease', description: 'Set up teams and a match, record each delivery, then review the scorecard and player statistics with Crease.', path: '/how-it-works/' });
 export default function Page() { return <PublicSite page="how" />; }

@@ -1,3 +1,4 @@
 import PublicSite from '../../components/PublicSite';
-export const metadata = { title: 'Privacy', description: 'Plain-language information about storage, synchronization and data handling in Crease.', alternates: { canonical: '/privacy/' } };
+import { publicMetadata } from '../../lib/seo';
+export const metadata = publicMetadata({ title: 'Privacy | Crease', description: 'Read how Crease handles local scorebooks, account synchronization and cricket scoring data.', path: '/privacy/' });
 export default function Page() { return <PublicSite page="privacy" />; }
