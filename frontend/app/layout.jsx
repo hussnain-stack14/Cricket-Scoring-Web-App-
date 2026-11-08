@@ -10,7 +10,7 @@ export const metadata = {
   metadataBase: new URL(siteUrl),
   ...(process.env.VERCEL_ENV === 'preview' ? { robots: { index: false, follow: false } } : {}),
   title: 'Crease — Free Cricket Scoring App | Score Matches Offline',
-  description: 'Score cricket matches ball by ball, manage teams, track player statistics and keep complete scorecards. Score offline with Crease.',
+  description: 'Score cricket matches ball by ball with Crease, a free offline cricket scoring app. Manage teams, track player stats, and create detailed scorecards.',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
@@ -21,6 +21,15 @@ export const metadata = {
     apple: '/icons/apple-touch-icon-v2.png',
   },
   appleWebApp: { capable: true, title: 'Crease', statusBarStyle: 'default' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Crease',
+    title: 'Crease — Free Cricket Scoring App | Score Matches Offline',
+    description: 'Score cricket matches ball by ball with Crease, a free offline cricket scoring app. Manage teams, track player stats, and create detailed scorecards.',
+    url: siteUrl,
+    images: [{ url: '/crease-social.png', width: 1200, height: 630, alt: 'Crease cricket scoring app' }],
+  },
+  twitter: { card: 'summary_large_image', title: 'Crease — Free Cricket Scoring App | Score Matches Offline', description: 'Score cricket matches ball by ball with Crease, a free offline cricket scoring app. Manage teams, track player stats, and create detailed scorecards.', images: ['/crease-social.png'] },
 };
 export const viewport = {
   width: 'device-width',

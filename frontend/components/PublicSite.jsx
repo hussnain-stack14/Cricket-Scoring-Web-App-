@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { softwareApplicationSchema, webPageSchema } from '../lib/seo';
 import {
   ArrowRight,
   BarChart3,
@@ -447,6 +448,15 @@ function Footer() {
   );
 }
 
+function StructuredData({ data }) {
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
 function HomeShot({ src, width, height, alt, className = '', eager = false, sizes = '(max-width: 720px) 100vw, 55vw' }) {
   return (
     <Image
@@ -474,7 +484,7 @@ function PremiumHome() {
         <div className="home-hero-copy">
           <p className="home-eyebrow">CRICKET, KEPT CLEAR</p>
           <h1 id="home-title">Every Ball.<br /><em>Every Moment.</em></h1>
-          <p>Score cricket matches ball by ball, even offline. Manage teams, track player performances and keep every scorecard organized with Crease.</p>
+          <p>Crease is a free cricket scoring app built for local matches. Score every ball offline, manage teams, track player statistics, and keep complete cricket scorecards in one place.</p>
           <div className="site-actions">
             <Link className="site-button light" href="/app/">Start scoring <ArrowRight size={17} /></Link>
             <InstallButton className="site-button ghost" />
@@ -1179,6 +1189,98 @@ function Legal({ type }) {
 }
 
 export default function PublicSite({ page = 'home' }) {
+  const schemaByPage = {
+    home: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'Crease',
+        url: 'https://creaseweb.com/',
+        description:
+          'Crease is a free cricket scoring app for local matches, ball-by-ball scoring, offline play, player stats and complete scorecards.',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: 'https://creaseweb.com/?q={search_term_string}',
+          'query-input': 'required name=search_term_string',
+        },
+      },
+      softwareApplicationSchema({
+        title: 'Crease',
+        description:
+          'Crease is a free cricket scoring app for local matches, offline scoring, team management and scorecards.',
+        url: 'https://creaseweb.com/',
+        featureList: [
+          'Ball-by-ball cricket scoring',
+          'Offline match scoring',
+          'Team and player management',
+          'Match statistics and scorecards',
+          'Match history and scorebook exports',
+        ],
+      }),
+    ],
+    features: [
+      webPageSchema({
+        title: 'Cricket Scoring Features | Crease',
+        description: 'Ball-by-ball scoring, offline match scoring, team management, scorecards and player statistics in Crease.',
+        url: 'https://creaseweb.com/features/',
+        pageType: 'CollectionPage',
+      }),
+      softwareApplicationSchema({
+        title: 'Crease',
+        description: 'Create matches, score every ball and review complete scorecards with Crease.',
+        url: 'https://creaseweb.com/features/',
+      }),
+    ],
+    how: [
+      webPageSchema({
+        title: 'How Cricket Scoring Works | Crease',
+        description: 'Learn how to set up a match, score every delivery and review a complete cricket scorecard in Crease.',
+        url: 'https://creaseweb.com/how-it-works/',
+        pageType: 'HowTo',
+      }),
+    ],
+    download: [
+      webPageSchema({
+        title: 'Install Crease: Free Cricket Scoring App',
+        description: 'Install Crease on Android, iPhone, iPad and desktop browsers for free offline cricket scoring.',
+        url: 'https://creaseweb.com/download/',
+        pageType: 'WebPage',
+      }),
+    ],
+    about: [
+      webPageSchema({
+        title: 'About Crease | Free Cricket Scoring App',
+        description: 'Learn how Crease supports local cricket scoring, team management and scorecards without a constant internet connection.',
+        url: 'https://creaseweb.com/about/',
+        pageType: 'AboutPage',
+      }),
+    ],
+    help: [
+      webPageSchema({
+        title: 'Crease Help Centre | Cricket Scoring Support',
+        description: 'Get answers to common cricket scoring questions, offline use, backups, and team setup in Crease.',
+        url: 'https://creaseweb.com/help/',
+        pageType: 'FAQPage',
+      }),
+    ],
+    privacy: [
+      webPageSchema({
+        title: 'Privacy Policy | Crease',
+        description: 'Read how Crease stores local scorebooks, account and match data, and sync information.',
+        url: 'https://creaseweb.com/privacy/',
+        pageType: 'WebPage',
+      }),
+    ],
+    terms: [
+      webPageSchema({
+        title: 'Terms of Service | Crease',
+        description: 'Review Crease terms for cricket scoring, data handling and app use.',
+        url: 'https://creaseweb.com/terms/',
+        pageType: 'WebPage',
+      }),
+    ],
+  };
+
   const content = {
     home: <PremiumHome />,
     features: <Features />,
@@ -1189,10 +1291,16 @@ export default function PublicSite({ page = 'home' }) {
     privacy: <Legal type="privacy" />,
     terms: <Legal type="terms" />,
   }[page];
+
   return (
     <div className="public-site">
       <Header />
-      <main>{content}</main>
+      <main>
+        {schemaByPage[page]?.map((schema, index) => (
+          <StructuredData key={`${page}-${index}`} data={schema} />
+        ))}
+        {content}
+      </main>
       <Footer />
     </div>
   );
