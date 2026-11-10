@@ -89,7 +89,7 @@ function ProductPreview({ kind = 'score' }) {
         </label>
         <div className="setup-format">
           <span>20 overs</span>
-          <span>11 players</span>
+          <span>Flexible lineup</span>
           <span>Local match</span>
         </div>
         <button type="button" tabIndex={-1}>
@@ -145,7 +145,7 @@ function ProductPreview({ kind = 'score' }) {
             <i>{team[0]}</i>
             <span>
               <strong>{team}</strong>
-              <small>{11 - index} players</small>
+              <small>Squad selected</small>
             </span>
             <b>›</b>
           </div>

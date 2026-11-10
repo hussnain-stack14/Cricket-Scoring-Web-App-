@@ -3,6 +3,7 @@ import './marketing.css';
 import './marketing-fixes.css';
 import './home.css';
 import './download.css';
+import InlineScript from '../components/InlineScript';
 import ThemeController from '../components/ThemeController';
 import PwaInstallCapture from '../components/PwaInstallCapture';
 import { siteUrl } from '../lib/seo';
@@ -40,15 +41,11 @@ export const viewport = {
 export default function Layout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{const t=localStorage.getItem('crease-theme');if(t==='red-ball'||t==='blue')document.documentElement.dataset.theme=t}catch(e){}",
-          }}
-        />
-      </head>
       <body>
+        <InlineScript
+          id="crease-theme-init"
+          code="try{const t=localStorage.getItem('crease-theme');if(t==='red-ball'||t==='blue')document.documentElement.dataset.theme=t}catch(e){}"
+        />
         <ThemeController />
         <PwaInstallCapture />
         {children}

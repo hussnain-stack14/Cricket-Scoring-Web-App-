@@ -439,6 +439,10 @@ export default function Settings({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (!Number.isSafeInteger(rules.size) || rules.size < 2) {
+                setError('Players per team must be a whole number of at least 2.');
+                return;
+              }
               if (rules.maxBowler > rules.overs || rules.maxBowler * rules.size < rules.overs) {
                 setError('Bowler limit must cover the innings and not exceed match overs.');
                 return;
@@ -448,7 +452,7 @@ export default function Settings({
           >
             {[
               ['overs', 'Overs per innings', 1, 50],
-              ['size', 'Players per side', 2, 11],
+              ['size', 'Players per team', 2, undefined],
               ['maxBowler', 'Maximum overs per bowler', 1, 50],
             ].map(([key, label, min, max]) => (
               <Field

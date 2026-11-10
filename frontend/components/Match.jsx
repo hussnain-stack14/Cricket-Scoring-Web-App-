@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { FileText } from 'lucide-react';
+import { ArrowLeftRight, FileText } from 'lucide-react';
 import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
 import { matchStates, overs, rate, result } from '../lib/engine';
 import { Button, Field, Select, Sheet, Tabs, playerLabel } from './ui';
@@ -157,6 +157,29 @@ export default function Match({ w, data, run, error, session }) {
       setSavingDelivery(false);
     }
   }
+  async function swapStrike() {
+    if (
+      !canScore ||
+      frozen ||
+      s.done ||
+      s.needBatter ||
+      !s.striker ||
+      !s.nonStriker ||
+      deliveryInFlight.current
+    )
+      return false;
+    deliveryInFlight.current = true;
+    setSavingDelivery(true);
+    try {
+      return await act({
+        type: 'event',
+        event: { type: 'swapStrike', id: uuid() },
+      });
+    } finally {
+      deliveryInFlight.current = false;
+      setSavingDelivery(false);
+    }
+  }
   function detail(extra = 'none') {
     setSheetError('');
     setDelivery({
@@ -273,7 +296,7 @@ export default function Match({ w, data, run, error, session }) {
     return ['bowled', 'caught', 'lbw', 'run out', 'stumped', 'hit wicket'];
   }
   function undoLatest() {
-    if (!latest || deliveryInFlight.current) return;
+    if ((!latest && events.at(-1)?.type !== 'swapStrike') || deliveryInFlight.current) return;
     deliveryInFlight.current = true;
     setSavingDelivery(true);
     act({ type: 'undo' }).finally(() => {
@@ -322,6 +345,7 @@ export default function Match({ w, data, run, error, session }) {
   }
   const set = (k, v) => setDelivery((d) => ({ ...d, [k]: v }));
   const latest = [...events].reverse().find((e) => e.type === 'delivery');
+  const canUndo = Boolean(latest || events.at(-1)?.type === 'swapStrike');
   const dismissalKinds = getDismissalKinds();
   return (
     <div className="match-centre">
@@ -447,11 +471,16 @@ export default function Match({ w, data, run, error, session }) {
                           </td>
                         </tr>
                       )}
-                      {[s.striker, s.nonStriker].filter(Boolean).map((p, index) => (
+                      {[s.striker, s.nonStriker].filter(Boolean).map((p) => (
                         <tr key={p} className={p === s.striker ? 'active-player' : ''}>
                           <td>
                             {s.batting[p].name}
-                            {p === s.striker && <span className="strike"> ●</span>}
+                            {p === s.striker && (
+                              <span className="strike" aria-label="Striker">
+                                {' '}
+                                ●
+                              </span>
+                            )}
                           </td>
                           <td>
                             <b>{s.batting[p].runs}</b>
@@ -646,7 +675,7 @@ export default function Match({ w, data, run, error, session }) {
                                   ? 'score-boundary'
                                   : ''
                           }
-                          disabled={savingDelivery || (value === 'Undo' && !latest)}
+                          disabled={savingDelivery || (value === 'Undo' && !canUndo)}
                           onClick={() => {
                             if (value === 'W') {
                               chooseWicket(dismissalKinds[0]);
@@ -662,6 +691,26 @@ export default function Match({ w, data, run, error, session }) {
                           {value}
                         </button>
                       ))}
+                    </div>
+                    <div className="swap-strike-controls">
+                      <button
+                        className="swap-strike-button"
+                        type="button"
+                        aria-label="Swap Strike between current batters"
+                        disabled={
+                          !canScore ||
+                          frozen ||
+                          s.done ||
+                          s.needBatter ||
+                          !s.striker ||
+                          !s.nonStriker ||
+                          savingDelivery
+                        }
+                        onClick={swapStrike}
+                      >
+                        <ArrowLeftRight size={16} aria-hidden="true" />
+                        Swap Strike
+                      </button>
                     </div>
                     <p className="scoring-section-label">Extras</p>
                     <div className="extras-buttons quick-extra-buttons">

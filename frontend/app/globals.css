@@ -5664,6 +5664,36 @@ pre {
 .match-centre .active-player {
   background: #edf8f0;
 }
+.match-centre .swap-strike-controls {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 14px;
+}
+.match-centre .swap-strike-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: 999px;
+  color: var(--color-primary-text);
+  background: var(--color-primary-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.match-centre .swap-strike-button:hover:not(:disabled) {
+  border-color: var(--color-primary-border);
+  filter: brightness(0.97);
+}
+.match-centre .swap-strike-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .match-centre .live-player-tables .empty-lineup {
   width: auto;
   color: #728077;

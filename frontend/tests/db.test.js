@@ -308,3 +308,164 @@ test('playerless match can add and select players during play without losing sco
   db.close();
   await db.delete();
 });
+
+test('live strike swaps and settings sync without changing recorded deliveries', async () => {
+  await db.delete();
+  await db.open();
+  const w = await createWorkspace('Live settings scorer');
+  await db.syncMeta.put({
+    workspaceId: w.id,
+    teamId: 'live-settings-sync',
+    role: 'scorer',
+    revisions: {},
+    conflicts: [],
+  });
+  const players = [];
+  for (let index = 0; index < 6; index++)
+    players.push(await saveRecord(w.id, 'players', { name: `Player ${index}` }));
+  const teams = [];
+  for (let index = 0; index < 2; index++) {
+    const team = { id: uuid(), name: `Side ${index}` };
+    const squad = players.slice(index * 3, index * 3 + 3);
+    await saveTeam(
+      w.id,
+      team,
+      squad.map((player) => player.id),
+    );
+    teams.push({ ...team, squad });
+  }
+  let match = await createMatch(
+    w.id,
+    {
+      teams,
+      date: '2026-11-10',
+      firstBat: 0,
+      rules: { overs: 20, size: 6, maxBowler: 4, freeHit: true },
+    },
+    { striker: players[0].id, nonStriker: players[1].id, bowler: players[3].id },
+  );
+  const score = () =>
+    all(w.id).then(({ innings, events }) =>
+      import('../lib/engine.js').then(({ matchStates }) =>
+        matchStates(match, innings.filter((inning) => inning.matchId === match.id), events)[0],
+      ),
+    );
+  const addEvent = (event) =>
+    changeMatch(w.id, match.id, match.revision, {
+      type: 'event',
+      event: { id: uuid(), ...event },
+    });
+
+  match = await addEvent({ type: 'swapStrike' });
+  let state = await score();
+  assert.equal(state.striker, players[1].id);
+  assert.equal(state.balls, 0);
+  assert.equal(state.runs, 0);
+
+  match = await addEvent({
+    type: 'delivery',
+    bat: 1,
+    extra: 'none',
+    extraRuns: 0,
+    running: 1,
+  });
+  const scoreAfterBall = await score();
+  match = await addEvent({ type: 'swapStrike' });
+  state = await score();
+  assert.notEqual(state.striker, scoreAfterBall.striker);
+  match = await changeMatch(w.id, match.id, match.revision, { type: 'undo' });
+  state = await score();
+  assert.equal(state.striker, scoreAfterBall.striker);
+  assert.equal(state.runs, scoreAfterBall.runs);
+  assert.equal(state.balls, scoreAfterBall.balls);
+  assert.equal(state.batting[players[1].id].runs, scoreAfterBall.batting[players[1].id].runs);
+  for (let index = 1; index < 12; index++) {
+    if (index === 6)
+      match = await addEvent({ type: 'bowler', player: players[4].id });
+    match = await addEvent({
+      type: 'delivery',
+      bat: 0,
+      extra: 'none',
+      extraRuns: 0,
+      running: 0,
+    });
+  }
+  state = await score();
+  assert.equal(state.runs, 1);
+  assert.equal(state.balls, 12);
+  assert.equal(state.batting[players[1].id].runs, 1);
+
+  const initialEventCount = (await all(w.id)).events.length;
+  match = await changeMatch(w.id, match.id, match.revision, {
+    type: 'settings',
+    overs: 10,
+    size: 6,
+  });
+  match = await changeMatch(w.id, match.id, match.revision, {
+    type: 'settings',
+    overs: 15,
+    size: 17,
+  });
+  assert.equal(match.rules.overs, 15);
+  assert.equal(match.rules.size, 17);
+  assert.equal(match.rules.maxBowler, 4);
+  assert.equal((await all(w.id)).events.length, initialEventCount);
+  validateBackup(await exportBackup(w));
+  match = await changeMatch(w.id, match.id, match.revision, {
+    type: 'settings',
+    overs: 15,
+    size: 4,
+  });
+  assert.equal(match.rules.size, 4);
+  await assert.rejects(
+    changeMatch(w.id, match.id, match.revision, {
+      type: 'settings',
+      overs: 15,
+      size: 2,
+    }),
+    /selected match players/,
+  );
+  await assert.rejects(
+    changeMatch(w.id, match.id, match.revision, {
+      type: 'settings',
+      overs: 1,
+      size: 4,
+    }),
+    /already recorded/,
+  );
+  await assert.rejects(
+    changeMatch(w.id, match.id, match.revision, {
+      type: 'settings',
+      overs: 2,
+      size: 4,
+    }),
+    /end the current innings/,
+  );
+  match = await changeMatch(w.id, match.id, match.revision, {
+    type: 'settings',
+    overs: 2,
+    size: 4,
+    confirmEndInnings: true,
+  });
+  state = await score();
+  assert.equal(state.done, true);
+  assert.equal(state.runs, 1);
+  assert.equal(state.balls, 12);
+  assert.equal((await all(w.id)).events.length, initialEventCount);
+
+  const pending = await db.pendingChanges.where({ workspaceId: w.id }).toArray();
+  const swap = pending.find((change) => change.table === 'events' && change.data.type === 'swapStrike');
+  const pendingMatch = pending.find((change) => change.table === 'matches' && change.recordId === match.id);
+  assert.ok(swap);
+  assert.equal(pendingMatch.data.rules.overs, 2);
+
+  db.close();
+  await db.open();
+  match = (await all(w.id)).matches.find((item) => item.id === match.id);
+  state = await score();
+  assert.equal(match.rules.overs, 2);
+  assert.equal(state.done, true);
+  assert.equal(state.balls, 12);
+  db.close();
+  await db.delete();
+});

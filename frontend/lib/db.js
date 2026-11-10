@@ -670,7 +670,55 @@ export async function changeMatch(workspaceId, id, revision, action) {
         m.status = 'live';
       } else {
         must(m.status === 'live', 'Start or reopen this match before scoring.');
-        if (action.type === 'finalize') {
+        if (action.type === 'settings') {
+          const overs = action.overs;
+          const size = action.size;
+          must(
+            Number.isInteger(overs) && overs >= 1 && overs <= 50,
+            'Overs must be a whole number from 1 to 50.',
+          );
+          must(
+            Number.isSafeInteger(size) && size >= 2,
+            'Players per team must be a whole number of at least 2.',
+          );
+          const venue = action.venue === undefined ? m.venue || '' : action.venue;
+          must(typeof venue === 'string' && venue.length <= 100, 'Venue must be at most 100 characters.');
+          const minimumPlayers = Math.max(...m.teams.map((team) => team.squad.length));
+          must(
+            size >= minimumPlayers,
+            `Each team already has ${minimumPlayers} selected match players. The player limit cannot be lower.`,
+          );
+          const maximumRecordedBalls = Math.max(...states.map((state) => state.balls));
+          must(
+            overs * 6 >= maximumRecordedBalls,
+            `Overs cannot be lower than the ${Math.ceil(maximumRecordedBalls / 6)} overs already recorded.`,
+          );
+          const maxBowler = Math.min(
+            overs,
+            Math.max(m.rules.maxBowler, Math.ceil(overs / size)),
+          );
+          const updatedMatch = {
+            ...m,
+            rules: { ...m.rules, overs, size, maxBowler },
+            venue: venue.trim(),
+          };
+          validateSetup(updatedMatch);
+          const updatedStates = matchStates(updatedMatch, inns, evs);
+          must(
+            inns.length < 2 || updatedStates[0].done,
+            'These settings would make the first innings unfinished after the chase has started.',
+          );
+          const currentState = states.at(-1);
+          const updatedCurrentState = updatedStates.at(-1);
+          must(
+            currentState.done ||
+              !updatedCurrentState.done ||
+              action.confirmEndInnings === true,
+            'These settings will end the current innings. Review and confirm the change first.',
+          );
+          m.rules = updatedMatch.rules;
+          m.venue = updatedMatch.venue;
+        } else if (action.type === 'finalize') {
           must(states.length === 2 && states[1].done, 'Finish both innings first.');
           m.status = 'completed';
         } else if (action.type === 'startChase') {
@@ -690,7 +738,9 @@ export async function changeMatch(workspaceId, id, revision, action) {
         } else if (action.type === 'rewind' || action.type === 'undo') {
           const selected =
             action.type === 'undo'
-              ? [...evs].reverse().find((e) => e.type === 'delivery')
+              ? evs.at(-1)?.type === 'swapStrike'
+                ? evs.at(-1)
+                : [...evs].reverse().find((e) => e.type === 'delivery')
               : evs.find((e) => e.id === action.eventId);
           must(selected, 'No delivery to reverse.');
           const removed = evs.filter((e) => e.seq >= selected.seq);
@@ -782,9 +832,8 @@ export function validateBackup(b) {
       Number.isInteger(rules.overs) &&
       rules.overs >= 1 &&
       rules.overs <= 50 &&
-      Number.isInteger(rules.size) &&
+      Number.isSafeInteger(rules.size) &&
       rules.size >= 2 &&
-      rules.size <= 11 &&
       Number.isInteger(rules.maxBowler) &&
       rules.maxBowler >= 1 &&
       rules.maxBowler <= rules.overs &&

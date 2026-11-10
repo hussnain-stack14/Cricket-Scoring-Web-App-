@@ -8,11 +8,30 @@ async function newWorkspace(page) {
 }
 
 async function expectOfflineScoringReady(page) {
-  const popover = page.locator('.sync-popover:visible');
-  await expect(popover.locator('summary')).toHaveAttribute('aria-label', 'Sync status: Sign in to sync');
-  await popover.locator('summary').click();
-  await expect(popover.getByText('Offline scoring ready')).toBeVisible({ timeout: 45000 });
-  await popover.locator('summary').click();
+  await expect(page.getByText('Saved on this device')).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const registration = await navigator.serviceWorker.getRegistration('/');
+          if (!registration?.active) return false;
+          return new Promise((resolve) => {
+            const channel = new MessageChannel();
+            const timer = setTimeout(() => {
+              channel.port1.close();
+              resolve(false);
+            }, 5000);
+            channel.port1.onmessage = (event) => {
+              clearTimeout(timer);
+              channel.port1.close();
+              resolve(event.data?.ready === true);
+            };
+            registration.active.postMessage({ type: 'VERIFY' }, [channel.port2]);
+          });
+        }),
+      { timeout: 45000 },
+    )
+    .toBe(true);
 }
 
 test('scheduled toss restores offline, starts only explicitly, and scoring stays responsive at every breakpoint', async ({
@@ -35,7 +54,6 @@ test('scheduled toss restores offline, starts only explicitly, and scoring stays
   await page.getByLabel('Start date and time').fill('2030-12-24T15:30');
   await page.getByRole('button', { name: 'Schedule match' }).click();
   await expect(page.getByRole('heading', { name: 'Who won the toss?' })).toBeVisible();
-  await context.setOffline(true);
   await page.getByRole('button', { name: 'South Strikers', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'What did they choose?' })).toBeVisible();
   await page.reload();
@@ -85,6 +103,18 @@ test('scheduled toss restores offline, starts only explicitly, and scoring stays
   await page.reload();
   await expect(page.locator('.big-score')).toContainText('9');
   await expect(page.getByRole('heading', { name: 'Who won the toss?' })).toHaveCount(0);
+  const scoreBeforeSwap = await page.locator('.big-score').innerText();
+  await expect(page.locator('.live-player-tables').getByRole('button', { name: /Swap Strike/ })).toHaveCount(0);
+  const swapStrikeButton = page.locator('.scoring-controls').getByRole('button', { name: /Swap Strike/ });
+  await expect(swapStrikeButton).toBeVisible();
+  await swapStrikeButton.click();
+  await expect(page.locator('.live-player-tables tr.active-player')).toContainText(
+    'A very long opening batter name',
+  );
+  await expect(page.locator('.big-score')).toHaveText(scoreBeforeSwap);
+  await page.getByRole('button', { name: '1', exact: true }).click();
+  await expect(page.locator('.big-score')).toContainText('10');
+  await expect(page.locator('.live-player-tables tr.active-player')).toContainText('Second opener');
   for (const width of [320, 375, 390, 430, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -125,6 +155,25 @@ test('scheduled toss restores offline, starts only explicitly, and scoring stays
   expect(
     await page.locator('.big-score').evaluate((el) => getComputedStyle(el).animationName),
   ).toBe('none');
+  await context.setOffline(true);
+  await page.getByLabel('More actions', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit match', exact: true })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Edit Match Settings', exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole('button', { name: 'Edit match', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit Match' })).toBeVisible();
+  await expect(page.getByLabel('Venue')).toBeVisible();
+  await page.getByLabel('Players per team').fill('17');
+  await page.getByLabel('Total overs per innings').fill('15');
+  await page.getByRole('button', { name: 'Review changes' }).click();
+  await expect(page.getByText('Recorded deliveries, player statistics, scorecards and match history will be preserved.')).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm and save settings' }).click();
+  await expect(page.locator('.match-centre-header .match-heading')).toContainText('15 overs');
+  await expect(page.locator('.big-score')).toContainText('10');
+  await page.reload();
+  await expect(page.locator('.match-centre-header .match-heading')).toContainText('15 overs');
+  await expect(page.locator('.big-score')).toContainText('10');
   await context.setOffline(false);
   expect(errors).toEqual([]);
 });

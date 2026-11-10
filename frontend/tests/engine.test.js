@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replay, overs, rate, career, result } from '../lib/engine.js';
+import { replay, overs, rate, career, result, validateSetup } from '../lib/engine.js';
 const match = {
   firstBat: 0,
   rules: { overs: 3, size: 3, maxBowler: 2, freeHit: true },
@@ -32,6 +32,74 @@ test('five runs count as running, not a boundary, and rotate the strike', () => 
   assert.equal(s.batting.a.sixes, 0);
   assert.equal(s.balls, 1);
   assert.equal(s.striker, 'b');
+});
+test('manual strike swap changes the next striker without adding a delivery or score', () => {
+  const before = replay(match, inn, []);
+  const swapped = replay(match, inn, [{ type: 'swapStrike' }]);
+  assert.equal(swapped.striker, 'b');
+  assert.equal(swapped.nonStriker, 'a');
+  assert.equal(swapped.runs, before.runs);
+  assert.equal(swapped.balls, before.balls);
+  assert.deepEqual(swapped.batting, before.batting);
+  assert.equal(swapped.deliveries.length, before.deliveries.length);
+
+  const rotated = replay(match, inn, [
+    { type: 'swapStrike' },
+    ball({ bat: 1, running: 1 }),
+  ]);
+  assert.equal(rotated.striker, 'a');
+  assert.equal(rotated.nonStriker, 'b');
+  assert.equal(rotated.batting.b.runs, 1);
+});
+test('manual strike swap requires two batters at the crease', () => {
+  assert.throws(
+    () => replay(match, { ...inn, nonStriker: '' }, [{ type: 'swapStrike' }]),
+    /Both batters/,
+  );
+});
+test('configured player counts determine innings wickets from five through seventeen players', () => {
+  for (const size of [5, 8, 11, 15, 17]) {
+    const side = (prefix) =>
+      Array.from({ length: size }, (_, index) => ({
+        id: `${prefix}${index}`,
+        name: `${prefix}${index}`,
+      }));
+    const customMatch = {
+      firstBat: 0,
+      date: '2026-11-10',
+      rules: { overs: 5, size, maxBowler: 1, freeHit: true },
+      teams: [
+        { id: `home${size}`, name: 'Home', squad: side(`h${size}-`) },
+        { id: `away${size}`, name: 'Away', squad: side(`a${size}-`) },
+      ],
+    };
+    validateSetup(customMatch);
+    const events = [];
+    const opening = {
+      number: 1,
+      striker: `h${size}-0`,
+      nonStriker: `h${size}-1`,
+      bowler: `a${size}-0`,
+    };
+    for (let wicket = 0; wicket < size - 1; wicket++) {
+      let current = replay(customMatch, opening, events);
+      if (current.needBowler) {
+        events.push({
+          type: 'bowler',
+          player: `a${size}-${Math.floor(current.balls / 6)}`,
+        });
+        current = replay(customMatch, opening, events);
+      }
+      const dismissed = current.striker;
+      events.push(ball({ wicket: { kind: 'bowled', player: dismissed } }));
+      if (wicket < size - 2)
+        events.push({ type: 'batter', player: `h${size}-${wicket + 2}` });
+    }
+    const score = replay(customMatch, opening, events);
+    assert.equal(score.wickets, size - 1);
+    assert.equal(score.done, true);
+    assert.equal(Object.keys(score.batting).length, size);
+  }
 });
 test('wide/no-ball separate batter balls and legal deliveries; running excludes penalties', () => {
   const s = replay(match, inn, [

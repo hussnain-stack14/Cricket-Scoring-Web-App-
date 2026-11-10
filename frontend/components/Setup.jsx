@@ -204,7 +204,7 @@ export default function Setup({ w, data, run, setError }) {
             <div className="two-col">
               {[
                 ['overs', 'Overs per innings', 50],
-                ['size', 'Players per side', 11],
+                ['size', 'Players per team', null],
                 ['maxBowler', 'Maximum overs per bowler', 50],
               ].map(([key, label, max]) => (
                 <Field
@@ -212,7 +212,7 @@ export default function Setup({ w, data, run, setError }) {
                   label={label}
                   type="number"
                   min={key === 'size' ? 2 : 1}
-                  max={max}
+                  max={max || undefined}
                   value={draft.rules[key]}
                   onChange={(event) =>
                     set('rules', { ...draft.rules, [key]: Number(event.target.value) })
@@ -296,8 +296,9 @@ export default function Setup({ w, data, run, setError }) {
               Free hit after every no-ball
             </label>
             <p className="help">
-              Six-ball overs. One-run wide and no-ball penalties. Two batters at the crease. You can
-              add players at any time, up to the configured team size.
+              Six-ball overs. One-run wide and no-ball penalties. Two batters at the crease. Choose
+              the number of players taking part; more players can be added during a match up to that
+              configured lineup size.
             </p>
             <div className="notice">
               <strong>{selectedTeams.map((team) => team.name).join(' vs ')}</strong>

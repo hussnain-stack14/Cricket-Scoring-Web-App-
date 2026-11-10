@@ -10,8 +10,8 @@ export function validateSetup(m) {
     'Overs must be 1–50.',
   );
   check(
-    Number.isInteger(m.rules.size) && m.rules.size >= 2 && m.rules.size <= 11,
-    'Players per side must be 2–11.',
+    Number.isSafeInteger(m.rules.size) && m.rules.size >= 2,
+    'Players per side must be a whole number of at least 2.',
   );
   check(
     Number.isInteger(m.rules.maxBowler) &&
@@ -95,6 +95,14 @@ export function replay(match, inning, events, target = null) {
   let overConceded = 0;
   for (const e of events) {
     check(!s.done, 'Delivery follows a completed innings; review history.');
+    if (e.type === 'swapStrike') {
+      check(
+        s.striker && s.nonStriker && !s.needBatter,
+        'Both batters must be at the crease to swap strike.',
+      );
+      [s.striker, s.nonStriker] = [s.nonStriker, s.striker];
+      continue;
+    }
     if (e.type === 'batter') {
       check(
         s.needBatter && s.batting[e.player] && !s.batting[e.player].played,

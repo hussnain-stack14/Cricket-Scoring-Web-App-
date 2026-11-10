@@ -151,11 +151,11 @@ function userError(error) {
   return message && message.length < 180 ? message : 'Something went wrong. Please try again.';
 }
 export default function App({ screen }) {
-  const [w, setW] = useState(() => appShellCache?.w ?? null),
-    [data, setData] = useState(() => appShellCache?.data ?? null),
+  const [w, setW] = useState(null),
+    [data, setData] = useState(null),
     [error, setError] = useState(''),
     [status, setStatus] = useState(''),
-    [loaded, setLoaded] = useState(() => Boolean(appShellCache)),
+    [loaded, setLoaded] = useState(false),
     [name, setName] = useState(''),
     [filter, setFilter] = useState('live'),
     [sidebarCollapsed, setSidebarCollapsed] = useState(false),
@@ -167,12 +167,12 @@ export default function App({ screen }) {
     const timer = setInterval(() => setClock(Date.now()), 60000);
     return () => clearInterval(timer);
   }, []);
-  const [session, setSession] = useState(() => appShellCache?.session ?? null);
-  const [syncMeta, setSyncMeta] = useState(() => appShellCache?.syncMeta ?? null);
-  const [pendingSync, setPendingSync] = useState(() => appShellCache?.pendingSync ?? 0);
+  const [session, setSession] = useState(null);
+  const [syncMeta, setSyncMeta] = useState(null);
+  const [pendingSync, setPendingSync] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [showStartupSplash, setShowStartupSplash] = useState(readStartupSplashState);
+  const [showStartupSplash, setShowStartupSplash] = useState(true);
   const [installCelebration, setInstallCelebration] = useState(false);
   const busy = useRef(false);
   const syncBusy = useRef(false);
@@ -186,6 +186,18 @@ export default function App({ screen }) {
   workspaceRef.current = w;
   const offline = useOffline();
   const base = '/app';
+  useEffect(() => {
+    const cached = appShellCache;
+    if (cached) {
+      setW(cached.w);
+      setData(cached.data);
+      setSession(cached.session);
+      setSyncMeta(cached.syncMeta);
+      setPendingSync(cached.pendingSync);
+      setLoaded(true);
+    }
+    if (!readStartupSplashState()) setShowStartupSplash(false);
+  }, []);
   const installationRelevant = !offline.installed;
   async function requestInstall() {
     const outcome = await offline.install();
