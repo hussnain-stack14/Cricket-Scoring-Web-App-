@@ -1,5 +1,5 @@
 import { db, tables } from './db.js';
-import { fetchWithTimeout } from './request.js';
+import { DEFAULT_REQUEST_TIMEOUT_MS, fetchWithTimeout } from './request.js';
 import { matchStates } from './engine.js';
 
 // The server permits up to 250 changes, but processing a backup batch requires individual
@@ -7,7 +7,7 @@ import { matchStates } from './engine.js';
 // request limits and make interrupted uploads resumable.
 const MAX_BATCH = 50;
 const PUSH_TIMEOUT_MS = 45_000;
-const SESSION_TIMEOUT_MS = 4000;
+const SESSION_TIMEOUT_MS = DEFAULT_REQUEST_TIMEOUT_MS;
 const recordKey = (table, recordId) => `${table}:${recordId}`;
 const pendingKey = (workspaceId, table, recordId) => `${workspaceId}:${table}:${recordId}`;
 let sessionRequest;
