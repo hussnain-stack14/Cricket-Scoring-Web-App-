@@ -236,6 +236,11 @@ export default function SignOutAction({ workspaceId, compact = false, onOpen, re
       }
       window.location.assign('/account/login/');
     } catch (signOutError) {
+      setSessionInvalidated(false);
+      if (signOutTokenRef.current === signOutToken) {
+        await cancelSignOut(workspaceId, signOutToken).catch(() => {});
+        rememberSignOutToken(null);
+      }
       setError(
         signOutError instanceof Error
           ? signOutError.message
