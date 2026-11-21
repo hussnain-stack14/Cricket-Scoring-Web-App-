@@ -215,6 +215,7 @@ export default function Match({ w, data, run, error, session }) {
       kind,
       player: s.striker,
       survivorEnd: 'striker',
+      completedRuns: 0,
     });
     setSheet({ type: 'wicket', kind });
   }
@@ -224,6 +225,9 @@ export default function Match({ w, data, run, error, session }) {
       extra: 'none',
       extraRuns: 0,
       running: 0,
+      ...(delivery.kind === 'run out'
+        ? { completedRuns: Number(delivery.completedRuns ?? 0) }
+        : {}),
       wicket: {
         kind: delivery.kind,
         player: delivery.player,
@@ -266,6 +270,16 @@ export default function Match({ w, data, run, error, session }) {
       ...current,
       ...simpleDelivery(current.extra, runs),
       kind: runs === 0 || current.kind === 'run out' ? current.kind : '',
+      ...(current.kind === 'run out' ? { completedRuns: runs } : {}),
+    }));
+  }
+  function setDismissalKind(kind) {
+    setDelivery((current) => ({
+      ...current,
+      kind,
+      ...(kind === 'run out'
+        ? { completedRuns: Number(current.running) || 0 }
+        : {}),
     }));
   }
   function advancedDismissal() {
@@ -285,6 +299,9 @@ export default function Match({ w, data, run, error, session }) {
       extra: delivery.extra,
       extraRuns: delivery.extraRuns,
       running: delivery.running,
+      ...(delivery.kind === 'run out'
+        ? { completedRuns: Number(delivery.completedRuns ?? 0) }
+        : {}),
       boundary: delivery.boundary,
       wicket,
     });
@@ -344,6 +361,42 @@ export default function Match({ w, data, run, error, session }) {
     } else setSheetError(error || 'Could not select this player. Refresh the match and try again.');
   }
   const set = (k, v) => setDelivery((d) => ({ ...d, [k]: v }));
+  const completedRunsValid =
+    Number.isSafeInteger(Number(delivery.completedRuns ?? 0)) &&
+    Number(delivery.completedRuns ?? 0) >= 0;
+  function completedRunsControl() {
+    return (
+      <Field label="Runs completed">
+        <div className="completed-runs-control">
+          <button
+            type="button"
+            aria-label="Decrease completed runs"
+            disabled={Number(delivery.completedRuns ?? 0) <= 0}
+            onClick={() =>
+              set('completedRuns', Math.max(0, Number(delivery.completedRuns ?? 0) - 1))
+            }
+          >
+            −
+          </button>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            value={delivery.completedRuns ?? 0}
+            onChange={(event) => set('completedRuns', Number(event.target.value))}
+          />
+          <button
+            type="button"
+            aria-label="Increase completed runs"
+            onClick={() => set('completedRuns', Number(delivery.completedRuns ?? 0) + 1)}
+          >
+            +
+          </button>
+        </div>
+      </Field>
+    );
+  }
   const latest = [...events].reverse().find((e) => e.type === 'delivery');
   const canUndo = Boolean(latest || events.at(-1)?.type === 'swapStrike');
   const dismissalKinds = getDismissalKinds();
@@ -814,12 +867,18 @@ export default function Match({ w, data, run, error, session }) {
                           Delivery {index + 1}:{' '}
                           {(event.bat || 0) +
                             (event.extraRuns || 0) +
+                            (event.wicket?.kind === 'run out'
+                              ? Math.max(0, (event.completedRuns || 0) - (event.running || 0))
+                              : 0) +
                             (event.extra === 'wide' || event.extra?.startsWith('noBall')
                               ? 1
                               : 0)}{' '}
                           run
                           {(event.bat || 0) +
                             (event.extraRuns || 0) +
+                            (event.wicket?.kind === 'run out'
+                              ? Math.max(0, (event.completedRuns || 0) - (event.running || 0))
+                              : 0) +
                             (event.extra === 'wide' || event.extra?.startsWith('noBall')
                               ? 1
                               : 0) ===
@@ -901,7 +960,7 @@ export default function Match({ w, data, run, error, session }) {
                     type="button"
                     key={kind}
                     className={delivery.kind === kind ? 'selected' : ''}
-                    onClick={() => set('kind', kind)}
+                    onClick={() => setDismissalKind(kind)}
                   >
                     {kind[0].toUpperCase() + kind.slice(1)}
                   </button>
@@ -918,6 +977,7 @@ export default function Match({ w, data, run, error, session }) {
                   .filter(Boolean)
                   .map((playerId) => playerLabel(s.batting[playerId]))}
               />
+              {delivery.kind === 'run out' && completedRunsControl()}
               {delivery.kind === 'run out' && (
                 <Select
                   label="Which end does the not-out batter take?"
@@ -930,7 +990,12 @@ export default function Match({ w, data, run, error, session }) {
                 />
               )}
               <Button
-                disabled={savingDelivery || !delivery.kind || !delivery.player}
+                disabled={
+                  savingDelivery ||
+                  !delivery.kind ||
+                  !delivery.player ||
+                  (delivery.kind === 'run out' && !completedRunsValid)
+                }
                 onClick={recordWicket}
               >
                 {savingDelivery ? 'Saving…' : 'Record wicket'}
@@ -1002,8 +1067,8 @@ export default function Match({ w, data, run, error, session }) {
                   checked={!!delivery.kind}
                   onChange={(event) => {
                     if (event.target.checked) {
-                      set('kind', getDismissalKinds(delivery.extra)[0]);
-                    } else set('kind', '');
+                      setDismissalKind(getDismissalKinds(delivery.extra)[0]);
+                    } else setDismissalKind('');
                   }}
                 />
                 Wicket
@@ -1018,7 +1083,7 @@ export default function Match({ w, data, run, error, session }) {
                           type="button"
                           key={kind}
                           className={delivery.kind === kind ? 'selected' : ''}
-                          onClick={() => set('kind', kind)}
+                          onClick={() => setDismissalKind(kind)}
                         >
                           {kind[0].toUpperCase() + kind.slice(1)}
                         </button>
@@ -1035,6 +1100,7 @@ export default function Match({ w, data, run, error, session }) {
                       .filter(Boolean)
                       .map((playerId) => playerLabel(s.batting[playerId]))}
                   />
+                  {delivery.kind === 'run out' && completedRunsControl()}
                   {delivery.kind === 'run out' && (
                     <Select
                       label="Which end does the not-out batter take?"
@@ -1049,7 +1115,11 @@ export default function Match({ w, data, run, error, session }) {
                 </>
               )}
               <Button
-                disabled={savingDelivery || (!!delivery.kind && !delivery.player)}
+                disabled={
+                  savingDelivery ||
+                  (!!delivery.kind && !delivery.player) ||
+                  (delivery.kind === 'run out' && !completedRunsValid)
+                }
                 onClick={recordSimpleDelivery}
               >
                 {savingDelivery ? 'Saving…' : 'Record Ball'}
@@ -1076,6 +1146,9 @@ export default function Match({ w, data, run, error, session }) {
                         survivorEnd: delivery.survivorEnd,
                       }
                     : null,
+                  ...(delivery.kind === 'run out'
+                    ? { completedRuns: Number(delivery.completedRuns ?? 0) }
+                    : {}),
                 });
               }}
             >
@@ -1128,7 +1201,14 @@ export default function Match({ w, data, run, error, session }) {
                 min="0"
                 max="6"
                 value={delivery.running}
-                onChange={(e) => set('running', Number(e.target.value))}
+                onChange={(e) => {
+                  const running = Number(e.target.value);
+                  setDelivery((current) => ({
+                    ...current,
+                    running,
+                    ...(current.kind === 'run out' ? { completedRuns: running } : {}),
+                  }));
+                }}
               />
               <p className="help">Enter runs completed by the batters, not penalties.</p>
               <label className="check">
@@ -1142,7 +1222,7 @@ export default function Match({ w, data, run, error, session }) {
               <Select
                 label="Dismissal (optional)"
                 value={delivery.kind}
-                onChange={(e) => set('kind', e.target.value)}
+                onChange={(e) => setDismissalKind(e.target.value)}
                 options={[
                   { id: '', name: 'No wicket' },
                   ...getDismissalKinds(delivery.extra).concat(
@@ -1150,6 +1230,7 @@ export default function Match({ w, data, run, error, session }) {
                   ),
                 ]}
               />
+              {delivery.kind === 'run out' && completedRunsControl()}
               {delivery.kind && (
                 <Select
                   label="Dismissed batter"
@@ -1175,7 +1256,11 @@ export default function Match({ w, data, run, error, session }) {
                 Penalties are added automatically. Enter only completed running, excluding penalties
                 and boundary allowances. Umpire decisions determine the dismissal and ends.
               </p>
-              <Button disabled={savingDelivery}>
+              <Button
+                disabled={
+                  savingDelivery || (delivery.kind === 'run out' && !completedRunsValid)
+                }
+              >
                 {savingDelivery ? 'Saving…' : 'Save advanced delivery'}
               </Button>
             </form>

@@ -17,6 +17,8 @@ import {
   validateBackup,
   uuid,
 } from '../lib/db.js';
+import { pushChanges } from '../lib/sync.js';
+import { matchStates } from '../lib/engine.js';
 test('workspace isolation, transaction rollback, revisions, undo, backup and finalization', async () => {
   await db.delete();
   await db.open();
@@ -124,6 +126,131 @@ test('workspace isolation, transaction rollback, revisions, undo, backup and fin
   await db.open();
   assert.equal((await all(w.id)).matches.length, 1);
   await db.delete();
+});
+
+test('run-out completed runs persist offline, sync with the event, and survive undo and correction', async () => {
+  await db.delete();
+  await db.open();
+  const priorFetch = globalThis.fetch;
+  const w = await createWorkspace('Run-out scorer');
+  await db.syncMeta.put({
+    workspaceId: w.id,
+    teamId: 'run-out-sync',
+    role: 'owner',
+    revisions: {},
+    conflicts: [],
+  });
+  const players = [];
+  for (let index = 0; index < 6; index++)
+    players.push(await saveRecord(w.id, 'players', { name: `Player ${index}` }));
+  const teams = [];
+  for (let index = 0; index < 2; index++) {
+    const team = { id: uuid(), name: `Side ${index}` };
+    const squad = players.slice(index * 3, index * 3 + 3);
+    await saveTeam(
+      w.id,
+      team,
+      squad.map((player) => player.id),
+    );
+    teams.push({ ...team, squad });
+  }
+  let match = await createMatch(
+    w.id,
+    {
+      teams,
+      date: '2026-11-10',
+      firstBat: 0,
+      rules: { overs: 1, size: 3, maxBowler: 1, freeHit: true },
+    },
+    { striker: players[0].id, nonStriker: players[1].id, bowler: players[3].id },
+  );
+  const addRunOut = (completedRuns) =>
+    changeMatch(w.id, match.id, match.revision, {
+      type: 'event',
+      event: {
+        id: uuid(),
+        type: 'delivery',
+        bat: 0,
+        extra: 'none',
+        extraRuns: 0,
+        running: 0,
+        completedRuns,
+        wicket: {
+          kind: 'run out',
+          player: players[1].id,
+          survivorEnd: 'nonStriker',
+        },
+      },
+    });
+  const score = async () => {
+    const data = await all(w.id);
+    return matchStates(
+      match,
+      data.innings.filter((inning) => inning.matchId === match.id),
+      data.events.filter((event) => event.matchId === match.id),
+    )[0];
+  };
+  let pushed;
+  globalThis.fetch = async (url, options = {}) => {
+    assert.equal(url, '/api/sync/push');
+    const changes = JSON.parse(options.body).changes;
+    pushed = changes;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        applied: changes.map((change) => ({
+          table: change.table,
+          recordId: change.recordId,
+          changeId: change.changeId,
+          revision: change.baseRevision + 1,
+        })),
+        rejected: [],
+      }),
+    };
+  };
+
+  try {
+    match = await addRunOut(2);
+    assert.equal((await score()).runs, 2);
+    assert.equal((await all(w.id)).events[0].completedRuns, 2);
+
+    db.close();
+    await db.open();
+    match = (await all(w.id)).matches.find((record) => record.id === match.id);
+    assert.equal((await score()).runs, 2);
+    assert.equal((await pushChanges(w.id)).pushed > 0, true);
+    assert.equal(
+      pushed.find((change) => change.table === 'events' && !change.deleted).data.completedRuns,
+      2,
+    );
+    assert.equal(await db.pendingChanges.where({ workspaceId: w.id }).count(), 0);
+
+    match = await changeMatch(w.id, match.id, match.revision, { type: 'undo' });
+    assert.equal((await score()).runs, 0);
+    match = await addRunOut(1);
+    assert.equal((await score()).runs, 1);
+    const correctedEvent = (await all(w.id)).events.find(
+      (event) => event.matchId === match.id && event.type === 'delivery',
+    );
+    assert.equal(correctedEvent.completedRuns, 1);
+
+    db.close();
+    await db.open();
+    match = (await all(w.id)).matches.find((record) => record.id === match.id);
+    assert.equal((await score()).runs, 1);
+    await pushChanges(w.id);
+    assert.ok(
+      pushed.some(
+        (change) =>
+          change.table === 'events' && !change.deleted && change.data.completedRuns === 1,
+      ),
+    );
+  } finally {
+    globalThis.fetch = priorFetch;
+    db.close();
+    await db.delete();
+  }
 });
 
 function tablesCount(backup) {

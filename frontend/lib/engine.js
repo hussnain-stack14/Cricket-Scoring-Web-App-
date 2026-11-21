@@ -160,8 +160,22 @@ export function replay(match, inning, events, target = null) {
       !e.boundary || ([4, 6].includes(bat) && running === 0),
       'Bat boundary must be four or six with no running.',
     );
-    const penalty = wide || nb ? 1 : 0,
-      total = bat + extraRuns + penalty,
+    let completedRuns = running;
+    if (wicket?.kind === 'run out') {
+      completedRuns = e.completedRuns ?? running;
+      check(
+        Number.isSafeInteger(completedRuns) && completedRuns >= 0,
+        'Completed runs must be a non-negative whole number.',
+      );
+    }
+    const addedCompletedRuns = Math.max(0, completedRuns - running),
+      creditedBatRuns =
+        bat + (extra === 'none' || extra === 'noBall' ? addedCompletedRuns : 0),
+      creditedExtraRuns =
+        extraRuns + (wide || bye || lb ? addedCompletedRuns : 0),
+      effectiveRunning = Math.max(running, completedRuns),
+      penalty = wide || nb ? 1 : 0,
+      total = creditedBatRuns + creditedExtraRuns + penalty,
       legal = !wide && !nb;
     const batter = s.batting[s.striker],
       bowler = s.bowling[s.bowler];
@@ -204,16 +218,16 @@ export function replay(match, inning, events, target = null) {
     }
     const before = s.balls;
     batter.balls += wide ? 0 : 1;
-    batter.runs += bat;
+    batter.runs += creditedBatRuns;
     if (e.boundary && bat === 4) batter.fours++;
     if (e.boundary && bat === 6) batter.sixes++;
     s.runs += total;
     s.partnership += total;
-    if (wide) s.extras.wide += 1 + extraRuns;
+    if (wide) s.extras.wide += 1 + creditedExtraRuns;
     if (nb) s.extras.noBall++;
-    if (bye) s.extras.bye += extraRuns;
-    if (lb) s.extras.legBye += extraRuns;
-    const conceded = bat + penalty + (wide ? extraRuns : 0);
+    if (bye) s.extras.bye += creditedExtraRuns;
+    if (lb) s.extras.legBye += creditedExtraRuns;
+    const conceded = creditedBatRuns + penalty + (wide ? creditedExtraRuns : 0);
     bowler.runs += conceded;
     if (conceded === 0) bowler.dots++;
     bowler.bowled = true;
@@ -222,7 +236,7 @@ export function replay(match, inning, events, target = null) {
       s.balls++;
       bowler.balls++;
     }
-    if (running % 2) [s.striker, s.nonStriker] = [s.nonStriker, s.striker];
+    if (effectiveRunning % 2) [s.striker, s.nonStriker] = [s.nonStriker, s.striker];
     if (dismissal) {
       s.wickets++;
       s.batting[dismissal.player].out = true;

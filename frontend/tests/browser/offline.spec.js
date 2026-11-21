@@ -169,7 +169,17 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   }
   await page.getByRole('button', { name: 'W', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Record wicket' })).toBeVisible();
+  const completedRuns = page.getByLabel('Runs completed');
+  await expect(completedRuns).toHaveValue('0');
+  await page.getByRole('button', { name: 'Increase completed runs' }).click();
+  await expect(completedRuns).toHaveValue('1');
+  await page.getByRole('button', { name: 'Decrease completed runs' }).click();
+  await expect(completedRuns).toHaveValue('0');
+  await completedRuns.fill('1');
   await page.getByRole('button', { name: 'Record wicket' }).click();
+  await expect(page.locator('.big-score')).toContainText('3/1');
+  await page.reload();
+  await expect(page.locator('.big-score')).toContainText('3/1');
   await page.getByRole('button', { name: '+ Add new batsman' }).click();
   await page.getByLabel('Player name').fill('Replacement Batter');
   await page.getByRole('button', { name: 'Add player', exact: true }).click();

@@ -918,6 +918,30 @@ td small {
 .quick-sheet-content {
   padding-bottom: 8px;
 }
+.completed-runs-control {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  gap: 8px;
+}
+.completed-runs-control button {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--green);
+  font-size: 22px;
+  font-weight: 700;
+}
+.completed-runs-control button:disabled {
+  color: var(--muted);
+  opacity: 0.55;
+}
+.completed-runs-control input {
+  min-width: 0;
+  min-height: 48px;
+  text-align: center;
+  font-size: 18px;
+}
 .simple-field-label {
   margin: 12px 0 7px;
   color: var(--ink);

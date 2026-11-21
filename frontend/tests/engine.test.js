@@ -155,6 +155,129 @@ test('run out credits no bowler wicket and explicitly sets survivor end', () => 
   assert.equal(s.nonStriker, 'a');
   assert.equal(s.needBatter, 'striker');
 });
+test('run-out completed runs of zero, one, and two are replayed once and rotate strike', () => {
+  const runOut = (completedRuns) =>
+    replay(match, inn, [
+      ball({
+        completedRuns,
+        wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+      }),
+    ]);
+
+  const zero = runOut(0);
+  assert.equal(zero.runs, 0);
+  assert.equal(zero.batting.a.runs, 0);
+  assert.equal(zero.bowling.x.wickets, 0);
+
+  const one = runOut(1);
+  assert.equal(one.runs, 1);
+  assert.equal(one.batting.a.runs, 1);
+  assert.equal(one.striker, null);
+  assert.equal(one.nonStriker, 'a');
+  assert.equal(one.needBatter, 'striker');
+  assert.equal(one.bowling.x.wickets, 0);
+
+  const two = runOut(2);
+  assert.equal(two.runs, 2);
+  assert.equal(two.batting.a.runs, 2);
+  assert.equal(two.bowling.x.wickets, 0);
+});
+test('run-out entered runs do not double count runs already selected', () => {
+  const alreadySelected = replay(match, inn, [
+    ball({
+      bat: 1,
+      running: 1,
+      completedRuns: 1,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(alreadySelected.runs, 1);
+  assert.equal(alreadySelected.batting.a.runs, 1);
+
+  const oneMoreCompleted = replay(match, inn, [
+    ball({
+      bat: 1,
+      running: 1,
+      completedRuns: 2,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(oneMoreCompleted.runs, 2);
+  assert.equal(oneMoreCompleted.batting.a.runs, 2);
+});
+test('run-out completed runs follow delivery-type credits without changing extras rules', () => {
+  const wide = replay(match, inn, [
+    ball({
+      extra: 'wide',
+      extraRuns: 1,
+      running: 1,
+      completedRuns: 2,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(wide.runs, 3);
+  assert.equal(wide.extras.wide, 3);
+  assert.equal(wide.batting.a.runs, 0);
+  assert.equal(wide.bowling.x.runs, 3);
+  assert.equal(wide.balls, 0);
+  assert.equal(wide.bowling.x.wickets, 0);
+
+  const noBall = replay(match, inn, [
+    ball({
+      extra: 'noBall',
+      bat: 1,
+      running: 1,
+      completedRuns: 2,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(noBall.runs, 3);
+  assert.equal(noBall.batting.a.runs, 2);
+  assert.equal(noBall.bowling.x.runs, 3);
+  assert.equal(noBall.balls, 0);
+  assert.equal(noBall.freeHit, true);
+
+  const bye = replay(match, inn, [
+    ball({
+      extra: 'bye',
+      extraRuns: 1,
+      running: 1,
+      completedRuns: 2,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(bye.runs, 2);
+  assert.equal(bye.extras.bye, 2);
+  assert.equal(bye.batting.a.runs, 0);
+  assert.equal(bye.bowling.x.runs, 0);
+  assert.equal(bye.balls, 1);
+
+  const noBallLegBye = replay(match, inn, [
+    ball({
+      extra: 'noBallLegBye',
+      extraRuns: 1,
+      running: 1,
+      completedRuns: 2,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(noBallLegBye.runs, 3);
+  assert.equal(noBallLegBye.extras.noBall, 1);
+  assert.equal(noBallLegBye.extras.legBye, 2);
+  assert.equal(noBallLegBye.bowling.x.runs, 1);
+  assert.equal(noBallLegBye.balls, 0);
+});
+test('historical run-out events without completedRuns retain their original score', () => {
+  const oldEvent = replay(match, inn, [
+    ball({
+      bat: 1,
+      running: 1,
+      wicket: { kind: 'run out', player: 'b', survivorEnd: 'nonStriker' },
+    }),
+  ]);
+  assert.equal(oldEvent.runs, 1);
+  assert.equal(oldEvent.batting.a.runs, 1);
+});
 test('caught on sixth delivery: new batter at non-striker end, new bowler mandatory', () => {
   const es = [
     ...Array.from({ length: 5 }, () => ball()),
