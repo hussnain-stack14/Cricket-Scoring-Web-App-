@@ -171,9 +171,83 @@ button:disabled {
 .theme-option-swatch { display: flex; gap: 5px; margin-bottom: 12px; }
 .theme-option-swatch i { width: 21px; height: 21px; border-radius: 50%; border: 1px solid #0001; }
 .theme-option.red i:first-child { background: #b91c1c; }.theme-option.red i:last-child { background: #fef2f2; }
-.update-notice { position: fixed; z-index: 30; right: max(16px, env(safe-area-inset-right)); bottom: calc(82px + env(safe-area-inset-bottom)); width: min(390px, calc(100vw - 32px)); padding: 15px; border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 14px; background: var(--surface); box-shadow: 0 12px 35px #0002; }
+.update-notice {
+  position: fixed;
+  z-index: 30;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  width: min(390px, calc(100vw - 32px));
+  padding: 16px 48px 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 35px #0002;
+  animation: update-notice-enter 180ms ease-out;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+.update-notice[data-closing='true'] {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.update-notice > strong {
+  display: block;
+  padding-right: 4px;
+  color: var(--ink);
+}
 .update-notice p { margin: 4px 0 12px; }
-@media (min-width: 760px) { .update-notice { bottom: 24px; } }
+.update-notice-status {
+  display: block;
+  margin: -4px 0 10px;
+  color: var(--muted);
+}
+.update-notice-error {
+  color: var(--danger, #b42318);
+  font-size: 13px;
+}
+.update-notice-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+.update-notice-close:hover,
+.update-notice-close:focus-visible {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+.update-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.update-notice-actions .button {
+  min-height: 44px;
+  flex: 1 1 125px;
+}
+@keyframes update-notice-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 760px) {
+  .update-notice { bottom: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-notice,
+  .update-notice[data-closing='true'] {
+    animation: none;
+    transition: none;
+  }
+}
 .app {
   max-width: 1200px;
   margin: auto;

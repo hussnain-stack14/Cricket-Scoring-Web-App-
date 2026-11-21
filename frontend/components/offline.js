@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { liveQuery } from 'dexie';
 import { PWA_INSTALL_EVENT } from './PwaInstallCapture';
+import { db } from '../lib/db';
 
 function isStandalone() {
   return (
@@ -11,6 +13,61 @@ function isStandalone() {
 }
 
 const offlineFailure = "Offline setup couldn't finish. Connect to the internet and try again.";
+const UPDATE_SNOOZE_KEY = 'crease-update-snoozed-until';
+const UPDATE_DISMISSED_KEY = 'crease-update-dismissed-session';
+const UPDATE_SNOOZE_MS = 24 * 60 * 60 * 1000;
+const UPDATE_TIMEOUT_MS = 30_000;
+let updateReloadStarted = false;
+
+function storedTimestamp() {
+  try {
+    const value = Number(localStorage.getItem(UPDATE_SNOOZE_KEY));
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function dismissedForSession() {
+  try {
+    return sessionStorage.getItem(UPDATE_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function updateAvailablePhase() {
+  return storedTimestamp() > Date.now() ? 'deferred' : 'available';
+}
+
+function verifyWorker(worker) {
+  if (!worker) return Promise.reject(new Error('No waiting service worker is available.'));
+  const channel = new MessageChannel();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      channel.port1.close();
+      reject(new Error('Timed out verifying the waiting update.'));
+    }, 15000);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer);
+      if (event.data?.ready === true) resolve(true);
+      else reject(new Error('The waiting update is not ready. Check your connection and retry.'));
+      channel.port1.close();
+    };
+    channel.port1.onmessageerror = () => {
+      clearTimeout(timer);
+      channel.port1.close();
+      reject(new Error('Could not verify the waiting update. Keep this page open and retry.'));
+    };
+    try {
+      worker.postMessage({ type: 'VERIFY' }, [channel.port2]);
+    } catch (error) {
+      clearTimeout(timer);
+      channel.port1.close();
+      reject(error);
+    }
+  });
+}
 
 function waitForActivation(registration) {
   if (registration.active) return Promise.resolve(registration);
@@ -56,9 +113,56 @@ export function useOffline() {
   const [installState, setInstallState] = useState('checking');
   const [installed, setInstalled] = useState(false);
   const [update, setUpdate] = useState(false);
+  const [snoozedUntil, setSnoozedUntil] = useState(storedTimestamp);
+  const [dismissed, setDismissed] = useState(dismissedForSession);
+  const [noticeClock, setNoticeClock] = useState(Date.now);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  const [updateBlocked, setUpdateBlocked] = useState(false);
+  const [updatePhase, setUpdatePhase] = useState('checking');
+  const [liveMatchCount, setLiveMatchCount] = useState(0);
   const registrationRef = useRef(null);
   const checkTimerRef = useRef(null);
   const releaseVersionRef = useRef(null);
+  const updateListenerRef = useRef(null);
+  const installingListenerRef = useRef(null);
+  const applyPromiseRef = useRef(null);
+  const checkPromiseRef = useRef(null);
+  const noticeVisible = update && !dismissed && snoozedUntil <= noticeClock;
+
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      setNoticeClock(now);
+      if (storedTimestamp() <= now)
+        setUpdatePhase((current) => (current === 'deferred' ? 'available' : current));
+    };
+    const timer = window.setInterval(tick, 60_000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = liveQuery(() =>
+      db.matches.filter((match) => match.status === 'live').count(),
+    ).subscribe({
+      next: (count) => {
+        setLiveMatchCount(count);
+        if (count === 0) {
+          setUpdateBlocked(false);
+          setUpdatePhase((current) => (current === 'waiting-live' ? 'available' : current));
+        }
+      },
+      error: () =>
+        setUpdateError('Could not check for active matches. Keep scoring open and retry.'),
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const readRelease = useCallback(async () => {
     if (!navigator.onLine) return null;
@@ -135,15 +239,40 @@ export function useOffline() {
       }
       const updateFound = () => {
         const worker = reg.installing;
-        worker?.addEventListener('statechange', () => {
-          if (worker.state === 'installed' && navigator.serviceWorker.controller) setUpdate(true);
-        });
-        if (reg.waiting) setUpdate(true);
+        if (installingListenerRef.current?.worker !== worker) {
+          if (installingListenerRef.current)
+            installingListenerRef.current.worker.removeEventListener(
+              'statechange',
+              installingListenerRef.current.listener,
+            );
+          const onStateChange = () => {
+            if (worker?.state === 'installed' && navigator.serviceWorker.controller) {
+              setUpdate(true);
+              setUpdatePhase(updateAvailablePhase());
+            }
+          };
+          if (worker) {
+            worker.addEventListener('statechange', onStateChange);
+            installingListenerRef.current = { worker, listener: onStateChange };
+          }
+        }
+        if (reg.waiting || worker?.state === 'installed') {
+          setUpdate(true);
+          setUpdatePhase(updateAvailablePhase());
+        }
       };
-      reg.addEventListener('updatefound', updateFound);
+      if (updateListenerRef.current?.registration !== reg) {
+        updateListenerRef.current?.registration.removeEventListener(
+          'updatefound',
+          updateListenerRef.current.listener,
+        );
+        reg.addEventListener('updatefound', updateFound);
+        updateListenerRef.current = { registration: reg, listener: updateFound };
+      }
       if (reg.installing || reg.waiting) updateFound();
       registrationRef.current = reg;
       setUpdate(!!reg.waiting);
+      setUpdatePhase(reg.waiting ? updateAvailablePhase() : 'no-update');
       // Read release metadata independently of Cache Storage. A failed/offline
       // request is not an update and never changes local scoring data.
       try {
@@ -213,26 +342,55 @@ export function useOffline() {
       window.removeEventListener('focus', check);
       document.removeEventListener('visibilitychange', check);
       window.clearInterval(checkTimerRef.current);
+      if (updateListenerRef.current) {
+        updateListenerRef.current.registration.removeEventListener(
+          'updatefound',
+          updateListenerRef.current.listener,
+        );
+        updateListenerRef.current = null;
+      }
+      if (installingListenerRef.current) {
+        installingListenerRef.current.worker.removeEventListener(
+          'statechange',
+          installingListenerRef.current.listener,
+        );
+        installingListenerRef.current = null;
+      }
     };
   }, [prepare]);
 
   const checkForUpdate = useCallback(async () => {
-    const reg = registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
-    if (!reg || !navigator.onLine) return false;
-    registrationRef.current = reg;
+    if (checkPromiseRef.current) return checkPromiseRef.current;
+    setUpdatePhase('checking');
+    const check = (async () => {
+      const reg = registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
+      if (!reg || !navigator.onLine) {
+        setUpdatePhase('no-update');
+        return false;
+      }
+      registrationRef.current = reg;
+      try {
+        const release = await readRelease();
+        const releaseChanged = Boolean(
+          release && releaseVersionRef.current && release.version !== releaseVersionRef.current,
+        );
+        if (release) releaseVersionRef.current = release.version;
+        await reg.update();
+        const hasUpdate = Boolean(reg.waiting);
+        setUpdate(hasUpdate);
+        if (hasUpdate) setUpdatePhase(updateAvailablePhase());
+        else setUpdatePhase('no-update');
+        // Metadata is advisory. A worker must be waiting before an update can be applied.
+        return hasUpdate || releaseChanged;
+      } catch {
+        return false;
+      }
+    })();
+    checkPromiseRef.current = check;
     try {
-      const release = await readRelease();
-      const releaseChanged = Boolean(
-        release && releaseVersionRef.current && release.version !== releaseVersionRef.current,
-      );
-      if (release) releaseVersionRef.current = release.version;
-      await reg.update();
-      const hasUpdate = Boolean(reg.waiting);
-      setUpdate(hasUpdate);
-      // Metadata is advisory. A worker must be waiting before an update can be applied.
-      return hasUpdate || releaseChanged;
-    } catch {
-      return false;
+      return await check;
+    } finally {
+      checkPromiseRef.current = null;
     }
   }, [readRelease]);
 
@@ -296,17 +454,117 @@ export function useOffline() {
   }, [prepare, verify]);
 
   async function applyUpdate() {
-    const reg = registrationRef.current;
-    if (!reg?.waiting) return;
-    navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), {
-      once: true,
-    });
-    reg.waiting.postMessage({ type: 'ACTIVATE' });
+    if (applyPromiseRef.current) return applyPromiseRef.current;
+    const applying = (async () => {
+      setApplyingUpdate(true);
+      setUpdateError('');
+      setUpdateBlocked(false);
+      setUpdatePhase('checking');
+      try {
+        const reg =
+          registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
+        if (!reg?.waiting) {
+          setUpdatePhase('no-update');
+          throw new Error(
+            'The waiting update is no longer available. Check for updates and retry.',
+          );
+        }
+        registrationRef.current = reg;
+        const waitingWorker = reg.waiting;
+        await verifyWorker(waitingWorker);
+
+        if (!db.isOpen()) await db.open();
+        const hasLiveMatches = await db.transaction('r', ...db.tables, async () =>
+          db.matches.filter((match) => match.status === 'live').count(),
+        );
+        if (hasLiveMatches) {
+          setUpdateBlocked(true);
+          setUpdatePhase('waiting-live');
+          return false;
+        }
+        if (updateReloadStarted)
+          throw new Error('An update is already being applied in another request. Wait or retry.');
+
+        setUpdatePhase('applying');
+        await new Promise((resolve, reject) => {
+          let settled = false;
+          const finish = (error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+            if (error) reject(error);
+            else resolve();
+          };
+          const onControllerChange = () => {
+            if (updateReloadStarted) return;
+            updateReloadStarted = true;
+            setUpdatePhase('completed');
+            finish();
+            window.location.reload();
+          };
+          const timer = setTimeout(
+            () =>
+              finish(
+                new Error(
+                  'The update did not take control of this page. Your saved data is unchanged; check your connection and retry.',
+                ),
+              ),
+            UPDATE_TIMEOUT_MS,
+          );
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+          if (reg.waiting !== waitingWorker) {
+            finish(
+              new Error('The waiting update changed before it could be applied. Retry safely.'),
+            );
+            return;
+          }
+          try {
+            waitingWorker.postMessage({ type: 'ACTIVATE' });
+          } catch (error) {
+            finish(error);
+          }
+        });
+        return true;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not apply the update. Your saved data is unchanged; retry when ready.';
+        setUpdateError(message);
+        setUpdatePhase('failed');
+        return false;
+      } finally {
+        setApplyingUpdate(false);
+      }
+    })();
+    applyPromiseRef.current = applying;
+    try {
+      return await applying;
+    } finally {
+      applyPromiseRef.current = null;
+    }
   }
 
   function deferUpdate() {
-    // Keep the waiting worker intact; the next explicit check or app launch can offer it again.
-    setUpdate(false);
+    const until = Date.now() + UPDATE_SNOOZE_MS;
+    setSnoozedUntil(until);
+    setNoticeClock(Date.now());
+    setUpdatePhase('deferred');
+    try {
+      localStorage.setItem(UPDATE_SNOOZE_KEY, String(until));
+    } catch {
+      // Snoozing is optional; the update remains available if storage is blocked.
+    }
+  }
+
+  function dismissUpdateNotice() {
+    setDismissed(true);
+    try {
+      sessionStorage.setItem(UPDATE_DISMISSED_KEY, '1');
+    } catch {
+      // Closing the notice never changes the waiting service worker.
+    }
   }
 
   const installationMessage = {
@@ -325,11 +583,18 @@ export function useOffline() {
     retry,
     checkForUpdate,
     update,
+    noticeVisible,
+    updatePhase,
+    applyingUpdate,
+    updateError,
+    updateBlocked,
+    liveMatchCount,
     installed,
     installState,
     installationMessage,
     install,
     applyUpdate,
     deferUpdate,
+    dismissUpdateNotice,
   };
 }

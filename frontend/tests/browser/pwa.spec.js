@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
 
 test('production install controls, manifest, icons and offline precache are accurate', async ({
   page,
@@ -113,6 +114,154 @@ test('production install controls, manifest, icons and offline precache are accu
   await heroOpenApp.click();
   await expect(page).toHaveURL(/\/app\/$/);
   expect(consoleErrors).toEqual([]);
+});
+
+test('update notice snoozes, preserves live matches, and reloads only after explicit apply', async ({
+  page,
+}) => {
+  const originalWorker = await readFile('public/sw.js', 'utf8');
+  try {
+    await page.goto('/app/');
+    await expect(page.getByText('A workspace of your own')).toBeVisible({ timeout: 15000 });
+    await page.getByLabel('Your scorer name').fill('PWA update scorer');
+    await page.getByRole('button', { name: 'Get started' }).click();
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker?.controller));
+
+    await page.evaluate(async () => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction(
+          ['matches', 'pendingChanges'],
+          'readwrite',
+        );
+        const liveMatchId = crypto.randomUUID();
+        const pendingChangeId = crypto.randomUUID();
+        transaction.objectStore('matches').put({
+          id: liveMatchId,
+          workspaceId: 'pwa-update-safety-test',
+          status: 'live',
+        });
+        transaction.objectStore('pendingChanges').put({
+          id: `pwa-update-safety-test:events:${pendingChangeId}`,
+          changeId: crypto.randomUUID(),
+          workspaceId: 'pwa-update-safety-test',
+          table: 'events',
+          recordId: pendingChangeId,
+          data: { id: pendingChangeId, type: 'delivery', completedRuns: 1 },
+          deleted: false,
+          baseRevision: 0,
+          queuedAt: new Date().toISOString(),
+        });
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+      const ids = { liveMatchId, pendingChangeId };
+      window.__pwaUpdateSafetyIds = ids;
+      sessionStorage.setItem('pwa-update-safety-test-ids', JSON.stringify(ids));
+    });
+
+    await writeFile(
+      'public/sw.js',
+      originalWorker.replace(/const CACHE = '([^']+)'/, "const CACHE = '$1-notification-test'"),
+    );
+    await page.evaluate(async () => {
+      await (await navigator.serviceWorker.getRegistration('/')).update();
+    });
+    const notice = page.getByRole('region', { name: 'Crease update available' });
+    await expect(notice).toBeVisible({ timeout: 30000 });
+    await notice.getByRole('button', { name: 'Maybe later' }).click();
+    await expect(notice).toBeHidden();
+    expect(
+      await page.evaluate(() => Number(localStorage.getItem('crease-update-snoozed-until'))),
+    ).toBeGreaterThan(Date.now());
+    expect(
+      await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)),
+    ).toBe(true);
+
+    await page.evaluate(() =>
+      localStorage.setItem('crease-update-snoozed-until', String(Date.now() - 1)),
+    );
+    await page.reload();
+    await expect(notice).toBeVisible();
+    await notice.getByRole('button', { name: 'Dismiss update notification' }).click();
+    await expect(notice).toBeHidden();
+    expect(
+      await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)),
+    ).toBe(true);
+    await page.reload();
+    await expect(notice).toBeHidden();
+    await page.evaluate(() => sessionStorage.removeItem('crease-update-dismissed-session'));
+    await page.reload();
+    await expect(notice).toBeVisible();
+
+    const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+    await notice.getByRole('button', { name: 'Update now' }).click();
+    await expect(page.getByText('Finish live scoring before applying this update.')).toBeVisible();
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+    expect(
+      await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)),
+    ).toBe(true);
+
+    await page.evaluate(async () => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction(
+          ['matches', 'pendingChanges'],
+          'readwrite',
+        );
+        const { liveMatchId } = JSON.parse(
+          sessionStorage.getItem('pwa-update-safety-test-ids'),
+        );
+        transaction.objectStore('matches').delete(liveMatchId);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+    });
+    await expect(page.getByText('Finish live scoring before applying this update.')).toBeHidden();
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+    expect(
+      await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)),
+    ).toBe(true);
+    await Promise.all([
+      page.waitForFunction(
+        () => performance.getEntriesByType('navigation')[0]?.type === 'reload',
+        { timeout: 30000 },
+      ),
+      notice.getByRole('button', { name: 'Update now' }).click(),
+    ]);
+
+    const preserved = await page.evaluate(async () => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const { pendingChangeId } = JSON.parse(
+        sessionStorage.getItem('pwa-update-safety-test-ids'),
+      );
+      return new Promise((resolve, reject) => {
+        const transaction = database.transaction('pendingChanges', 'readonly');
+        const request = transaction
+          .objectStore('pendingChanges')
+          .get(`pwa-update-safety-test:events:${pendingChangeId}`);
+        transaction.oncomplete = () => resolve(request.result?.data);
+        transaction.onerror = () => reject(transaction.error);
+      });
+    });
+    expect(preserved.completedRuns).toBe(1);
+    await expect(page.getByRole('region', { name: 'Crease update available' })).toBeHidden();
+  } finally {
+    await writeFile('public/sw.js', originalWorker);
+  }
 });
 
 test('dashboard install suggestion is dismissible for the browser session and never blocks scoring', async ({

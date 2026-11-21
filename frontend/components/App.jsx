@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   ArrowRight,
   Download,
+  X,
 } from 'lucide-react';
 import {
   deleteMatch,
@@ -161,6 +162,7 @@ export default function App({ screen }) {
     [sidebarCollapsed, setSidebarCollapsed] = useState(false),
     [installHelpOpen, setInstallHelpOpen] = useState(false);
   const [installBannerDismissed, setInstallBannerDismissed] = useState(true);
+  const [updateNoticeClosing, setUpdateNoticeClosing] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {
@@ -175,9 +177,9 @@ export default function App({ screen }) {
   const [showStartupSplash, setShowStartupSplash] = useState(true);
   const [installCelebration, setInstallCelebration] = useState(false);
   const busy = useRef(false);
+  const updateNoticeTimer = useRef(null);
   const syncBusy = useRef(false);
   const syncRef = useRef(null);
-  const automaticUpdateStarted = useRef(false);
   const validatedSession = useRef(null);
   const sessionRef = useRef(session);
   const workspaceRef = useRef(w);
@@ -186,6 +188,15 @@ export default function App({ screen }) {
   workspaceRef.current = w;
   const offline = useOffline();
   const base = '/app';
+  useEffect(() => () => window.clearTimeout(updateNoticeTimer.current), []);
+  function closeUpdateNotice(action) {
+    if (updateNoticeClosing) return;
+    setUpdateNoticeClosing(true);
+    updateNoticeTimer.current = window.setTimeout(() => {
+      action();
+      setUpdateNoticeClosing(false);
+    }, 180);
+  }
   useEffect(() => {
     const cached = appShellCache;
     if (cached) {
@@ -553,23 +564,6 @@ export default function App({ screen }) {
   const completedMatches = matches.filter((match) => match.status === 'completed');
   const upcoming = upcomingMatches(matches, clock);
   const drafts = data?.drafts ?? [];
-  useEffect(() => {
-    // A dashboard-only restart is safe because it is outside live scoring. Pending
-    // changes remain durably stored in IndexedDB and are not a reason to block an
-    // application update forever. Other screens keep the explicit update notice.
-    if (
-      !offline.update ||
-      automaticUpdateStarted.current ||
-      screen !== 'dashboard' ||
-      liveMatches.length > 0
-    )
-      return undefined;
-    const timer = window.setTimeout(() => {
-      automaticUpdateStarted.current = true;
-      void offline.applyUpdate();
-    }, 1500);
-    return () => window.clearTimeout(timer);
-  }, [liveMatches.length, offline, screen]);
   const listedMatches =
     filter === 'upcoming' ? upcoming : matches.filter((m) => m.status === filter);
   const teamStats = useMemo(
@@ -942,14 +936,25 @@ export default function App({ screen }) {
                     <div className="dashboard-welcome">
                       <div>
                         <p className="dashboard-kicker">Welcome back, {w.name} 👋</p>
-                        <h2>{liveMatches.length ? 'Your match is ready.' : 'Ready for the next match?'}</h2>
+                        <h2>
+                          {liveMatches.length
+                            ? 'Your match is ready.'
+                            : 'Ready for the next match?'}
+                        </h2>
                         <p className="dashboard-summary">
                           {liveMatches.length
                             ? `${liveMatches.length} active ${liveMatches.length === 1 ? 'match' : 'matches'} saved on this device.`
                             : 'Create a scorebook and keep every ball in one place.'}
                         </p>
                       </div>
-                      <Link className="button dashboard-primary-action" href={liveMatches.length ? `${base}/match/?id=${liveMatches[0].id}` : `${base}/setup/?new=1`}>
+                      <Link
+                        className="button dashboard-primary-action"
+                        href={
+                          liveMatches.length
+                            ? `${base}/match/?id=${liveMatches[0].id}`
+                            : `${base}/setup/?new=1`
+                        }
+                      >
                         {liveMatches.length ? 'Resume match' : 'New match'} <ArrowRight size={17} />
                       </Link>
                     </div>
@@ -1236,22 +1241,55 @@ export default function App({ screen }) {
                       </div>
                     </aside>
                   )}
-                {offline.update && (
-                  <aside className="update-notice" role="status" aria-live="polite">
+                {offline.noticeVisible && screen !== 'match' && (
+                  <aside
+                    className="update-notice"
+                    data-closing={updateNoticeClosing || undefined}
+                    role="region"
+                    aria-label="Crease update available"
+                    aria-live="polite"
+                  >
+                    <button
+                      className="update-notice-close"
+                      type="button"
+                      aria-label="Dismiss update notification"
+                      disabled={updateNoticeClosing || offline.applyingUpdate}
+                      onClick={() => closeUpdateNotice(offline.dismissUpdateNotice)}
+                    >
+                      <X size={18} aria-hidden="true" />
+                    </button>
                     <strong>Crease update available</strong>
                     <p>A new version is ready. Your match data is safe.</p>
-                    {screen === 'match' || liveMatches.length > 0 ? (
-                      <small>Finish live scoring before applying this update.</small>
-                    ) : (
-                      <div className="actions">
-                        <button className="button compact" onClick={offline.applyUpdate}>
-                          Update now
-                        </button>
-                        <button className="button compact secondary" onClick={offline.deferUpdate}>
-                          Later
-                        </button>
-                      </div>
+                    {offline.updateBlocked ||
+                    offline.liveMatchCount > 0 ||
+                    liveMatches.length > 0 ? (
+                      <small className="update-notice-status">
+                        Finish live scoring before applying this update.
+                      </small>
+                    ) : null}
+                    {offline.updateError && (
+                      <p className="update-notice-error" role="alert">
+                        {offline.updateError}
+                      </p>
                     )}
+                    <div className="update-notice-actions">
+                      <button
+                        className="button compact"
+                        type="button"
+                        disabled={offline.applyingUpdate || updateNoticeClosing}
+                        onClick={() => void offline.applyUpdate()}
+                      >
+                        {offline.applyingUpdate ? 'Updating…' : 'Update now'}
+                      </button>
+                      <button
+                        className="button compact secondary"
+                        type="button"
+                        disabled={offline.applyingUpdate || updateNoticeClosing}
+                        onClick={() => closeUpdateNotice(offline.deferUpdate)}
+                      >
+                        Maybe later
+                      </button>
+                    </div>
                   </aside>
                 )}
               </>
@@ -1274,7 +1312,11 @@ export default function App({ screen }) {
                 <CheckCircle2 size={27} />
               </span>
               <p>You&apos;re ready to score your next match.</p>
-              <Link className="button" href={`${base}/`} onClick={() => setInstallCelebration(false)}>
+              <Link
+                className="button"
+                href={`${base}/`}
+                onClick={() => setInstallCelebration(false)}
+              >
                 Open Crease <ArrowRight size={17} aria-hidden="true" />
               </Link>
             </div>

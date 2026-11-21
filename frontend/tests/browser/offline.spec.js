@@ -14,7 +14,10 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByLabel('Your scorer name').fill('Local scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
   const syncPopover = page.locator('.sync-popover:visible');
-  await expect(syncPopover.locator('summary')).toHaveAttribute('aria-label', 'Sync status: Sign in to sync');
+  await expect(syncPopover.locator('summary')).toHaveAttribute(
+    'aria-label',
+    'Sync status: Sign in to sync',
+  );
   await syncPopover.locator('summary').click();
   await expect(syncPopover.getByText('Offline scoring ready')).toBeVisible({ timeout: 45000 });
   await syncPopover.locator('summary').click();
@@ -330,7 +333,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
     }
     await page.screenshot({ path: `test-results/match-${width}.png`, fullPage: true });
   }
-  // Install a new asset-cache version, prove it waits, then apply it without losing records.
+  // Install a new asset-cache version, prove it waits for an explicit safe update.
   await context.setOffline(false);
   await page.goto('/app/more/');
   await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
@@ -344,14 +347,151 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
       const r = await navigator.serviceWorker.getRegistration();
       await r.update();
     });
-    await expect(page.getByRole('button', { name: 'Apply update & reload' })).toBeVisible({
+    const updateNotice = page.getByRole('region', { name: 'Crease update available' });
+    await expect(updateNotice).toBeVisible({
       timeout: 30000,
     });
-    await page.getByRole('button', { name: 'Apply update & reload' }).click();
+    await updateNotice.getByRole('button', { name: 'Maybe later' }).click();
+    await expect(updateNotice).toBeHidden();
+    const snoozedUntil = await page.evaluate(() =>
+      Number(localStorage.getItem('crease-update-snoozed-until')),
+    );
+    expect(snoozedUntil).toBeGreaterThan(Date.now());
+    expect(
+      await page.evaluate(async () =>
+        Boolean((await navigator.serviceWorker.getRegistration()).waiting),
+      ),
+    ).toBe(true);
+
+    await page.evaluate(() =>
+      localStorage.setItem('crease-update-snoozed-until', String(Date.now() - 1)),
+    );
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Crease update available' })).toBeVisible();
+    await page
+      .getByRole('region', { name: 'Crease update available' })
+      .getByRole('button', { name: 'Dismiss update notification' })
+      .click();
+    await expect(page.getByRole('region', { name: 'Crease update available' })).toBeHidden();
+    expect(
+      await page.evaluate(async () =>
+        Boolean((await navigator.serviceWorker.getRegistration()).waiting),
+      ),
+    ).toBe(true);
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Crease update available' })).toBeHidden();
+    await page.evaluate(() => sessionStorage.removeItem('crease-update-dismissed-session'));
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Crease update available' })).toBeVisible();
+
+    const matchId = new URL(matchUrl).searchParams.get('id');
+    const beforeUpdate = await page.evaluate(async (id) => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return new Promise((resolve, reject) => {
+        const transaction = database.transaction(
+          ['matches', 'events', 'pendingChanges'],
+          'readonly',
+        );
+        const match = transaction.objectStore('matches').get(id);
+        const events = transaction.objectStore('events').count();
+        const pending = transaction.objectStore('pendingChanges').count();
+        transaction.oncomplete = () =>
+          resolve({ match: match.result, events: events.result, pending: pending.result });
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }, matchId);
+    await page.evaluate(async (id) => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction('matches', 'readwrite');
+        const store = transaction.objectStore('matches');
+        const request = store.get(id);
+        request.onsuccess = () => store.put({ ...request.result, status: 'live' });
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }, matchId);
+    await page
+      .getByRole('region', { name: 'Crease update available' })
+      .getByRole('button', { name: 'Update now' })
+      .click();
+    await expect(page.getByText('Finish live scoring before applying this update.')).toBeVisible();
+    expect(
+      await page.evaluate(async () =>
+        Boolean((await navigator.serviceWorker.getRegistration()).waiting),
+      ),
+    ).toBe(true);
+
+    const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+    await page.evaluate(async (id) => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction('matches', 'readwrite');
+        const store = transaction.objectStore('matches');
+        const request = store.get(id);
+        request.onsuccess = () => store.put({ ...request.result, status: 'completed' });
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }, matchId);
+    await expect(page.getByText('Finish live scoring before applying this update.')).toBeHidden();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+    expect(
+      await page.evaluate(async () =>
+        Boolean((await navigator.serviceWorker.getRegistration()).waiting),
+      ),
+    ).toBe(true);
+    await expect(
+      page.getByRole('region', { name: 'Crease update available' }).getByRole('button', {
+        name: 'Update now',
+      }),
+    ).toBeVisible();
+    await Promise.all([
+      page.waitForFunction(() => performance.getEntriesByType('navigation')[0]?.type === 'reload', {
+        timeout: 30000,
+      }),
+      page
+        .getByRole('region', { name: 'Crease update available' })
+        .getByRole('button', { name: 'Update now' })
+        .click(),
+    ]);
     await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
     await expect(page.getByText('Ready to use offline.', { exact: true })).toBeVisible({
       timeout: 30000,
     });
+    const afterUpdate = await page.evaluate(async (id) => {
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('crease-local');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return new Promise((resolve, reject) => {
+        const transaction = database.transaction(
+          ['matches', 'events', 'pendingChanges'],
+          'readonly',
+        );
+        const match = transaction.objectStore('matches').get(id);
+        const events = transaction.objectStore('events').count();
+        const pending = transaction.objectStore('pendingChanges').count();
+        transaction.oncomplete = () =>
+          resolve({ match: match.result, events: events.result, pending: pending.result });
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }, matchId);
+    expect(afterUpdate).toEqual(beforeUpdate);
   } finally {
     await writeFile('public/sw.js', originalWorker);
   }

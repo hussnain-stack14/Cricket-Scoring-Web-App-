@@ -303,23 +303,22 @@ export default function Settings({
             ground.
           </p>
           <p className="help">
-            Safe updates restart automatically from the dashboard. During live scoring, an update
-            stays ready until you finish or choose to restart when safe.
+            Updates are applied only when you choose. Crease checks for active matches again before
+            restarting, and never clears your scorebook or pending sync data.
           </p>
           {offline.update && (
             <div className="notice">
-              <p>
-                An update is ready. Finish scoring and save your drafts before applying it. Other
-                open tabs must also finish scoring.
-              </p>
-              <Button
-                disabled={data.matches.some((m) => m.status === 'live')}
-                onClick={offline.applyUpdate}
-              >
-                Apply update & reload
+              <p>An update is ready. It stays available until you choose to apply it.</p>
+              <Button disabled={offline.applyingUpdate} onClick={() => void offline.applyUpdate()}>
+                {offline.applyingUpdate ? 'Applying update…' : 'Update now'}
               </Button>
-              {data.matches.some((m) => m.status === 'live') && (
+              {(offline.updateBlocked || data.matches.some((m) => m.status === 'live')) && (
                 <p className="help">Available after your live matches are finalized.</p>
+              )}
+              {offline.updateError && (
+                <p role="alert" className="notice error">
+                  {offline.updateError}
+                </p>
               )}
             </div>
           )}
