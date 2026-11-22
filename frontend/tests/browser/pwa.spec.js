@@ -133,13 +133,13 @@ test('update notice snoozes, preserves live matches, and reloads only after expl
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
+      const liveMatchId = crypto.randomUUID();
+      const pendingChangeId = crypto.randomUUID();
       await new Promise((resolve, reject) => {
         const transaction = database.transaction(
           ['matches', 'pendingChanges'],
           'readwrite',
         );
-        const liveMatchId = crypto.randomUUID();
-        const pendingChangeId = crypto.randomUUID();
         transaction.objectStore('matches').put({
           id: liveMatchId,
           workspaceId: 'pwa-update-safety-test',
@@ -225,19 +225,24 @@ test('update notice snoozes, preserves live matches, and reloads only after expl
         transaction.onerror = () => reject(transaction.error);
       });
     });
-    await expect(page.getByText('Finish live scoring before applying this update.')).toBeHidden();
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
     expect(
       await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)),
     ).toBe(true);
+    await page.reload();
+    await expect(notice).toBeVisible();
+    await expect(page.getByText('Finish live scoring before applying this update.')).toBeHidden();
+
+    const postMatchTimeOrigin = await page.evaluate(() => performance.timeOrigin);
     await Promise.all([
-      page.waitForFunction(
-        () => performance.getEntriesByType('navigation')[0]?.type === 'reload',
-        { timeout: 30000 },
-      ),
+      page.waitForNavigation({ waitUntil: 'load', timeout: 30000 }),
       notice.getByRole('button', { name: 'Update now' }).click(),
     ]);
+    expect(await page.evaluate(() => performance.getEntriesByType('navigation')[0]?.type)).toBe(
+      'reload',
+    );
+    expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(postMatchTimeOrigin);
 
     const preserved = await page.evaluate(async () => {
       const database = await new Promise((resolve, reject) => {

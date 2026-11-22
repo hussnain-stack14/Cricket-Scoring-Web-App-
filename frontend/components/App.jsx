@@ -61,10 +61,6 @@ import { DownloadScorecardButton } from './ReportActions';
 import TeamAccountMenu from './TeamAccountMenu';
 import { PWA_INSTALL_EVENT } from './PwaInstallCapture';
 
-// Retain already-read local state while Next transitions between app routes. The
-// cache exists only for this JavaScript session; Dexie remains the source of truth.
-let appShellCache = null;
-
 function readStartupSplashState() {
   if (typeof window === 'undefined') return true;
   try {
@@ -189,6 +185,13 @@ export default function App({ screen }) {
   const offline = useOffline();
   const base = '/app';
   useEffect(() => () => window.clearTimeout(updateNoticeTimer.current), []);
+  useEffect(() => {
+    setError('');
+    setStatus('');
+    setName('');
+    setFilter('live');
+    setDeleting(null);
+  }, [screen]);
   function closeUpdateNotice(action) {
     if (updateNoticeClosing) return;
     setUpdateNoticeClosing(true);
@@ -198,15 +201,6 @@ export default function App({ screen }) {
     }, 180);
   }
   useEffect(() => {
-    const cached = appShellCache;
-    if (cached) {
-      setW(cached.w);
-      setData(cached.data);
-      setSession(cached.session);
-      setSyncMeta(cached.syncMeta);
-      setPendingSync(cached.pendingSync);
-      setLoaded(true);
-    }
     if (!readStartupSplashState()) setShowStartupSplash(false);
   }, []);
   const installationRelevant = !offline.installed;
@@ -245,10 +239,6 @@ export default function App({ screen }) {
     }
   }, [loaded]);
   useEffect(() => {
-    if (!loaded) return;
-    appShellCache = w ? { w, data, session, syncMeta, pendingSync } : null;
-  }, [data, loaded, pendingSync, session, syncMeta, w]);
-  useEffect(() => {
     const announceInstallation = (event) => {
       if (event.detail?.state !== 'installed' || screen === 'match' || installCelebrated.current)
         return;
@@ -274,26 +264,21 @@ export default function App({ screen }) {
       window.removeEventListener('offline', updateOnlineState);
     };
   }, []);
+  const scoringScreen = screen === 'match';
   useEffect(() => {
     // Scoring keeps its revision snapshot so a stale second scorer is rejected.
-    if (!w?.id || screen === 'match') return;
+    if (!w?.id || scoringScreen) return;
     const subscription = liveQuery(() => all(w.id)).subscribe({
       next: setData,
       error: (e) => setError(userError(e)),
     });
     return () => subscription.unsubscribe();
-  }, [w?.id, screen]);
+  }, [w?.id, scoringScreen]);
   async function refresh() {
     const ws = await workspace();
     const nextData = ws ? await all(ws.id) : null;
     setW(ws);
     setData(nextData);
-    // A route can begin before React has committed the state update above. Update
-    // the presentation cache in the same turn so a just-saved draft is never
-    // rendered as an older cached snapshot on the destination route.
-    appShellCache = ws
-      ? { w: ws, data: nextData, session: sessionRef.current, syncMeta, pendingSync }
-      : null;
     setLoaded(true);
   }
   useEffect(() => {
@@ -312,15 +297,6 @@ export default function App({ screen }) {
           const syncState = await getSyncState(ws.id);
           setSyncMeta(syncState.meta);
           setPendingSync(syncState.pending);
-          appShellCache = {
-            w: ws,
-            data: localData,
-            session: cachedSession,
-            syncMeta: syncState.meta,
-            pendingSync: syncState.pending,
-          };
-        } else if (ws) {
-          appShellCache = { w: ws, data: localData, session: null, syncMeta: null, pendingSync: 0 };
         }
         setLoaded(true);
       } catch (e) {
@@ -566,15 +542,16 @@ export default function App({ screen }) {
   const drafts = data?.drafts ?? [];
   const listedMatches =
     filter === 'upcoming' ? upcoming : matches.filter((m) => m.status === filter);
+  const dashboardStatsVisible = screen === 'dashboard';
   const teamStats = useMemo(
     () =>
       new Map(
-        (screen === 'dashboard' ? (data?.teams ?? []) : []).map((team) => [
+        (dashboardStatsVisible ? (data?.teams ?? []) : []).map((team) => [
           team.id,
           teamStatistics(team.id, data.matches, data.innings, data.events),
         ]),
       ),
-    [data, screen],
+    [data, dashboardStatsVisible],
   );
   const recentMatches = [...completedMatches]
     .sort((a, b) => new Date(b.date) - new Date(a.date))

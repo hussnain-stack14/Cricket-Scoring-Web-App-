@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChevronRight,
@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   UserRound,
   Palette,
+  LoaderCircle,
 } from 'lucide-react';
 import {
   clearWorkspace,
@@ -47,7 +48,10 @@ export default function Settings({
     [storage, setStorage] = useState(''),
     [localError, setLocalError] = useState(''),
     [selectedCategory, setSelectedCategory] = useState(null),
-    [theme, setThemeChoice] = useState('classic');
+    [theme, setThemeChoice] = useState('classic'),
+    [offlineActionMessage, setOfflineActionMessage] = useState('');
+  const [preparingOffline, setPreparingOffline] = useState(false);
+  const preparationInFlight = useRef(false);
   useEffect(
     () =>
       setThemeChoice(
@@ -58,6 +62,44 @@ export default function Settings({
   function chooseTheme(next) {
     setThemeChoice(next);
     setTheme(next);
+  }
+  async function retryOfflinePreparation() {
+    if (preparationInFlight.current) return;
+    preparationInFlight.current = true;
+    setPreparingOffline(true);
+    setOfflineActionMessage('');
+    try {
+      const prepared = await offline.retry();
+      setOfflineActionMessage(
+        prepared
+          ? 'Offline preparation complete.'
+          : 'Preparation failed. Check your connection and retry.',
+      );
+    } finally {
+      preparationInFlight.current = false;
+      setPreparingOffline(false);
+    }
+  }
+  async function installApp() {
+    setOfflineActionMessage('Opening installation prompt…');
+    const outcome = await offline.install();
+    setOfflineActionMessage(
+      {
+        accepted: 'Installation started.',
+        dismissed: 'Installation was canceled.',
+        instructions: 'Use Installation help for browser instructions.',
+        installed: 'Crease is already installed.',
+        error: 'Could not open installation. Use Installation help.',
+      }[outcome] || '',
+    );
+  }
+  async function checkForUpdates() {
+    setOfflineActionMessage('');
+    await offline.checkForUpdate();
+  }
+  async function applyAvailableUpdate() {
+    setOfflineActionMessage('');
+    await offline.applyUpdate();
   }
   const categories = [
     {
@@ -280,40 +322,105 @@ export default function Settings({
         </section>
       )}
       {selectedCategory === 'sync' && (
-        <section className="card">
+        <section className="card offline-settings-card">
           <h2>Offline & installation</h2>
-          <p role="status">{offline.message}</p>
-          <Button secondary onClick={offline.retry}>
-            Retry offline preparation
-          </Button>
-          <Button secondary onClick={offline.checkForUpdate}>
-            Check for updates
-          </Button>
-          {offline.installed ? (
-            <Link className="button" href="/app/">
-              Open Crease
-            </Link>
-          ) : (
-            <Button onClick={offline.install}>Install Crease</Button>
-          )}
-          <p role="status">{offline.installationMessage}</p>
-          <p className="help">
-            Android / Chromium: use Install in your browser menu. iPhone / iPad: open in Safari, tap
-            Share, then Add to Home Screen. Prepare offline while connected before leaving for the
-            ground.
+          <p className="offline-readiness" role="status" aria-live="polite">
+            {preparingOffline
+              ? 'Preparing...'
+              : offline.ready
+                ? 'Ready to use offline'
+                : offline.message}
           </p>
-          <p className="help">
-            Updates are applied only when you choose. Crease checks for active matches again before
-            restarting, and never clears your scorebook or pending sync data.
-          </p>
+          <div className="offline-settings-actions">
+            <button
+              className="button secondary offline-action-button"
+              type="button"
+              disabled={preparingOffline}
+              aria-busy={preparingOffline}
+              onClick={() => void retryOfflinePreparation()}
+            >
+              {preparingOffline && (
+                <LoaderCircle className="offline-action-spinner" size={16} aria-hidden="true" />
+              )}
+              {preparingOffline ? 'Preparing...' : 'Retry Preparation'}
+            </button>
+            <button
+              className="button secondary offline-action-button"
+              type="button"
+              disabled={offline.updateCheckState === 'checking'}
+              aria-busy={offline.updateCheckState === 'checking'}
+              onClick={() => void checkForUpdates()}
+            >
+              {offline.updateCheckState === 'checking' && (
+                <LoaderCircle className="offline-action-spinner" size={16} aria-hidden="true" />
+              )}
+              {offline.updateCheckState === 'checking' ? 'Checking...' : 'Check for Updates'}
+            </button>
+            <button
+              className="button offline-action-button offline-install-button"
+              type="button"
+              disabled={offline.installed || offline.installState === 'prompting'}
+              aria-busy={offline.installState === 'prompting'}
+              onClick={() => void installApp()}
+            >
+              {offline.installState === 'prompting' && (
+                <LoaderCircle className="offline-action-spinner" size={16} aria-hidden="true" />
+              )}
+              {offline.installed
+                ? 'Installed'
+                : offline.installState === 'prompting'
+                  ? 'Opening...'
+                  : 'Install Crease'}
+            </button>
+          </div>
+          <div className="offline-action-feedback">
+            {offline.updateCheckState === 'current' && <p role="status">You're up to date.</p>}
+            {offline.updateCheckState === 'error' && (
+              <>
+                <p role="alert">{offline.updateCheckError}</p>
+                <button
+                  type="button"
+                  className="offline-retry-link"
+                  onClick={() => void checkForUpdates()}
+                >
+                  Retry check
+                </button>
+              </>
+            )}
+            {offlineActionMessage && <p role="status">{offlineActionMessage}</p>}
+          </div>
+          <details className="offline-install-help">
+            <summary>Installation help</summary>
+            <p>
+              On iPhone or iPad, open Crease in Safari, tap Share, then Add to Home Screen. In
+              Chromium browsers, choose Install app from the browser menu.
+            </p>
+          </details>
           {offline.update && (
-            <div className="notice">
-              <p>An update is ready. It stays available until you choose to apply it.</p>
-              <Button disabled={offline.applyingUpdate} onClick={() => void offline.applyUpdate()}>
-                {offline.applyingUpdate ? 'Applying update…' : 'Update now'}
-              </Button>
-              {(offline.updateBlocked || data.matches.some((m) => m.status === 'live')) && (
-                <p className="help">Available after your live matches are finalized.</p>
+            <div className="notice offline-update-panel">
+              <p>A new version is ready.</p>
+              <button
+                className="button offline-action-button"
+                type="button"
+                disabled={offline.applyingUpdate}
+                aria-busy={offline.applyingUpdate}
+                onClick={() => void applyAvailableUpdate()}
+              >
+                {offline.applyingUpdate && (
+                  <LoaderCircle className="offline-action-spinner" size={16} aria-hidden="true" />
+                )}
+                {offline.applyingUpdate
+                  ? offline.updatePhase === 'applying'
+                    ? 'Updating Crease...'
+                    : 'Preparing update...'
+                  : 'Update now'}
+              </button>
+              {(offline.updateBlocked ||
+                offline.liveMatchCount > 0 ||
+                data.matches.some((m) => m.status === 'live')) && (
+                <p className="offline-update-status">
+                  Finish live scoring before applying this update.
+                </p>
               )}
               {offline.updateError && (
                 <p role="alert" className="notice error">

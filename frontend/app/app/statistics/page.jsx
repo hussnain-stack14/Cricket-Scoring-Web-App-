@@ -1,4 +1,3 @@
-import App from '../../../components/App';
 export default function Page() {
-  return <App screen="statistics" />;
+  return null;
 }

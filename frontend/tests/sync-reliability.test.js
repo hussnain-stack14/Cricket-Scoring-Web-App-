@@ -49,7 +49,7 @@ test('retry after a lost response preserves changes, uses stable operation IDs a
         const changes = JSON.parse(options.body).changes;
         ids.push(changes[0].changeId);
         assert.equal(options.headers['X-Crease-Workspace'], 'original-account');
-        if (!attempts++) throw new TypeError('Failed to fetch');
+        if (attempts++ < 3) throw new TypeError('Failed to fetch');
         return Response.json({
           applied: changes.map((c) => ({ ...c, revision: 1 })),
           rejected: [],
@@ -63,8 +63,41 @@ test('retry after a lost response preserves changes, uses stable operation IDs a
     const [a, b] = await Promise.all([sync(w.id), sync(w.id)]);
     assert.equal(a.ok, true);
     assert.equal(b.ok, true);
-    assert.equal(ids.length, 2);
-    assert.equal(ids[0], ids[1]);
+    assert.equal(ids.length, 4);
+    assert.equal(new Set(ids).size, 1);
+    assert.equal(await getPendingCount(w.id), 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+test('transient sync failures retry a bounded number of times before reporting success', async () => {
+  const w = await setup();
+  const original = globalThis.fetch;
+  let pushAttempts = 0;
+  try {
+    globalThis.fetch = async (url, options) => {
+      if (url === '/api/auth/me') return Response.json(session);
+      if (url.includes('/push')) {
+        pushAttempts++;
+        if (pushAttempts === 1)
+          return Response.json({ error: 'Temporary server issue.' }, { status: 503 });
+        const changes = JSON.parse(options.body).changes;
+        return Response.json({
+          applied: changes.map((change) => ({
+            table: change.table,
+            recordId: change.recordId,
+            changeId: change.changeId,
+            revision: change.baseRevision + 1,
+          })),
+          rejected: [],
+        });
+      }
+      return Response.json({ records: [], pulledAt: new Date().toISOString() });
+    };
+
+    const result = await sync(w.id);
+    assert.equal(result.status, 'synced');
+    assert.equal(pushAttempts, 2);
     assert.equal(await getPendingCount(w.id), 0);
   } finally {
     globalThis.fetch = original;
@@ -128,7 +161,7 @@ test('backup import maps records to the signed-in workspace, waits for acknowled
     globalThis.fetch = original;
   }
 });
-test('sync retry recovers from session endpoint 500 without changing pending operations', async () => {
+test('sync retries a transient session endpoint failure before sending queued operations', async () => {
   const w = await setup();
   const original = globalThis.fetch;
   let sessionChecks = 0;
@@ -149,13 +182,9 @@ test('sync retry recovers from session endpoint 500 without changing pending ope
       return Response.json({ records: [], pulledAt: new Date().toISOString() });
     };
 
-    const failed = await sync(w.id);
-    assert.equal(failed.status, 'attention');
-    assert.match(failed.error, /MongoDB/);
-    assert.equal(await getPendingCount(w.id), 1);
-
-    const retried = await sync(w.id);
-    assert.equal(retried.status, 'synced');
+    const result = await sync(w.id);
+    assert.equal(result.status, 'synced');
+    assert.equal(sessionChecks, 2);
     assert.equal(await getPendingCount(w.id), 0);
   } finally {
     globalThis.fetch = original;
@@ -349,6 +378,69 @@ test('pull pagination applies one stable snapshot and advances only after the fi
     assert.equal((await db.syncMeta.get(w.id)).lastPull, pulledAt);
     assert.equal((await db.players.get('remote-one')).workspaceId, w.id);
     assert.equal((await db.players.get('remote-two')).workspaceId, w.id);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+test('pull commits each page without advancing its cursor when a later page fails', async () => {
+  const w = await setup(),
+    original = globalThis.fetch;
+  await db.pendingChanges.clear();
+  const pulledAt = '2026-10-26T12:00:00.000Z';
+  let failSecondPage = true;
+  try {
+    globalThis.fetch = async (url) => {
+      const parsed = new URL(url, 'https://crease.test');
+      if (!parsed.searchParams.has('afterRecordId')) {
+        return Response.json({
+          records: [
+            {
+              table: 'players',
+              recordId: 'remote-one',
+              data: { id: 'remote-one', name: 'Remote one' },
+              revision: 1,
+            },
+          ],
+          pulledAt,
+          until: pulledAt,
+          hasMore: true,
+          nextCursor: {
+            updatedAt: '2026-10-26T11:59:00.000Z',
+            table: 'players',
+            recordId: 'remote-one',
+          },
+        });
+      }
+      if (failSecondPage)
+        return Response.json({ error: 'Temporary pull failure.' }, { status: 503 });
+      return Response.json({
+        records: [
+          {
+            table: 'players',
+            recordId: 'remote-two',
+            data: { id: 'remote-two', name: 'Remote two' },
+            revision: 1,
+          },
+        ],
+        pulledAt,
+        until: pulledAt,
+        hasMore: false,
+        nextCursor: null,
+      });
+    };
+
+    const interrupted = await pullChanges(w.id);
+    assert.match(interrupted.error, /Temporary pull failure/);
+    assert.equal(interrupted.merged, 1);
+    assert.equal((await db.syncMeta.get(w.id)).lastPull, undefined);
+    assert.equal((await db.players.get('remote-one')).name, 'Remote one');
+
+    failSecondPage = false;
+    const completed = await pullChanges(w.id);
+    assert.equal(completed.merged, 1);
+    assert.equal((await db.players.get('remote-one')).name, 'Remote one');
+    assert.equal((await db.players.get('remote-two')).name, 'Remote two');
+    assert.equal((await db.syncMeta.get(w.id)).lastPull, pulledAt);
   } finally {
     globalThis.fetch = original;
   }

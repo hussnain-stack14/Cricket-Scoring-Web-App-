@@ -171,6 +171,140 @@ button:disabled {
 .theme-option-swatch { display: flex; gap: 5px; margin-bottom: 12px; }
 .theme-option-swatch i { width: 21px; height: 21px; border-radius: 50%; border: 1px solid #0001; }
 .theme-option.red i:first-child { background: #b91c1c; }.theme-option.red i:last-child { background: #fef2f2; }
+.offline-settings-card {
+  display: grid;
+  gap: 10px;
+}
+.offline-settings-card > h2,
+.offline-settings-card > p {
+  margin: 0;
+}
+.offline-readiness {
+  color: var(--color-primary-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+.offline-settings-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 2px;
+}
+.offline-action-button {
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-card);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+.offline-action-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 14px #10281a1c;
+  filter: none;
+}
+.offline-action-button:not(.secondary):hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+.offline-action-button.secondary:hover:not(:disabled) {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+}
+.offline-action-button:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: var(--shadow-card);
+}
+.offline-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  box-shadow: none;
+}
+.offline-action-button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.offline-action-spinner {
+  flex: none;
+  animation: offline-action-spin 800ms linear infinite;
+}
+@keyframes offline-action-spin {
+  to { transform: rotate(360deg); }
+}
+.offline-action-feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.offline-retry-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-text);
+  font-size: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.offline-install-help {
+  color: var(--muted);
+  font-size: 12px;
+}
+.offline-install-help summary {
+  width: fit-content;
+  color: var(--color-primary-text);
+  cursor: pointer;
+  font-weight: 650;
+}
+.offline-install-help p {
+  max-width: 62ch;
+  margin: 6px 0 0;
+}
+.offline-update-panel {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 2px;
+}
+.offline-update-panel > p {
+  margin: 0;
+}
+.offline-update-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .offline-settings-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .offline-install-button {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 360px) {
+  .offline-settings-actions {
+    grid-template-columns: 1fr;
+  }
+  .offline-install-button {
+    grid-column: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .offline-action-button {
+    transition: none;
+  }
+  .offline-action-spinner {
+    animation: none;
+  }
+}
 .update-notice {
   position: fixed;
   z-index: 30;

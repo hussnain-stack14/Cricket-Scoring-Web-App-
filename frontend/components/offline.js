@@ -120,6 +120,8 @@ export function useOffline() {
   const [updateError, setUpdateError] = useState('');
   const [updateBlocked, setUpdateBlocked] = useState(false);
   const [updatePhase, setUpdatePhase] = useState('checking');
+  const [updateCheckState, setUpdateCheckState] = useState('idle');
+  const [updateCheckError, setUpdateCheckError] = useState('');
   const [liveMatchCount, setLiveMatchCount] = useState(0);
   const registrationRef = useRef(null);
   const checkTimerRef = useRef(null);
@@ -128,6 +130,7 @@ export function useOffline() {
   const installingListenerRef = useRef(null);
   const applyPromiseRef = useRef(null);
   const checkPromiseRef = useRef(null);
+  const installPromiseRef = useRef(null);
   const noticeVisible = update && !dismissed && snoozedUntil <= noticeClock;
 
   useEffect(() => {
@@ -361,28 +364,76 @@ export function useOffline() {
 
   const checkForUpdate = useCallback(async () => {
     if (checkPromiseRef.current) return checkPromiseRef.current;
+    setUpdateCheckState('checking');
+    setUpdateCheckError('');
     setUpdatePhase('checking');
     const check = (async () => {
-      const reg = registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
-      if (!reg || !navigator.onLine) {
-        setUpdatePhase('no-update');
-        return false;
-      }
-      registrationRef.current = reg;
       try {
-        const release = await readRelease();
+        const reg =
+          registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
+        if (!navigator.onLine) throw new Error('Connect to the internet, then retry.');
+        if (!reg) throw new Error('Offline preparation is not available in this browser.');
+        registrationRef.current = reg;
+        let release = null;
+        try {
+          release = await readRelease();
+        } catch {
+          // A waiting service worker remains authoritative if release metadata is unavailable.
+        }
         const releaseChanged = Boolean(
           release && releaseVersionRef.current && release.version !== releaseVersionRef.current,
         );
         if (release) releaseVersionRef.current = release.version;
         await reg.update();
-        const hasUpdate = Boolean(reg.waiting);
+        let hasUpdate = Boolean(reg.waiting);
+        if (
+          !hasUpdate &&
+          reg.installing &&
+          (releaseChanged || reg.installing.state === 'installing')
+        ) {
+          hasUpdate = await new Promise((resolve, reject) => {
+            const worker = reg.installing;
+            const cleanup = () => {
+              clearTimeout(timer);
+              worker.removeEventListener('statechange', onStateChange);
+            };
+            const onStateChange = () => {
+              if (reg.waiting) {
+                cleanup();
+                resolve(true);
+              } else if (worker.state === 'installed' || worker.state === 'redundant') {
+                cleanup();
+                if (worker.state === 'redundant')
+                  reject(
+                    new Error(
+                      'The update could not be installed. Check your connection and retry.',
+                    ),
+                  );
+                else resolve(false);
+              }
+            };
+            const timer = setTimeout(() => {
+              cleanup();
+              reject(new Error('The update check timed out. Check your connection and retry.'));
+            }, 45_000);
+            worker.addEventListener('statechange', onStateChange);
+            onStateChange();
+          });
+        }
         setUpdate(hasUpdate);
-        if (hasUpdate) setUpdatePhase(updateAvailablePhase());
-        else setUpdatePhase('no-update');
-        // Metadata is advisory. A worker must be waiting before an update can be applied.
-        return hasUpdate || releaseChanged;
-      } catch {
+        if (hasUpdate) {
+          setUpdatePhase(updateAvailablePhase());
+          setUpdateCheckState('available');
+        } else {
+          setUpdatePhase('no-update');
+          setUpdateCheckState('current');
+        }
+        return hasUpdate;
+      } catch (error) {
+        setUpdateCheckError(
+          error instanceof Error ? error.message : 'Could not check for updates. Please retry.',
+        );
+        setUpdateCheckState('error');
         return false;
       }
     })();
@@ -395,30 +446,39 @@ export function useOffline() {
   }, [readRelease]);
 
   const install = useCallback(async () => {
-    if (installed) return 'installed';
-    const prompt = installPrompt || window.__creaseDeferredInstallPrompt;
-    if (!prompt) {
-      setInstallState('instructions');
-      return 'instructions';
-    }
-    setInstallState('prompting');
-    try {
-      await prompt.prompt();
-      const choice = await prompt.userChoice;
-      setInstallPrompt(null);
-      window.__creaseDeferredInstallPrompt = null;
-      if (choice?.outcome === 'accepted') {
-        setInstallState((current) => (current === 'installed' ? current : 'accepted'));
-        return 'accepted';
+    if (installPromiseRef.current) return installPromiseRef.current;
+    const installing = (async () => {
+      if (installed) return 'installed';
+      const prompt = installPrompt || window.__creaseDeferredInstallPrompt;
+      if (!prompt) {
+        setInstallState('instructions');
+        return 'instructions';
       }
-      setInstallState((current) => (current === 'installed' ? current : 'instructions'));
-      return 'dismissed';
-    } catch (error) {
-      setInstallPrompt(null);
-      window.__creaseDeferredInstallPrompt = null;
-      setInstallState('instructions');
-      setMessage('Could not open the install prompt. Use your browser menu to install Crease.');
-      return 'error';
+      setInstallState('prompting');
+      try {
+        await prompt.prompt();
+        const choice = await prompt.userChoice;
+        setInstallPrompt(null);
+        window.__creaseDeferredInstallPrompt = null;
+        if (choice?.outcome === 'accepted') {
+          setInstallState((current) => (current === 'installed' ? current : 'accepted'));
+          return 'accepted';
+        }
+        setInstallState((current) => (current === 'installed' ? current : 'instructions'));
+        return 'dismissed';
+      } catch (error) {
+        setInstallPrompt(null);
+        window.__creaseDeferredInstallPrompt = null;
+        setInstallState('instructions');
+        setMessage('Could not open the install prompt. Use your browser menu to install Crease.');
+        return 'error';
+      }
+    })();
+    installPromiseRef.current = installing;
+    try {
+      return await installing;
+    } finally {
+      installPromiseRef.current = null;
     }
   }, [installed, installPrompt]);
 
@@ -459,7 +519,7 @@ export function useOffline() {
       setApplyingUpdate(true);
       setUpdateError('');
       setUpdateBlocked(false);
-      setUpdatePhase('checking');
+      setUpdatePhase('preparing');
       try {
         const reg =
           registrationRef.current || (await navigator.serviceWorker?.getRegistration('/'));
@@ -589,6 +649,8 @@ export function useOffline() {
     updateError,
     updateBlocked,
     liveMatchCount,
+    updateCheckState,
+    updateCheckError,
     installed,
     installState,
     installationMessage,

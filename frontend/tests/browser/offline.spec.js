@@ -469,7 +469,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
         .click(),
     ]);
     await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
-    await expect(page.getByText('Ready to use offline.', { exact: true })).toBeVisible({
+    await expect(page.getByText('Ready to use offline', { exact: true })).toBeVisible({
       timeout: 30000,
     });
     const afterUpdate = await page.evaluate(async (id) => {

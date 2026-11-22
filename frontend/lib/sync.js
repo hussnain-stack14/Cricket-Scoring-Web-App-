@@ -8,10 +8,37 @@ import { matchStates } from './engine.js';
 const MAX_BATCH = 50;
 const PUSH_TIMEOUT_MS = 45_000;
 const SESSION_TIMEOUT_MS = DEFAULT_REQUEST_TIMEOUT_MS;
+const MAX_REQUEST_RETRIES = 2;
 const recordKey = (table, recordId) => `${table}:${recordId}`;
 const pendingKey = (workspaceId, table, recordId) => `${workspaceId}:${table}:${recordId}`;
 let sessionRequest;
 const syncJobs = new Map();
+const transientStatus = (status) => status === 408 || status === 429 || status >= 500;
+const transientNetworkError = (error) =>
+  error?.name === 'TimeoutError' || error?.name === 'TypeError';
+
+async function fetchWithRetry(url, options, timeoutMs) {
+  for (let attempt = 0; ; attempt++) {
+    let response;
+    try {
+      response = await fetchWithTimeout(url, options, timeoutMs);
+    } catch (error) {
+      if (attempt >= MAX_REQUEST_RETRIES || !transientNetworkError(error)) throw error;
+    }
+
+    if (response && (!transientStatus(response.status) || attempt >= MAX_REQUEST_RETRIES))
+      return response;
+
+    const retryAfter = Number(response?.headers.get('Retry-After')) * 1000;
+    const backoff = 250 * 2 ** attempt + Math.floor(Math.random() * 200);
+    await new Promise((resolve) =>
+      setTimeout(
+        resolve,
+        Math.min(2000, Math.max(backoff, Number.isFinite(retryAfter) ? retryAfter : 0)),
+      ),
+    );
+  }
+}
 const syncPriority = (change) => {
   if (change.deleted) {
     return ['events', 'audits', 'innings'].includes(change.table)
@@ -44,7 +71,7 @@ function hasVerifiedCompletedHistory(match, innings, events) {
 export async function fetchSession({ timeoutMs = SESSION_TIMEOUT_MS } = {}) {
   if (sessionRequest) return sessionRequest;
   sessionRequest = (async () => {
-    const res = await fetchWithTimeout('/api/auth/me', { credentials: 'include' }, timeoutMs);
+    const res = await fetchWithRetry('/api/auth/me', { credentials: 'include' }, timeoutMs);
     if (res.status === 401) return null;
     if (!res.ok) {
       const result = await res.json().catch(() => ({}));
@@ -136,7 +163,7 @@ export async function pushChanges(workspaceId) {
     });
     let result;
     try {
-      const res = await fetchWithTimeout(
+      const res = await fetchWithRetry(
         '/api/sync/push',
         {
           method: 'POST',
@@ -252,12 +279,12 @@ export async function pullChanges(workspaceId) {
   const priorCursor = meta.lastPull ? Date.parse(meta.lastPull) : 0;
   const since = new Date(Math.max(0, priorCursor - 1000)).toISOString();
 
-  let result;
+  let merged = 0;
+  let deferredMatchRecords = false;
+  let next = null;
+  let until = null;
+  let pulledAt = null;
   try {
-    const records = [];
-    let next = null;
-    let until = null;
-    let pulledAt = null;
     for (let page = 0; page < 1000; page++) {
       const params = new URLSearchParams({ since });
       if (until) params.set('until', until);
@@ -266,7 +293,7 @@ export async function pullChanges(workspaceId) {
         params.set('afterTable', next.table);
         params.set('afterRecordId', next.recordId);
       }
-      const res = await fetchWithTimeout(`/api/sync/pull?${params}`, {
+      const res = await fetchWithRetry(`/api/sync/pull?${params}`, {
         credentials: 'include',
         headers: { 'X-Crease-Workspace': meta.teamId },
       });
@@ -284,10 +311,20 @@ export async function pullChanges(workspaceId) {
         throw new Error('The sync server changed the pull snapshot during pagination.');
       pulledAt = pageResult.pulledAt;
       until = pageResult.until || pulledAt;
-      records.push(...pageResult.records);
+      const applied = await applyPullPage(workspaceId, meta, pageResult.records);
+      merged += applied.merged;
+      deferredMatchRecords ||= applied.incomplete;
       if (!pageResult.hasMore) {
-        result = { records, pulledAt };
-        break;
+        await db.transaction('rw', db.syncMeta, async () => {
+          const currentMeta = (await db.syncMeta.get(workspaceId)) ?? meta;
+          await db.syncMeta.put({
+            ...currentMeta,
+            lastPull: deferredMatchRecords ? currentMeta.lastPull : pulledAt,
+            syncStatus: deferredMatchRecords ? 'incomplete' : currentMeta.syncStatus,
+            lastError: null,
+          });
+        });
+        return { merged, incomplete: deferredMatchRecords };
       }
       if (
         !pageResult.nextCursor ||
@@ -298,15 +335,17 @@ export async function pullChanges(workspaceId) {
         throw new Error('The sync server returned an invalid pagination cursor.');
       next = pageResult.nextCursor;
     }
-    if (!result) throw new Error('Synchronization exceeded the safe pagination limit.');
+    throw new Error('Synchronization exceeded the safe pagination limit.');
   } catch (error) {
     await updateSyncMeta(workspaceId, {
       syncStatus: 'pending',
       lastError: error instanceof Error ? error.message : 'Pull failed.',
     });
-    return { merged: 0, error: error.message, httpStatus: error.status };
+    return { merged, error: error.message, httpStatus: error.status };
   }
+}
 
+async function applyPullPage(workspaceId, meta, records) {
   let merged = 0;
   let deferredMatchRecords = false;
   await db.transaction(
@@ -318,9 +357,7 @@ export async function pullChanges(workspaceId) {
       const currentMeta = (await db.syncMeta.get(workspaceId)) ?? meta;
       const revisions = { ...(currentMeta.revisions ?? {}) };
       const conflicts = [...(currentMeta.conflicts ?? [])];
-      for (const serverRecord of [...result.records].sort(
-        (a, b) => pullPriority(a) - pullPriority(b),
-      )) {
+      for (const serverRecord of [...records].sort((a, b) => pullPriority(a) - pullPriority(b))) {
         const { table, recordId, data, deletedAt, revision, lastChangeId } = serverRecord;
         if (!tables.includes(table) || typeof recordId !== 'string' || !Number.isInteger(revision))
           continue;
@@ -338,8 +375,6 @@ export async function pullChanges(workspaceId) {
             localInnings.length < data.syncSnapshot.innings ||
             !hasVerifiedCompletedHistory(data, localInnings, localEvents)
           ) {
-            // Keep match identity and currently received score visible, but never present a partial
-            // chase as final. The unchanged cursor retries the authoritative completion next pull.
             const existingMatch = await db.matches.get(recordId);
             if (!existingMatch || existingMatch.revision <= revision) {
               await db.matches.put({
@@ -431,9 +466,7 @@ export async function pullChanges(workspaceId) {
         ...currentMeta,
         revisions,
         conflicts,
-        lastPull: deferredMatchRecords ? currentMeta.lastPull : result.pulledAt,
         syncStatus: deferredMatchRecords ? 'incomplete' : currentMeta.syncStatus,
-        lastError: null,
       });
     },
   );
