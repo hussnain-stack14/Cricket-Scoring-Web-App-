@@ -74,6 +74,13 @@ export default function Profile({ data, w, run, error, session }) {
                 Delete player
               </Button>
             </div>
+            {stats.invalidMatches > 0 && (
+              <p className="notice error" role="alert">
+                {stats.invalidMatches} completed match{stats.invalidMatches === 1 ? '' : 'es'} with this
+                player have scoring history that needs review. Those saved records are retained and
+                excluded from career totals.
+              </p>
+            )}
           </details>
         )}
       </div>

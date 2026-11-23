@@ -388,6 +388,13 @@ export default function TeamStatistics({ team, data, onBack }) {
           is still missing scorecard data on this device. It is excluded until sync finishes.
         </p>
       )}
+      {stats.invalidHistory > 0 && (
+        <p className="notice error" role="alert">
+          {stats.invalidHistory} completed match{stats.invalidHistory === 1 ? '' : 'es'} have
+          scoring history that needs review. Their saved deliveries are retained and excluded from
+          these totals.
+        </p>
+      )}
 
       {tab === 'Overview' && (
         <>

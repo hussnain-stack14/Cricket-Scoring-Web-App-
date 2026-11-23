@@ -34,7 +34,7 @@ import {
   invalidateCachedAccountSession,
   workspace,
 } from '../lib/db';
-import { matchStates, result } from '../lib/engine';
+import { inspectMatchStates, result } from '../lib/engine';
 import { teamStatistics } from '../lib/statistics';
 import { fetchSession, getSyncState, sync } from '../lib/sync';
 import { Button, Field, Empty, Sheet } from './ui';
@@ -87,11 +87,19 @@ function MoreMenu({ children }) {
   useEffect(() => {
     if (open || !restoreAfterClose.current) return;
     restoreAfterClose.current = false;
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => triggerRef.current?.focus());
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
     const closeOnOutsidePress = (event) => {
+      if (event.target instanceof Element && event.target.closest('dialog.sheet[open]')) return;
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
     const closeOnEscape = (event) => {
@@ -595,13 +603,15 @@ export default function App({ screen }) {
     );
   }
   function renderMatchCard(match) {
-    const states = ['upcoming', 'cancelled'].includes(match.status)
-      ? []
-      : matchStates(
+    const history =
+      ['upcoming', 'cancelled'].includes(match.status)
+        ? { ok: true, states: [] }
+        : inspectMatchStates(
           match,
           data.innings.filter((inning) => inning.matchId === match.id),
           data.events.filter((event) => event.matchId === match.id),
         );
+    const states = history.ok ? history.states : [];
     return (
       <div className="match-card-item" key={match.id}>
         <Link className="match-card" href={`${base}/match/?id=${match.id}`}>
@@ -646,6 +656,11 @@ export default function App({ screen }) {
             <span>{match.rules.overs} overs</span>
             <span>{match.venue || 'Local match'}</span>
           </div>
+          {!history.ok && (
+            <p className="notice error" role="alert">
+              Scoring history needs review. Stored deliveries have been retained.
+            </p>
+          )}
           <div className="card-footer">
             {scheduledAction(match)}
             <ArrowUpRight size={17} />
@@ -659,7 +674,7 @@ export default function App({ screen }) {
               <EllipsisVertical size={18} aria-hidden="true" />
             </summary>
             <div className="match-card-menu-panel">
-              {match.status === 'completed' && (
+              {match.status === 'completed' && history.ok && (
                 <DownloadScorecardButton match={match} states={states} compact />
               )}
               {canDelete && (
@@ -1064,6 +1079,11 @@ export default function App({ screen }) {
                                       <small>
                                         {stats.matches} matches · {stats.won} wins
                                       </small>
+                                      {stats.invalidHistory > 0 && (
+                                        <small role="alert">
+                                          {stats.invalidHistory} saved match history needs review
+                                        </small>
+                                      )}
                                     </span>
                                     <b>
                                       {stats.winPercentage === null

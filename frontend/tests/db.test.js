@@ -70,6 +70,7 @@ test('workspace isolation, transaction rollback, revisions, undo, backup and fin
     /another tab/,
   );
   for (let i = 1; i < 6; i++) m = await deliver({});
+  await assert.rejects(deliver({}), /innings is complete/i);
   m = await changeMatch(w.id, m.id, m.revision, {
     type: 'startChase',
     opening: { striker: ps[2].id, nonStriker: ps[3].id, bowler: ps[0].id },

@@ -4,9 +4,9 @@ const publicPages = [
   ['/', 'Crease — Free Cricket Scoring App | Score Matches Offline'],
   ['/features/', 'Cricket Scoring Features | Crease'],
   ['/how-it-works/', 'How Cricket Scoring Works | Crease'],
-  ['/download/', 'Install the Crease Cricket Scoring App'],
-  ['/about/', 'About Crease | Cricket Scoring for Local Matches'],
-  ['/help/', 'Crease Help Centre'],
+  ['/download/', 'Install Crease: Free Cricket Scoring App'],
+  ['/about/', 'About Crease | Free Cricket Scoring App'],
+  ['/help/', 'Crease Help Centre | Cricket Scoring Support'],
   ['/privacy/', 'Privacy | Crease'],
   ['/terms/', 'Terms | Crease'],
 ];

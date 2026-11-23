@@ -292,12 +292,12 @@ test('production image and icon assets load, fit target widths, and preserve the
     const welcome = page.locator('.dashboard-welcome');
     await expect(welcome).toBeVisible();
     const background = await welcome.evaluate((element) => getComputedStyle(element).backgroundImage);
-    const expectedBackground = viewport.width <= 900
-      ? '/bg-dashboard-heading-mobile.webp'
-      : '/bg-dashboard-heading.webp';
-    expect(background).toContain(expectedBackground);
+    expect(background).toContain('linear-gradient');
+    expect(background).not.toContain('url(');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const heading = await welcome.getByRole('heading', { name: 'Your cricket, at a glance.' }).boundingBox();
+    const heading = await welcome
+      .getByRole('heading', { name: 'Ready for the next match?' })
+      .boundingBox();
     const panel = await welcome.boundingBox();
     expect(heading.x, `Dashboard hero copy should remain inset at ${viewport.width}px`).toBeGreaterThanOrEqual(panel.x + 12);
     expect(heading.x + heading.width).toBeLessThanOrEqual(panel.x + panel.width);
@@ -309,11 +309,9 @@ test('production image and icon assets load, fit target widths, and preserve the
     expect(logo.complete && logo.width > 0, 'shared Crease logo should load in the app header/sidebar').toBe(true);
     const heroContrast = await welcome.evaluate((element) => {
       const style = getComputedStyle(element, '::after');
-      return { image: style.backgroundImage, opacity: style.opacity, content: style.content };
+      return { display: style.display, content: style.content };
     });
-    expect(heroContrast.image).toContain('linear-gradient');
-    expect(heroContrast.opacity).toBe('1');
-    expect(heroContrast.content).not.toBe('none');
+    expect(heroContrast.display).toBe('none');
     await page.screenshot({
       path: `test-results/dashboard-hero-${viewport.label}.png`,
       fullPage: true,

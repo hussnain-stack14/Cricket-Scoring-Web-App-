@@ -1,4 +1,4 @@
-import { matchStates } from './engine.js';
+import { inspectMatchStates } from './engine.js';
 
 const emptyBatting = (player) => ({
   id: player.id,
@@ -67,6 +67,7 @@ export function teamStatistics(teamId, matches, innings, events) {
     highest: null,
     lowest: null,
     incompleteCompleted: 0,
+    invalidHistory: 0,
   };
 
   for (const match of matches) {
@@ -75,7 +76,12 @@ export function teamStatistics(teamId, matches, innings, events) {
     if (teamIndex === -1) continue;
     const matchInnings = innings.filter((inning) => inning.matchId === match.id);
     const matchEvents = events.filter((event) => event.matchId === match.id);
-    const states = matchStates(match, matchInnings, matchEvents);
+    const history = inspectMatchStates(match, matchInnings, matchEvents);
+    if (!history.ok) {
+      summary.invalidHistory++;
+      continue;
+    }
+    const states = history.states;
     if (states.length !== 2 || !states[0].done || !states[1].done) {
       summary.incompleteCompleted++;
       continue;

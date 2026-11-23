@@ -20,10 +20,16 @@ export default function TeamAccountMenu({
 }) {
   if (!session) {
     return (
-      <Link href="/account/login/" className="account-menu-item" onClick={onNavigate}>
-        <Shield size={20} strokeWidth={1.9} />
-        <span>Sign in / Sync</span>
-      </Link>
+      <nav className="account-menu-actions" aria-label="Account actions">
+        <Link href="/account/login/" className="account-menu-item" onClick={onNavigate}>
+          <Shield size={20} strokeWidth={1.9} />
+          <span>Sign in / Sync</span>
+        </Link>
+        <Link href="/app/more/" className="account-menu-item" onClick={onNavigate}>
+          <Settings size={19} aria-hidden="true" />
+          <span>Settings</span>
+        </Link>
+      </nav>
     );
   }
 

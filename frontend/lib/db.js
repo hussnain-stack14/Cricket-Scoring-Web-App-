@@ -516,12 +516,14 @@ export async function addMatchPlayer(
         if (selection.type === 'batter') {
           must(
             teamIndex === (inning.number === 1 ? match.firstBat : 1 - match.firstBat) &&
+              !state.done &&
               state.needBatter,
             'A batter cannot be selected at this time or for this team.',
           );
         } else if (selection.type === 'bowler') {
           must(
             teamIndex !== (inning.number === 1 ? match.firstBat : 1 - match.firstBat) &&
+              !state.done &&
               state.needBowler,
             'A bowler cannot be selected at this time or for this team.',
           );
@@ -719,7 +721,10 @@ export async function changeMatch(workspaceId, id, revision, action) {
           m.rules = updatedMatch.rules;
           m.venue = updatedMatch.venue;
         } else if (action.type === 'finalize') {
-          must(states.length === 2 && states[1].done, 'Finish both innings first.');
+          must(
+            states.length === 2 && states[0].done && states[1].done,
+            'Finish both innings first.',
+          );
           m.status = 'completed';
         } else if (action.type === 'startChase') {
           must(inns.length === 1 && states[0].done, 'First innings must be complete.');
@@ -769,6 +774,7 @@ export async function changeMatch(workspaceId, id, revision, action) {
           m.status = 'live';
         } else if (action.type === 'event') {
           if (await db.events.get(action.event.id)) return m;
+          must(!states.at(-1)?.done, 'This innings is complete. Start the next innings or finalize the match.');
           const inn = inns.at(-1);
           const e = {
             ...action.event,

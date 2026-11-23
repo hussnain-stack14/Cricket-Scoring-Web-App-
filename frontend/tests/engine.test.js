@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replay, overs, rate, career, result, validateSetup } from '../lib/engine.js';
+import {
+  inspectMatchStates,
+  matchStates,
+  replay,
+  overs,
+  rate,
+  career,
+  result,
+  validateSetup,
+} from '../lib/engine.js';
+import { appendedScoringEventError } from '../backend/scoringHistory.js';
 const match = {
   firstBat: 0,
   rules: { overs: 3, size: 3, maxBowler: 2, freeHit: true },
@@ -352,6 +362,89 @@ test('undo via replay restores innings end, strike and free hit', () => {
   assert.equal(s.needBowler, false);
   assert.equal(s.balls, 5);
 });
+test('history replay enforces delivery completion and chronological innings transition', () => {
+  const oneOver = { ...match, id: 'history-match', rules: { ...match.rules, overs: 1 } };
+  const firstInnings = { ...inn, id: 'history-innings-1', matchId: oneOver.id, number: 1 };
+  const openingEvents = Array.from({ length: 6 }, (_, index) => ({
+    ...ball(),
+    id: `event-${index + 1}`,
+    matchId: oneOver.id,
+    inningsId: firstInnings.id,
+    seq: index + 1,
+  }));
+  const completeFirst = matchStates(oneOver, [firstInnings], [...openingEvents].reverse());
+  assert.equal(completeFirst[0].done, true);
+  assert.throws(
+    () =>
+      matchStates(oneOver, [firstInnings], [
+        ...openingEvents,
+        {
+          ...ball(),
+          id: 'after-completion',
+          matchId: oneOver.id,
+          inningsId: firstInnings.id,
+          seq: 7,
+        },
+      ]),
+    /Delivery follows a completed innings/,
+  );
+
+  const chase = {
+    id: 'history-innings-2',
+    matchId: oneOver.id,
+    number: 2,
+    striker: 'x',
+    nonStriker: 'y',
+    bowler: 'a',
+  };
+  const chaseEvent = {
+    ...ball({ bat: 1, running: 1 }),
+    id: 'chase-event',
+    matchId: oneOver.id,
+    inningsId: chase.id,
+    seq: 7,
+  };
+  assert.equal(matchStates(oneOver, [firstInnings, chase], [...openingEvents, chaseEvent]).length, 2);
+  assert.throws(
+    () =>
+      matchStates(oneOver, [firstInnings, chase], [
+        ...openingEvents,
+        { ...chaseEvent, seq: 5 },
+      ]),
+    /sequence|innings order/i,
+  );
+});
+test('sync rejects a candidate event that would follow an already completed innings', () => {
+  const oneOver = { ...match, id: 'sync-history-match', rules: { ...match.rules, overs: 1 } };
+  const inning = { ...inn, id: 'sync-history-innings', matchId: oneOver.id, number: 1 };
+  const existingEvents = Array.from({ length: 6 }, (_, index) => ({
+    ...ball(),
+    id: `existing-${index}`,
+    matchId: oneOver.id,
+    inningsId: inning.id,
+    seq: index + 1,
+  }));
+  assert.match(
+    appendedScoringEventError(oneOver, [inning], existingEvents, {
+      ...ball(),
+      id: 'new-event',
+      matchId: oneOver.id,
+      inningsId: inning.id,
+      seq: 7,
+    }),
+    /Delivery follows a completed innings/,
+  );
+  assert.equal(
+    appendedScoringEventError(oneOver, [inning], existingEvents, {
+      ...ball(),
+      id: 'duplicate-sequence',
+      matchId: oneOver.id,
+      inningsId: inning.id,
+      seq: 6,
+    })?.includes('Duplicate event sequence'),
+    true,
+  );
+});
 test('career combines totals and excludes reopened matches', () => {
   const m1 = { ...match, id: 'm1', status: 'completed' },
     m2 = { ...match, id: 'm2', status: 'completed' };
@@ -364,7 +457,7 @@ test('career combines totals and excludes reopened matches', () => {
       ...ball({ bat: 4, boundary: true }),
       matchId: `m${i + 1}`,
       inningsId: `i${i + 1}`,
-      seq,
+      seq: seq + 1,
     })),
   );
   const first = events.filter((e) => e.matchId === 'm1');
@@ -372,7 +465,7 @@ test('career combines totals and excludes reopened matches', () => {
     ...ball({ wicket: { kind: 'bowled', player: 'a' } }),
     matchId: 'm1',
     inningsId: 'i1',
-    seq: 5,
+    seq: 6,
   });
   // Keep innings below over breaks for this aggregate fixture by using no-balls and disabling free hits.
   const adjusted = [...first, ...events.filter((e) => e.matchId === 'm2')].map((e) =>

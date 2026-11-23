@@ -6,6 +6,7 @@ import { SyncRecord } from '../../../../lib/server/models';
 import { getSessionOptions } from '../../../../lib/server/session';
 import { getCurrentSessionAccount } from '../../../../lib/server/accountAuth';
 import { completedHistoryError } from '../../../../backend/completedHistory.js';
+import { appendedScoringEventError } from '../../../../backend/scoringHistory.js';
 import { reportOperationalEvent } from '../../../../backend/monitoring.js';
 
 const ALLOWED_TABLES = new Set([
@@ -31,10 +32,13 @@ const syncPriority = (change) => {
   if (change?.table === 'players') return 0;
   if (change?.table === 'teams') return 1;
   if (change?.table === 'memberships') return 2;
-  if (change?.table !== 'matches')
-    return ['innings', 'events', 'audits'].includes(change?.table) ? 4 : 3;
+  if (change?.table !== 'matches') {
+    if (change?.table === 'innings') return 4;
+    if (['events', 'audits'].includes(change?.table)) return 5;
+    return 3;
+  }
   if (change?.data?.startId && change?.data?.startDetails) return -1;
-  return change?.data?.status === 'completed' ? 5 : 3;
+  return change?.data?.status === 'completed' ? 6 : 3;
 };
 
 function publicRecord(record) {
@@ -104,8 +108,15 @@ export async function POST(req) {
   await connectDB();
   const applied = [];
   const rejected = [];
+  const scoringHistoryByMatch = new Map();
 
-  for (const change of [...body.changes].sort((a, b) => syncPriority(a) - syncPriority(b))) {
+  for (const change of [...body.changes].sort((a, b) => {
+    const priority = syncPriority(a) - syncPriority(b);
+    if (priority) return priority;
+    if (a?.table === 'events' && b?.table === 'events' && a?.data?.matchId === b?.data?.matchId)
+      return (a?.data?.seq ?? 0) - (b?.data?.seq ?? 0);
+    return 0;
+  })) {
     const { table, recordId, data, baseRevision, changeId, deleted } = change ?? {};
     if (
       !ALLOWED_TABLES.has(table) ||
@@ -146,6 +157,66 @@ export async function POST(req) {
               change,
               existing,
               'This record belongs to a different match start. Resolve the match conflict first.',
+            ),
+          );
+          continue;
+        }
+      }
+      let scoringHistory = null;
+      if (!deleted && table === 'events' && data.matchId) {
+        scoringHistory = scoringHistoryByMatch.get(data.matchId);
+        if (!scoringHistory) {
+          const [matchRecord, eventRecords, inningsRecords] = await Promise.all([
+            SyncRecord.findOne({
+              teamId: session.teamId,
+              table: 'matches',
+              recordId: data.matchId,
+              deletedAt: null,
+            }).lean(),
+            SyncRecord.find(
+              {
+                teamId: session.teamId,
+                table: 'events',
+                deletedAt: null,
+                'data.matchId': data.matchId,
+              },
+              { data: 1, _id: 0 },
+            ).lean(),
+            SyncRecord.find(
+              {
+                teamId: session.teamId,
+                table: 'innings',
+                deletedAt: null,
+                'data.matchId': data.matchId,
+              },
+              { data: 1, _id: 0 },
+            ).lean(),
+          ]);
+          scoringHistory = {
+            match: matchRecord?.data,
+            events: eventRecords.map((record) => record.data),
+            innings: inningsRecords.map((record) => record.data),
+          };
+          scoringHistoryByMatch.set(data.matchId, scoringHistory);
+        }
+        const historyError = scoringHistory.match
+          ? appendedScoringEventError(
+              scoringHistory.match,
+              scoringHistory.innings,
+              scoringHistory.events,
+              { ...accountData, id: recordId },
+            )
+          : 'The match record is missing.';
+        if (historyError) {
+          reportOperationalEvent('sync_scoring_history_rejected', {
+            status: 'rejected',
+            reason: 'invalid_delivery_history',
+          });
+          rejected.push(
+            conflict(
+              change,
+              existing,
+              `${historyError} The stored scoring history was not changed.`,
             ),
           );
           continue;
@@ -252,6 +323,17 @@ export async function POST(req) {
         await SyncRecord.create({ ...filter, ...update, createdAt: now });
       }
       applied.push({ table, recordId, changeId, revision: baseRevision + 1 });
+      if (table === 'events' && data.matchId) {
+        const history = scoringHistoryByMatch.get(data.matchId);
+        if (history) {
+          history.events = deleted
+            ? history.events.filter((event) => event.id !== recordId)
+            : [
+                ...history.events.filter((event) => event.id !== recordId),
+                { ...accountData, id: recordId },
+              ];
+        }
+      }
     } catch (error) {
       if (error?.code === 11000) {
         const latest = await SyncRecord.findOne(filter);

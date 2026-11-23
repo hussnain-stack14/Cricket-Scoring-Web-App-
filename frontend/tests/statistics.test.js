@@ -35,21 +35,25 @@ function completedMatch(id, teams, firstBat, firstEvents, secondEvents) {
       bowler: teams[firstBat].squad[0].id,
     },
   ];
+  let sequence = 0;
   const deliveries = (eventsByInnings) =>
     eventsByInnings.flatMap((list, index) =>
-      list.map((event, seq) => ({
-        id: `${id}-${index}-${seq}`,
-        workspaceId: 'workspace',
-        matchId: id,
-        inningsId: innings[index].id,
-        seq: seq + 1,
-        type: 'delivery',
-        bat: 0,
-        extra: 'none',
-        extraRuns: 0,
-        running: 0,
-        ...event,
-      })),
+      list.map((event) => {
+        const seq = ++sequence;
+        return {
+          id: `${id}-${index}-${seq}`,
+          workspaceId: 'workspace',
+          matchId: id,
+          inningsId: innings[index].id,
+          seq,
+          type: 'delivery',
+          bat: 0,
+          extra: 'none',
+          extraRuns: 0,
+          running: 0,
+          ...event,
+        };
+      }),
     );
   return {
     match,
@@ -104,6 +108,37 @@ test('team statistics use only completed matches for the selected historical tea
   assert.equal(leadingBowler.economy, 5);
   assert.equal(leadingBowler.bowlingStrikeRate, 6);
   assert.equal(leadingBowler.dots, 1);
+});
+
+test('one invalid completed history is reported without crashing valid team statistics', () => {
+  const teams = [side('A', ['a1', 'a2']), side('B', ['b1', 'b2'])];
+  const valid = completedMatch(
+    'valid',
+    teams,
+    0,
+    Array.from({ length: 6 }, () => ({})),
+    [{ wicket: { kind: 'bowled', player: 'b1' } }],
+  );
+  const invalid = completedMatch(
+    'invalid',
+    teams,
+    0,
+    Array.from({ length: 6 }, () => ({})),
+    [{ wicket: { kind: 'bowled', player: 'b1' } }],
+  );
+  invalid.events.push({
+    ...invalid.events[5],
+    id: 'delivery-after-completion',
+    seq: invalid.events.length + 1,
+  });
+  const stats = teamStatistics(
+    'A',
+    [invalid.match, valid.match],
+    [...invalid.innings, ...valid.innings],
+    [...invalid.events, ...valid.events],
+  );
+  assert.equal(stats.invalidHistory, 1);
+  assert.equal(stats.matches, 1);
 });
 
 test('undefined averages stay null, qualification thresholds prevent tiny-sample leaders', () => {

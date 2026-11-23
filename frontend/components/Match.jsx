@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { ArrowLeftRight, FileText } from 'lucide-react';
 import { addMatchPlayer, changeMatch, uuid } from '../lib/db';
-import { matchStates, overs, rate, result } from '../lib/engine';
+import { inspectMatchStates, overs, rate, result } from '../lib/engine';
 import { Button, Field, Select, Sheet, Tabs, playerLabel } from './ui';
 import MatchHeader from './MatchHeader';
 import PreMatch from './PreMatch';
@@ -45,7 +45,10 @@ export default function Match({ w, data, run, error, session }) {
     if (!m || ['upcoming', 'cancelled'].includes(m.status)) return null;
     const inns = data.innings.filter((i) => i.matchId === id).sort((a, b) => a.number - b.number);
     const events = data.events.filter((e) => e.matchId === id).sort((a, b) => a.seq - b.seq);
-    return { inns, events, states: matchStates(m, inns, events) };
+    const history = inspectMatchStates(m, inns, events);
+    return history.ok
+      ? { inns, events, states: history.states, error: null }
+      : { inns, events, states: null, error: history.error };
   }, [m, data.innings, data.events, id]);
   const deliveryInFlight = useRef(false);
   if (!m)
@@ -56,7 +59,7 @@ export default function Match({ w, data, run, error, session }) {
     );
   if (['upcoming', 'cancelled'].includes(m.status))
     return <PreMatch match={m} w={w} data={data} run={run} error={error} session={session} />;
-  const { inns, events, states } = scoreData;
+  const { inns, events } = scoreData;
   if (!inns.length)
     return (
       <div className="match-centre">
@@ -66,6 +69,22 @@ export default function Match({ w, data, run, error, session }) {
         </p>
       </div>
     );
+  if (scoreData.error)
+    return (
+      <div className="match-centre">
+        <MatchHeader match={m} w={w} run={run} error={error} session={session} />
+        <div className="notice error" role="alert">
+          <strong>This match’s scoring history needs review.</strong>
+          <p>{scoreData.error}</p>
+          <p>
+            {events.length} stored scoring event{events.length === 1 ? '' : 's'} remain on this
+            device. No delivery was removed or changed, and scoring is paused to protect the
+            history.
+          </p>
+        </div>
+      </div>
+    );
+  const { states } = scoreData;
   const s = states.at(-1),
     inn = inns.at(-1),
     battingSide = inn.number === 1 ? m.firstBat : 1 - m.firstBat;
@@ -383,6 +402,7 @@ export default function Match({ w, data, run, error, session }) {
             min="0"
             step="1"
             inputMode="numeric"
+            aria-label="Runs completed"
             value={delivery.completedRuns ?? 0}
             onChange={(event) => set('completedRuns', Number(event.target.value))}
           />

@@ -145,7 +145,9 @@ test('profile sign-out dialog can be cancelled or escaped without leaving a bloc
 }) => {
   await mockSignedInAccount(page);
   await page.goto('/app/');
-  await expect(page.getByRole('heading', { name: 'Your cricket, at a glance.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Dashboard', exact: true }).first(),
+  ).toBeVisible();
 
   const accountMenu = page
     .locator('.desktop-topbar')

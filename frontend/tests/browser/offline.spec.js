@@ -13,14 +13,12 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(page.getByText('A workspace of your own')).toBeVisible({ timeout: 15000 });
   await page.getByLabel('Your scorer name').fill('Local scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
-  const syncPopover = page.locator('.sync-popover:visible');
-  await expect(syncPopover.locator('summary')).toHaveAttribute(
-    'aria-label',
-    'Sync status: Sign in to sync',
-  );
-  await syncPopover.locator('summary').click();
-  await expect(syncPopover.getByText('Offline scoring ready')).toBeVisible({ timeout: 45000 });
-  await syncPopover.locator('summary').click();
+  await page.goto('/app/more/');
+  await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Ready to use offline' }),
+  ).toBeVisible({ timeout: 45000 });
+  await page.goto('/app/');
   await expect(page.getByText('Your scorebook starts here')).toBeVisible();
   await page.goto('/app/matches/');
   await expect(page.getByRole('heading', { name: 'Matches', exact: true })).toBeVisible();
@@ -85,13 +83,13 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByRole('combobox', { name: 'Team B' }).selectOption({ label: 'South' });
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Overs per innings').fill('2');
-  await page.getByLabel('Players per side').fill('3');
+  await page.getByLabel('Players per team').fill('3');
   await page.getByLabel('Maximum overs per bowler').fill('1');
   await page.getByRole('combobox', { name: 'Toss winner' }).selectOption('0');
   await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(page.getByRole('status').first()).toContainText('Saved');
   await page.reload();
-  await expect(page.getByLabel('Players per side')).toHaveValue('3');
+  await expect(page.getByLabel('Players per team')).toHaveValue('3');
   await page.getByRole('button', { name: 'Start match' }).click();
   await expect(page).toHaveURL(/match/);
   const matchUrl = page.url();
@@ -172,6 +170,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   }
   await page.getByRole('button', { name: 'W', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Record wicket' })).toBeVisible();
+  await page.getByRole('button', { name: 'Run out', exact: true }).click();
   const completedRuns = page.getByLabel('Runs completed');
   await expect(completedRuns).toHaveValue('0');
   await page.getByRole('button', { name: 'Increase completed runs' }).click();
@@ -180,9 +179,9 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await expect(completedRuns).toHaveValue('0');
   await completedRuns.fill('1');
   await page.getByRole('button', { name: 'Record wicket' }).click();
-  await expect(page.locator('.big-score')).toContainText('3/1');
+  await expect(page.locator('.big-score')).toContainText('2/1');
   await page.reload();
-  await expect(page.locator('.big-score')).toContainText('3/1');
+  await expect(page.locator('.big-score')).toContainText('2/1');
   await page.getByRole('button', { name: '+ Add new batsman' }).click();
   await page.getByLabel('Player name').fill('Replacement Batter');
   await page.getByRole('button', { name: 'Add player', exact: true }).click();
@@ -446,9 +445,14 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
         transaction.onerror = () => reject(transaction.error);
       });
     }, matchId);
-    await expect(page.getByText('Finish live scoring before applying this update.')).toBeHidden();
     await page.waitForTimeout(500);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Crease update available' })).toBeVisible();
+    await expect(page.getByText('Finish live scoring before applying this update.')).toBeHidden();
+    const postFinishReloadTimeOrigin = await page.evaluate(() => performance.timeOrigin);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(postFinishReloadTimeOrigin);
     expect(
       await page.evaluate(async () =>
         Boolean((await navigator.serviceWorker.getRegistration()).waiting),
@@ -521,7 +525,9 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
 
   for (const width of [320, 360, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('heading', { name: 'Your cricket, at a glance.' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Dashboard', exact: true }).first(),
+    ).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,
     );
@@ -554,8 +560,8 @@ test('dashboard shell and navigation stay usable across phone, tablet, and deskt
   for (const label of ['Dashboard', 'Matches', 'Teams', 'Players', 'Stats']) {
     await expect(page.locator('.bottom-nav').getByRole('link', { name: label })).toBeVisible();
   }
-  await page.getByRole('button', { name: 'Open settings and more options' }).click();
-  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Open account and more options' }).click();
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/more\/$/);
   await expect(page.getByRole('heading', { name: 'More' })).toBeVisible();
   await page.screenshot({ path: 'test-results/settings-mobile.png', fullPage: true });

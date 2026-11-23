@@ -279,17 +279,60 @@ export function replay(match, inning, events, target = null) {
   return s;
 }
 export function matchStates(match, innings, events) {
-  const states = [];
-  for (const inn of [...innings].sort((a, b) => a.number - b.number))
-    states.push(
-      replay(
-        match,
-        inn,
-        events.filter((e) => e.inningsId === inn.id).sort((a, b) => a.seq - b.seq),
-        states[0] ? states[0].runs + 1 : null,
-      ),
+  check(innings.length <= 2, 'Invalid innings order.');
+  const inningIds = new Set();
+  const inningNumbers = new Set();
+  for (const inning of innings) {
+    check(typeof inning.id === 'string' && !inningIds.has(inning.id), 'Duplicate innings record.');
+    check(Number.isInteger(inning.number) && inning.number > 0, 'Invalid innings order.');
+    check(
+      !inning.matchId || inning.matchId === match.id,
+      'An innings record belongs to a different match.',
     );
+    check(!inningNumbers.has(inning.number), 'Duplicate innings order.');
+    inningIds.add(inning.id);
+    inningNumbers.add(inning.number);
+  }
+  const orderedInnings = [...innings].sort((a, b) => a.number - b.number);
+  check(orderedInnings.every((inning, index) => inning.number === index + 1), 'Invalid innings order.');
+  const sequences = new Set();
+  for (const event of events) {
+    check(inningIds.has(event.inningsId), 'A scoring event is not linked to a stored innings.');
+    check(Number.isSafeInteger(event.seq) && event.seq > 0, 'Invalid event sequence.');
+    check(!sequences.has(event.seq), 'Duplicate event sequence; review history.');
+    check(
+      !event.matchId || event.matchId === match.id,
+      'A scoring event belongs to a different match.',
+    );
+    sequences.add(event.seq);
+  }
+  const states = [];
+  let previousSequence = 0;
+  for (const inn of orderedInnings) {
+    const inningEvents = events
+      .filter((event) => event.inningsId === inn.id)
+      .sort((a, b) => a.seq - b.seq);
+    check(
+      inningEvents.every((event) => event.seq > previousSequence),
+      'Scoring events do not follow innings order; review history.',
+    );
+    if (inningEvents.length) previousSequence = inningEvents.at(-1).seq;
+    states.push(
+      replay(match, inn, inningEvents, states[0] ? states[0].runs + 1 : null),
+    );
+  }
   return states;
+}
+export function inspectMatchStates(match, innings, events) {
+  try {
+    return { ok: true, states: matchStates(match, innings, events), error: null };
+  } catch (error) {
+    return {
+      ok: false,
+      states: null,
+      error: error instanceof Error ? error.message : 'Scoring history could not be replayed.',
+    };
+  }
 }
 export function result(match, states) {
   if (states.length < 2 || !states[1].done) return 'In progress';
@@ -318,6 +361,7 @@ export function career(playerId, matches, innings, events, format = 'all') {
     maidens: 0,
     bestWickets: 0,
     bestRuns: null,
+    invalidMatches: 0,
   };
   for (const m of matches.filter(
     (m) =>
@@ -325,12 +369,17 @@ export function career(playerId, matches, innings, events, format = 'all') {
       (format === 'all' || String(m.rules.overs) === format) &&
       m.teams.some((t) => t.squad.some((p) => p.id === playerId)),
   )) {
-    out.matches++;
-    for (const s of matchStates(
+    const history = inspectMatchStates(
       m,
       innings.filter((i) => i.matchId === m.id),
       events.filter((e) => e.matchId === m.id),
-    )) {
+    );
+    if (!history.ok) {
+      out.invalidMatches++;
+      continue;
+    }
+    out.matches++;
+    for (const s of history.states) {
       const b = s.batting[playerId],
         w = s.bowling[playerId];
       if (b?.played) {

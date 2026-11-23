@@ -33,21 +33,25 @@ function completedMatch(id, teams, firstBat, firstEvents, secondEvents) {
       bowler: teams[firstBat].squad[0].id,
     },
   ];
+  let sequence = 0;
   const deliveries = (eventsByInnings) =>
     eventsByInnings.flatMap((list, index) =>
-      list.map((event, seq) => ({
-        id: `${id}-${index}-${seq}`,
-        workspaceId: 'workspace',
-        matchId: id,
-        inningsId: innings[index].id,
-        seq: seq + 1,
-        type: 'delivery',
-        bat: 0,
-        extra: 'none',
-        extraRuns: 0,
-        running: 0,
-        ...event,
-      })),
+      list.map((event) => {
+        const seq = ++sequence;
+        return {
+          id: `${id}-${index}-${seq}`,
+          workspaceId: 'workspace',
+          matchId: id,
+          inningsId: innings[index].id,
+          seq,
+          type: 'delivery',
+          bat: 0,
+          extra: 'none',
+          extraRuns: 0,
+          running: 0,
+          ...event,
+        };
+      }),
     );
   return {
     match,
