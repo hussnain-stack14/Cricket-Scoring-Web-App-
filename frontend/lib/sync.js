@@ -281,6 +281,7 @@ export async function pullChanges(workspaceId) {
 
   let merged = 0;
   let deferredMatchRecords = false;
+  let deferredError = null;
   let next = null;
   let until = null;
   let pulledAt = null;
@@ -314,6 +315,7 @@ export async function pullChanges(workspaceId) {
       const applied = await applyPullPage(workspaceId, meta, pageResult.records);
       merged += applied.merged;
       deferredMatchRecords ||= applied.incomplete;
+      deferredError ||= applied.error || null;
       if (!pageResult.hasMore) {
         await db.transaction('rw', db.syncMeta, async () => {
           const currentMeta = (await db.syncMeta.get(workspaceId)) ?? meta;
@@ -321,10 +323,10 @@ export async function pullChanges(workspaceId) {
             ...currentMeta,
             lastPull: deferredMatchRecords ? currentMeta.lastPull : pulledAt,
             syncStatus: deferredMatchRecords ? 'incomplete' : currentMeta.syncStatus,
-            lastError: null,
+            lastError: deferredError,
           });
         });
-        return { merged, incomplete: deferredMatchRecords };
+        return { merged, incomplete: deferredMatchRecords, error: deferredError };
       }
       if (
         !pageResult.nextCursor ||
@@ -348,6 +350,7 @@ export async function pullChanges(workspaceId) {
 async function applyPullPage(workspaceId, meta, records) {
   let merged = 0;
   let deferredMatchRecords = false;
+  let deferredError = null;
   await db.transaction(
     'rw',
     ...tables.map((table) => db[table]),
@@ -422,6 +425,25 @@ async function applyPullPage(workspaceId, meta, records) {
           continue;
         }
 
+        if (table === 'events' && data?.matchId && Number.isInteger(data.seq) && !deletedAt) {
+          const sequenceCollision = await db.events
+            .where({ workspaceId })
+            .filter(
+              (event) =>
+                event.matchId === data.matchId &&
+                event.id !== recordId &&
+                !event.deletedAt &&
+                event.seq === data.seq,
+            )
+            .first();
+          if (sequenceCollision) {
+            deferredMatchRecords = true;
+            deferredError =
+              'A remote scoring event conflicts with a local event sequence. Both records were preserved; export a backup and review the match history before retrying.';
+            continue;
+          }
+        }
+
         if (deletedAt) await db[table].delete(recordId);
         else if (data && typeof data === 'object')
           await db[table].put({ ...data, id: recordId, workspaceId });
@@ -467,10 +489,11 @@ async function applyPullPage(workspaceId, meta, records) {
         revisions,
         conflicts,
         syncStatus: deferredMatchRecords ? 'incomplete' : currentMeta.syncStatus,
+        ...(deferredError ? { lastError: deferredError } : {}),
       });
     },
   );
-  return { merged, incomplete: deferredMatchRecords };
+  return { merged, incomplete: deferredMatchRecords, error: deferredError };
 }
 
 export async function resolveConflict(workspaceId, conflict, resolution) {

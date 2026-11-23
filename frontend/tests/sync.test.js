@@ -5,6 +5,7 @@ import {
   activateAccountWorkspace,
   db,
   clearAccountWorkspace,
+  queueSyncChange,
   saveRecord,
   createWorkspace,
   getActiveCachedAccountSession,
@@ -237,6 +238,80 @@ test('sync pushes queued records and pulls remote records into the mapped worksp
         .count(),
       1,
     );
+  } finally {
+    globalThis.fetch = priorFetch;
+    await db.delete();
+  }
+});
+
+test('sync defers a remote event that duplicates a local match sequence', async () => {
+  await resetDatabase();
+  const teamWorkspace = await activateAccountWorkspace('CRS-SEQ', 'Sequence Team');
+  const matchId = crypto.randomUUID();
+  const inningsId = crypto.randomUUID();
+  const localEventId = crypto.randomUUID();
+  const remoteEventId = crypto.randomUUID();
+  const localEvent = {
+    id: localEventId,
+    workspaceId: teamWorkspace.id,
+    matchId,
+    startId: 'sequence-start',
+    inningsId,
+    seq: 333,
+    type: 'delivery',
+  };
+  await db.matches.put({
+    id: matchId,
+    workspaceId: teamWorkspace.id,
+    startId: 'sequence-start',
+    status: 'live',
+  });
+  await db.innings.put({
+    id: inningsId,
+    workspaceId: teamWorkspace.id,
+    matchId,
+    startId: 'sequence-start',
+    number: 1,
+  });
+  await db.events.put(localEvent);
+  await queueSyncChange(teamWorkspace.id, 'events', localEventId, localEvent);
+
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === '/api/auth/me')
+      return response({ authenticated: true, teamId: 'CRS-SEQ', teamName: 'Sequence Team' });
+    if (url === '/api/sync/push')
+      return response({ applied: [], rejected: [], pushedAt: new Date().toISOString() });
+    if (String(url).startsWith('/api/sync/pull')) {
+      return response({
+        pulledAt: new Date().toISOString(),
+        records: [
+          {
+            table: 'events',
+            recordId: remoteEventId,
+            data: {
+              ...localEvent,
+              id: remoteEventId,
+              type: 'delivery',
+            },
+            revision: 1,
+            lastChangeId: 'remote-sequence-change',
+            deletedAt: null,
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const result = await sync(teamWorkspace.id);
+    assert.equal(result.status, 'incomplete');
+    assert.match(result.error, /conflicts with a local event sequence/);
+    assert.deepEqual(await db.events.where({ workspaceId: teamWorkspace.id }).toArray(), [
+      localEvent,
+    ]);
+    assert.equal(await getPendingCount(teamWorkspace.id), 1);
   } finally {
     globalThis.fetch = priorFetch;
     await db.delete();

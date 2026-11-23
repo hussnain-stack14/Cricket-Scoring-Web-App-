@@ -53,7 +53,25 @@ test('draft resume, schedule, cancellation, deletion and responsive accessible d
       });
     }
   }
-  await page.getByRole('link', { name: /Upcoming.*North XI/s }).click();
+  const upcomingMatch = page.getByRole('link', { name: /Upcoming.*North XI/s });
+  const matchId = new URL(await upcomingMatch.getAttribute('href'), page.url()).searchParams.get(
+    'id',
+  );
+  const savedMatchStatus = await page.evaluate(async (id) => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('crease-local');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction('matches', 'readonly');
+      const request = transaction.objectStore('matches').get(id);
+      transaction.oncomplete = () => resolve(request.result?.status);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }, matchId);
+  expect(savedMatchStatus).toBe('upcoming');
+  await upcomingMatch.click();
   await page.getByText('Reschedule or cancel', { exact: true }).click();
   await page.getByRole('button', { name: 'Cancel match', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm cancellation' }).click();

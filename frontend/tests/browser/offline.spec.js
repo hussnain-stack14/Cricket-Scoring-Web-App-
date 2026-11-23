@@ -14,7 +14,8 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
   await page.getByLabel('Your scorer name').fill('Local scorer');
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.goto('/app/more/');
-  await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
+  if (!(await page.getByRole('heading', { name: 'Cloud sync & offline' }).isVisible()))
+    await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Ready to use offline' }),
   ).toBeVisible({ timeout: 45000 });

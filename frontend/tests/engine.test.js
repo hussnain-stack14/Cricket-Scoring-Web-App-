@@ -414,6 +414,44 @@ test('history replay enforces delivery completion and chronological innings tran
     /sequence|innings order/i,
   );
 });
+test('match replay rejects different events with the same sequence across innings', () => {
+  const oneOver = { ...match, id: 'duplicate-sequence-match', rules: { ...match.rules, overs: 1 } };
+  const firstInnings = { ...inn, id: 'duplicate-sequence-innings-1', matchId: oneOver.id, number: 1 };
+  const secondInnings = {
+    id: 'duplicate-sequence-innings-2',
+    matchId: oneOver.id,
+    number: 2,
+    striker: 'x',
+    nonStriker: 'y',
+    bowler: 'a',
+  };
+  const firstEvents = Array.from({ length: 6 }, (_, index) => ({
+    ...ball(),
+    id: `duplicate-sequence-first-${index}`,
+    matchId: oneOver.id,
+    inningsId: firstInnings.id,
+    seq: index + 1,
+  }));
+  const secondEvent = {
+    ...ball({ bat: 1, running: 1 }),
+    id: 'different-event-same-sequence',
+    matchId: oneOver.id,
+    inningsId: secondInnings.id,
+    seq: 6,
+  };
+
+  assert.throws(
+    () => matchStates(oneOver, [firstInnings, secondInnings], [...firstEvents, secondEvent]),
+    /Duplicate event sequence/,
+  );
+  assert.equal(
+    matchStates(oneOver, [firstInnings, secondInnings], [
+      ...firstEvents,
+      { ...secondEvent, seq: 7 },
+    ]).length,
+    2,
+  );
+});
 test('sync rejects a candidate event that would follow an already completed innings', () => {
   const oneOver = { ...match, id: 'sync-history-match', rules: { ...match.rules, overs: 1 } };
   const inning = { ...inn, id: 'sync-history-innings', matchId: oneOver.id, number: 1 };
