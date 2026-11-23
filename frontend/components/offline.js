@@ -531,13 +531,23 @@ export function useOffline() {
         }
         registrationRef.current = reg;
         const waitingWorker = reg.waiting;
-        await verifyWorker(waitingWorker);
 
         if (!db.isOpen()) await db.open();
-        const hasLiveMatches = await db.transaction('r', ...db.tables, async () =>
-          db.matches.filter((match) => match.status === 'live').count(),
-        );
-        if (hasLiveMatches) {
+        const hasLiveMatches = () =>
+          db.transaction('r', ...db.tables, async () =>
+            db.matches.filter((match) => match.status === 'live').count(),
+          );
+        if (await hasLiveMatches()) {
+          setUpdateBlocked(true);
+          setUpdatePhase('waiting-live');
+          return false;
+        }
+
+        await verifyWorker(waitingWorker);
+
+        // A match can start while the waiting worker is being verified.
+        const matchStartedWhileVerifying = await hasLiveMatches();
+        if (matchStartedWhileVerifying) {
           setUpdateBlocked(true);
           setUpdatePhase('waiting-live');
           return false;

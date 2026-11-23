@@ -5329,6 +5329,9 @@ pre {
     min-width: 0;
     padding: var(--space-3) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
   }
+  .setup-page-content {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
   .bottom-nav {
     position: fixed;
     z-index: 50;

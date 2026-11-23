@@ -7,8 +7,8 @@ const publicPages = [
   ['/download/', 'Install Crease: Free Cricket Scoring App'],
   ['/about/', 'About Crease | Free Cricket Scoring App'],
   ['/help/', 'Crease Help Centre | Cricket Scoring Support'],
-  ['/privacy/', 'Privacy | Crease'],
-  ['/terms/', 'Terms | Crease'],
+  ['/privacy/', 'Privacy Policy | Crease'],
+  ['/terms/', 'Terms of Service | Crease'],
 ];
 
 test('public pages expose unique metadata and production canonical URLs', async ({ page }) => {

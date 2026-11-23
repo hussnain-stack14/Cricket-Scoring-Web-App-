@@ -473,9 +473,7 @@ test('fresh workspace, complete offline match, persistence, profile, backups and
         .click(),
     ]);
     await page.getByRole('button', { name: /Cloud sync & offline/ }).click();
-    await expect(page.getByText('Ready to use offline', { exact: true })).toBeVisible({
-      timeout: 30000,
-    });
+    await expect(page.getByText(/^Ready to use offline\.?$/)).toBeVisible({ timeout: 30000 });
     const afterUpdate = await page.evaluate(async (id) => {
       const database = await new Promise((resolve, reject) => {
         const request = indexedDB.open('crease-local');
